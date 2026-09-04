@@ -503,6 +503,9 @@
   @supports (-webkit-touch-callout: none){
     .sheet input,.sheet textarea,.sheet select,.txt,.cmt-input,.search{font-size:16px}
   }
+  .drow input[type=date]{min-width:0;width:auto;max-width:44vw;box-sizing:border-box;-webkit-appearance:none;appearance:none}
+  .drow{min-width:0}
+  .sheet > *{max-width:100%;box-sizing:border-box}
   .yourlog{margin-top:24px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
   .yourlog .top{display:flex;align-items:baseline;gap:12px}
   .score{font-family:Outfit;font-weight:800;font-size:44px;color:var(--gold);line-height:1;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:baseline;gap:4px}
@@ -1718,10 +1721,7 @@ async function saveListImage(L, P){
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 52, H-36);
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  const file = new File([blob], `joystickd-${L.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}.png`, { type:"image/png" });
-  if (navigator.canShare && navigator.canShare({ files:[file] })){ try { await navigator.share({ files:[file] }); return; } catch(e){ if (e && e.name==="AbortError") return; } }
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-  toast("Image saved");
+  await deliverImage(blob, `joystickd-${L.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}.png`);
 }
 
 // ---- top-5 review sheet ----------------------------------------------------
@@ -2290,6 +2290,25 @@ async function toggleWishlist(g){
     const { error } = await sb.from("wishlist").upsert({user_id:me.id, game_id:g.id, game:g}); if (error) dbFail(error); }
 }
 
+// ---- image delivery ----------------------------------------------------------
+// In the iOS app: write to a temp file and open the native share sheet (has "Save Image").
+// In browsers: web share if available, else download.
+async function deliverImage(blob, filename){
+  const cap = window.Capacitor;
+  if (cap?.isNativePlatform?.() && cap.Plugins?.Filesystem && cap.Plugins?.Share){
+    try {
+      const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.readAsDataURL(blob); });
+      const w = await cap.Plugins.Filesystem.writeFile({ path: filename, data: b64, directory: "CACHE" });
+      await cap.Plugins.Share.share({ files: [w.uri] });
+      return;
+    } catch(e){ if (e && /cancel/i.test(String(e.message||e))) return; console.warn("native share:", e); }
+  }
+  const file = new File([blob], filename, { type:"image/png" });
+  if (navigator.canShare && navigator.canShare({ files:[file] })){ try { await navigator.share({ files:[file] }); return; } catch(e){ if (e && e.name==="AbortError") return; } }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  toast("Image saved");
+}
+
 // ---- review card image ------------------------------------------------------
 function sheetLog(){
   const dP=$("#playedDate").value||null, dT=$("#firstTrophyDate").value||null, dPl=$("#platDate").value||null;
@@ -2387,10 +2406,7 @@ async function saveReviewImage(g){
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  const file = new File([blob], `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}.png`, { type:"image/png" });
-  if (navigator.canShare && navigator.canShare({ files:[file] })){ try { await navigator.share({ files:[file] }); return; } catch(e){ if (e && e.name==="AbortError") return; } }
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-  toast("Image saved");
+  await deliverImage(blob, `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}.png`);
 }
 
 // ---- profile snapshot image --------------------------------------------------
@@ -2473,10 +2489,7 @@ async function saveProfileImage(P, opts={}){
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 52, H-36);
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  const file = new File([blob], `joystickd-${P.username.toLowerCase()}.png`, { type:"image/png" });
-  if (navigator.canShare && navigator.canShare({ files:[file] })){ try { await navigator.share({ files:[file] }); return; } catch(e){ if (e && e.name==="AbortError") return; } }
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-  toast("Image saved");
+  await deliverImage(blob, `joystickd-${P.username.toLowerCase()}.png`);
 }
 
 // ---- database writes (live mode) ------------------------------------------
