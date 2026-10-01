@@ -933,7 +933,14 @@ const AUTH_LINK = (()=>{
 const sb = LIVE ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 let me = null;                       // {id, username} when signed in (live mode)
 const requireAuth = ()=>{ if (LIVE && !me){ openAuth(); return false; } return true; };
-const dbFail = e => { console.error(e); toast("Couldn't save — " + (e.message||e)); };
+const BLOCKED_MSG = "That includes language that isn't allowed on Joystickd.";
+const dbFail = e => { console.error(e); if (/BLOCKED_LANGUAGE/.test(e?.message||"")) return toast(BLOCKED_MSG); toast("Couldn't save — " + (e.message||e)); };
+// Ask the database whether user-written text is allowed (slur list lives server-side; the same check is enforced
+// by triggers on save, this call is just for a friendly message before we try). Fails open if the RPC is missing.
+async function textOk(surface, txt){
+  if (!LIVE || !txt) return true;
+  try { const { data, error } = await sb.rpc("check_text", { surface, txt }); if (error) return true; return data !== false; } catch(e){ return true; }
+}
 
 // ---- IGDB via the Supabase edge function ---------------------------------
 async function igdb(action, params={}){
@@ -1133,6 +1140,7 @@ const commentCount = (gid, uid) => commentsCache[ckey(gid,uid)]?.length ?? comme
 async function postComment(gid, uid, body){
   if (!requireAuth()) return;
   body = body.trim(); if (!body) return;
+  if (!(await textOk("comment", body))) return toast(BLOCKED_MSG);
   const { data, error } = await sb.from("review_comments").insert({game_id:gid, review_user:uid, user_id:me.id, body}).select().single();
   if (error) return dbFail(error);
   (commentsCache[ckey(gid,uid)] ||= []).push(data); render();
@@ -1280,18 +1288,19 @@ const PLAT_IMG = (rating, cls="") => rating==null ? TROPHY(cls) : `<img class="p
 const TROPHY = (cls="") => `<span class="trophy ${cls}" title="Platinum" aria-label="Platinum trophy"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 3h10v2h3v3c0 2.4-1.8 4.4-4.2 4.9A5 5 0 0 1 13 15.9V18h3v2H8v-2h3v-2.1a5 5 0 0 1-2.8-3C5.8 12.4 4 10.4 4 8V5h3V3zm0 4H6v1c0 1.2.7 2.2 1.7 2.7A9 9 0 0 1 7 8V7zm10 0v1c0 .9-.2 1.8-.7 2.7C17.3 10.2 18 9.2 18 8V7h-1z"/></svg></span>`;
 
 // ---- rating colour scale --------------------------------------------------
-const SCALE = {10:"#ffd84d",9:"#a15ff0",8:"#3f8cff",7:"#2fd17a",6:"#ff5fa8",5:"#ff8f2e",4:"#e93a3a",3:"#8f1414",2:"#6f7889",1:"#383d47"};   // 1 lifted from #262a33 — was nearly invisible on panel2
+const SCALE = {10:"#ffd84d",9:"#a15ff0",8:"#3f8cff",7:"#2fd17a",6:"#ff5fa8",5:"#ff8f2e",4:"#e93a3a",3:"#8f1414",2:"#6f7889",1:"#333333"};   // 1 = neutral black to match the 1/10 trophy orb (blends use this; a flat 1 is glossy, see ratingColors)
 function ratingColors(v){
   if (v==null) return null;
   const lo=Math.floor(v), hi=Math.ceil(v);
   if (v===10) return ["#fff1a8","#ffd84d","#c9960c"];
+  if (v===1) return ["#b0b0b0","#3c3c3c","#1a1a1a"];  // glossy black: highlight → body → shadow, like the 1/10 trophy orb
   if (v===2.5) return ["#6b0e0e", SCALE[2]];        // darker red on the 2.5 blend specifically
   return lo===hi ? [SCALE[lo],SCALE[lo]] : [SCALE[hi],SCALE[lo]];
 }
 const ratingGradient = v => { const c=ratingColors(v); return c ? `linear-gradient(135deg,${c.join(",")})` : "var(--gold)"; };
 function ratingText(v){
   const c=ratingColors(v); if(!c) return "";
-  const glow = v<=1.5 ? "text-shadow:0 0 0 1px rgba(255,255,255,.25),0 0 6px rgba(255,255,255,.25);" : v===10 ? "filter:drop-shadow(0 0 6px rgba(255,216,77,.55));" : "";
+  const glow = v<=1.5 ? "filter:drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 5px rgba(255,255,255,.22));" : v===10 ? "filter:drop-shadow(0 0 6px rgba(255,216,77,.55));" : "";
   return `background:${ratingGradient(v)};-webkit-background-clip:text;background-clip:text;color:transparent;${glow}`;
 }
 const ratingInk = v => (v>=9.5 || (v>=5 && v<8)) ? "#1a1200" : "#fff";
@@ -1871,6 +1880,7 @@ function wireListEditor(){
   $("#listSave").onclick = async ()=>{
     const name = $("#listName").value.replace(/\s+/g," ").trim().slice(0,80);
     if (!name) return toast("Give the list a name");
+    if (!(await textOk("list", name))) return toast(BLOCKED_MSG);
     const row = { user_id:me.id, name, numbered:listDraft.numbered, show_ratings:listDraft.showRatings, show_plats:listDraft.showPlats, games:listDraft.games, updated_at:new Date().toISOString() };
     let saved;
     if (listDraft.id){ const { data, error } = await sb.from("lists").update(row).eq("id", listDraft.id).select().single(); if (error) return dbFail(error); saved=data;
@@ -2684,10 +2694,11 @@ $("#cancelLog").onclick = closeSheet;
 $("#sheetWrap").addEventListener("click", e=>{ if(e.target.id==="sheetWrap") closeSheet(); });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeSheet(); closePicker(); } });
 
-$("#saveLog").onclick = ()=>{
+$("#saveLog").onclick = async ()=>{
   if (draft.rating==null && !draft.playedOnly){ toast("Pick a rating, or mark it as played"); return; }
   const dPlayed=$("#playedDate").value, dTrophy=$("#firstTrophyDate").value, dPlat=$("#platDate").value;
   if (!dPlayed && !dTrophy && !dPlat){ toast("Add at least one date"); return; }
+  if (!(await textOk("review", $("#reviewText").value))){ toast(BLOCKED_MSG); return; }
   const hrs = parseFloat($("#platHours").value), pnum = parseInt($("#platNum").value);
   logs[draft.gameId] = { game:getGame(draft.gameId), rating: draft.playedOnly && draft.rating==null ? null : draft.rating, review:$("#reviewText").value.trim(), date:dPlayed, firstTrophy:dTrophy, platDate:dPlat, subs:{...draft.subs},
     platinum:!!draft.platinum, platinumVerified:false,
@@ -3012,9 +3023,19 @@ $("#authGo").onclick = async ()=>{
     if (authMode==="signup"){
       if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) throw new Error("Username must be 3–20 letters, numbers or underscores.");
       if (password.length < 6) throw new Error("Password needs at least 6 characters.");
-      // Ask the database whether the username is free, before creating anything.
-      const { data: free, error: checkErr } = await sb.rpc("username_available", { name: username });
-      if (!checkErr && free === false) throw new Error("That username is taken — try another.");
+      // Ask the database whether the username is free, before creating anything — and if it's taken,
+      // whether it's taken by THIS email's own unfinished sign-up (then we just resend the confirmation).
+      let status = null;
+      { const { data, error } = await sb.rpc("username_status", { name: username, email }); if (!error) status = data; }
+      if (status === null){ const { data: free, error: checkErr } = await sb.rpc("username_available", { name: username }); if (!checkErr && free === false) status = "taken"; }
+      if (status === "yours_unconfirmed"){
+        const { error: rsErr } = await sb.auth.resend({ type:"signup", email });
+        if (rsErr && !/rate limit/i.test(rsErr.message||"")) throw rsErr;
+        showAuthErr("You already started signing up with this email — we've sent you a fresh confirmation link. Check your inbox (and junk folder), tap it, then sign in.", true); return;
+      }
+      if (status === "yours_confirmed"){ authMode="signin"; paintAuth(); $("#authEmail").value = email; throw new Error("That username is already yours — this account is set up. Sign in with your password, or use “Forgot your password?”."); }
+      if (status === "taken") throw new Error("That username is taken — try another.");
+      if (!(await textOk("username", username))) throw new Error("That username isn't allowed — try another.");
       const { data, error } = await sb.auth.signUp({ email, password, options:{ data:{ username } } });
       if (error){
         const m = (error.message||"").toLowerCase();
@@ -3083,6 +3104,7 @@ function wireBioUI(){
   $("#bioWrap").addEventListener("click", e=>{ if(e.target.id==="bioWrap") $("#bioWrap").classList.remove("open"); });
   $("#bioSave").onclick = async ()=>{
     const bio = $("#bioText").value.replace(/\s+/g," ").trim().slice(0,160);
+    if (!(await textOk("bio", bio))) return toast(BLOCKED_MSG);
     const { error } = await sb.from("profiles").update({ bio }).eq("id", me.id); if (error) return dbFail(error);
     me.bio = bio; $("#bioWrap").classList.remove("open"); toast("Bio saved"); render();
   };
