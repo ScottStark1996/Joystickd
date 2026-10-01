@@ -933,6 +933,14 @@ const AUTH_LINK = (()=>{
 const sb = LIVE ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 let me = null;                       // {id, username} when signed in (live mode)
 const requireAuth = ()=>{ if (LIVE && !me){ openAuth(); return false; } return true; };
+// Supabase returns at most 1000 rows per request. fetchAll() pages through a query so popular games
+// (and prolific users) aren't silently truncated. `build` must return a fresh query each call.
+async function fetchAll(build, page=1000){
+  let all=[], from=0;
+  for (;;){ const { data, error } = await build().range(from, from+page-1);
+    if (error) return { data:all, error };
+    all = all.concat(data||[]); if (!data || data.length<page) return { data:all, error:null }; from += page; }
+}
 const BLOCKED_MSG = "That includes language that isn't allowed on Joystickd.";
 const dbFail = e => { console.error(e); if (/BLOCKED_LANGUAGE/.test(e?.message||"")) return toast(BLOCKED_MSG); toast("Couldn't save — " + (e.message||e)); };
 // Ask the database whether user-written text is allowed (slur list lives server-side; the same check is enforced
@@ -1006,21 +1014,57 @@ async function fetchGame(id){
 
 // ---- community data ---------------------------------------------------------
 // Live mode: other users' logs for a game, fetched when the game page opens.
-const communityCache = {};           // gameId -> [{user_id, rating, subs, platinum, plat_diff, plat_hours}]
+const communityCache = {};           // gameId -> { summary } from game_summary() (legacy: { summary, rows })
+const friendLogs = {};               // gameId -> logs by people I follow (game_friend_logs)
+const gameReviewsState = {};         // gameId -> { sort, rows, total, local } (paged via game_reviews)
+// Absorb a review/friend row from the server into the per-game caches the renderers read.
+function absorbRow(gid, r){
+  if (r.username){ revNames[r.user_id] = r.username; avatars[r.user_id] = r.avatar_url || null; }
+  if (Array.isArray(r.awards)){ gameBallots[gid] = (gameBallots[gid]||[]).filter(b=> b.user_id!==r.user_id).concat(r.awards.map(a=>({ user_id:r.user_id, year:a.year, category:a.category }))); }
+  if (r.like_count!=null){ likesCache[gid] = (likesCache[gid]||[]).filter(k=> k.review_user!==r.user_id)
+      .concat(Array.from({length:r.like_count}, (_,i)=>({ user_id: (r.liked_by_me && i===0 && me) ? me.id : "·"+i, review_user:r.user_id }))); }
+  if (r.comment_count!=null){ (commentCounts[gid] ||= {})[r.user_id] = r.comment_count; }
+}
 async function loadCommunity(id){
   if (!LIVE || communityCache[id]) return;
+  const [S, F] = await Promise.all([ sb.rpc("game_summary", { gid:id }), me ? sb.rpc("game_friend_logs", { gid:id }) : Promise.resolve({ data:[] }) ]);
+  if (S.error){ console.warn("game_summary unavailable, using legacy loader:", S.error.message); return loadCommunityLegacy(id); }
+  communityCache[id] = { summary: S.data || {} };
+  friendLogs[id] = F.error ? [] : (F.data||[]);
+  friendLogs[id].forEach(r=> absorbRow(id, r));
+}
+async function loadGameReviews(id, sort, append=false){
+  const st = gameReviewsState[id];
+  if (st?.local) return;                                   // legacy: all rows already here
+  const off = append && st && st.sort===sort ? st.rows.length : 0;
+  const { data, error } = await sb.rpc("game_reviews", { gid:id, sort, lim:20, off });
+  if (error){ console.warn("game_reviews:", error.message); gameReviewsState[id] = { sort, rows: append ? st.rows : [], total: append ? st.total : 0 }; return; }
+  const rows = data||[]; rows.forEach(r=> absorbRow(id, r));
+  gameReviewsState[id] = { sort, rows: append && st && st.sort===sort ? st.rows.concat(rows) : rows, total: rows[0]?.total_count ?? (append ? st.total : 0) };
+}
+// Legacy path (only if the RPCs aren't installed yet): download rows and compute the same summary locally.
+async function loadCommunityLegacy(id){
   const [L, K, B, C] = await Promise.all([
-    sb.from("logs").select("*").eq("game_id", id),
-    sb.from("review_likes").select("user_id,review_user").eq("game_id", id),
-    sb.from("ballots").select("user_id,year,category").eq("game_id", id),
-    sb.from("logs_counted").select("user_id").eq("game_id", id),
+    fetchAll(()=> sb.from("logs").select("*").eq("game_id", id)),
+    fetchAll(()=> sb.from("review_likes").select("user_id,review_user").eq("game_id", id)),
+    fetchAll(()=> sb.from("ballots").select("user_id,year,category").eq("game_id", id)),
+    fetchAll(()=> sb.from("logs_counted").select("user_id").eq("game_id", id)),
   ]);
-  communityCache[id] = L.error ? [] : L.data;
-  countedUsers[id] = C.error ? null : new Set((C.data||[]).map(r=>r.user_id));
+  const rows = L.error ? [] : L.data, counted = C.error ? null : new Set((C.data||[]).map(r=>r.user_id));
+  const others = rows.filter(r=> r.user_id!==me?.id && (!counted || counted.has(r.user_id)));
+  const rated = others.filter(r=>r.rating!=null).map(r=>+r.rating), dist = {}; rated.forEach(v=> dist[String(v)] = (dist[String(v)]||0)+1);
+  const subs = {}; SUBS.forEach(sc=>{ const v = others.map(r=>r.subs?.[sc.key]).filter(x=>x!=null).map(Number); if (v.length) subs[sc.key] = { avg: mean(v), count: v.length }; });
+  const pl = others.filter(r=>r.platinum && (r.plat_diff!=null||r.plat_hours!=null)), pd = pl.map(r=>r.plat_diff).filter(v=>v!=null).map(Number), ph = pl.map(r=>r.plat_hours).filter(v=>v!=null).map(Number);
+  communityCache[id] = { summary: { rating_count: rated.length, rating_avg: rated.length ? mean(rated) : null, dist, subs,
+    plat_count: pl.length, plat_diff_count: pd.length, plat_hours_count: ph.length, plat_diff_avg: pd.length ? mean(pd) : null, plat_hours_avg: ph.length ? mean(ph) : null,
+    review_count: rows.filter(r=>(r.review||"").trim()).length }, rows };
   likesCache[id] = K.error ? [] : (K.data||[]);
   gameBallots[id] = B.error ? [] : (B.data||[]);
   await loadCommentCounts(id);
-  const ids = [...new Set((communityCache[id]||[]).map(r=>r.user_id))].filter(u=>u!==me?.id && !revNames[u]);
+  const fids = me ? followingIds() : [];
+  friendLogs[id] = rows.filter(r=> fids.includes(r.user_id));
+  gameReviewsState[id] = { local:true, sort:null, rows: rows.filter(r=>(r.review||"").trim()), total: 0 };
+  const ids = [...new Set(rows.map(r=>r.user_id))].filter(u=>u!==me?.id && !revNames[u]);
   if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
 }
 const likesCache = {}, revNames = {}, gameBallots = {};
@@ -1105,7 +1149,7 @@ function wireReports(app){
   app.querySelectorAll("[data-excl]").forEach(b=> b.onclick = async ()=>{
     const flag = b.dataset.flag==="1";
     const { error } = await sb.rpc("set_excluded", { target:b.dataset.excl, flag }); if (error) return dbFail(error);
-    Object.keys(communityCache).forEach(k=>delete communityCache[k]); stats.rows=null; toast(flag ? "Excluded from stats" : "Counting again");
+    clearCommunity(); stats.rows=null; toast(flag ? "Excluded from stats" : "Counting again");
     loadSpikeAccounts(+b.dataset.gid);
   });
   app.querySelectorAll("[data-rep]").forEach(b=> b.onclick = async ()=>{
@@ -1211,8 +1255,7 @@ async function loadProfileLikes(P){
   if (view.tab==="logs") render();
 }
 
-const countedUsers = {};              // gameId -> Set of user ids whose ratings count (null = all)
-const others = id => (communityCache[id]||[]).filter(r=> r.user_id!==me?.id && (!countedUsers[id] || countedUsers[id].has(r.user_id)));
+const summaryOf = id => communityCache[id]?.summary || null;
 
 // OpenCritic score via the "opencritic" edge function (cached server-side).
 const criticCache = {};                 // gameId -> {score, tier, review_count, url} | {score:null} | {error}
@@ -1225,7 +1268,8 @@ async function loadCritic(g){
     const d = await r.json(); criticCache[g.id] = d.error ? { error:d.error } : d;
   } catch(e){ criticCache[g.id] = { error:String(e) }; }
 }
-const invalidateCommunity = id => { delete communityCache[id]; };
+const invalidateCommunity = id => { delete communityCache[id]; delete friendLogs[id]; delete gameReviewsState[id]; };
+const clearCommunity = ()=> { Object.keys(communityCache).forEach(k=>delete communityCache[k]); Object.keys(friendLogs).forEach(k=>delete friendLogs[k]); Object.keys(gameReviewsState).forEach(k=>delete gameReviewsState[k]); };
 
 // Sample mode only: pretend community ratings so the demo has numbers.
 // There are no other users yet. Until accounts exist, each game gets a small,
@@ -1233,18 +1277,15 @@ const invalidateCommunity = id => { delete communityCache[id]; };
 // to show. Delete these three generators when real user data arrives.
 function seeded(id, n){ let x = (id*2654435761 + n*40503) % 4294967296; return ()=>{ x = (x*1664525 + 1013904223) % 4294967296; return x/4294967296; }; }
 function communityRatings(id){
-  if (LIVE) return others(id).filter(r=>r.rating!=null).map(r=>+r.rating);
   const g=getGame(id), r=seeded(id,1), base = g?.critic ? 5 + g.critic/20 : 7 + r()*2;   // critic 90 → base 9.5
   const count = 3 + Math.floor(r()*5);
   return Array.from({length:count}, ()=> Math.min(10, Math.max(1, Math.round((base + (r()-0.5)*3)*2)/2)));
 }
 function communitySubs(id,key){
-  if (LIVE) return others(id).map(r=>r.subs?.[key]).filter(v=>v!=null).map(Number);
   const si = SUBS.findIndex(s=>s.key===key), r=seeded(id, 10+si);
   return communityRatings(id).filter(()=>r()>0.3).map(v=> Math.min(10, Math.max(1, Math.round((v + (r()-0.5)*2)*2)/2)));
 }
 function communityPlat(id){
-  if (LIVE) return others(id).filter(r=>r.platinum && (r.plat_diff!=null||r.plat_hours!=null)).map(r=>[r.plat_diff==null?null:+r.plat_diff, r.plat_hours==null?null:+r.plat_hours]);
   const r=seeded(id,99), n = 2 + Math.floor(r()*3);
   return Array.from({length:n}, ()=> [Math.round((2 + r()*7)*2)/2, Math.round(10 + r()*150)]);
 }
@@ -1265,6 +1306,7 @@ let top5 = [null,null,null,null,null];
 let wishlist = {};          // gameId -> added_at (mine)
 let myLists = [];           // my lists, newest first
 let listView = null;        // list id currently open on a profile, else null
+let friendsExpanded = null;  // game id whose "From people you follow" list is fully expanded
 let listDraft = null;       // editor state {id?, name, numbered, showRatings, games:[]}
 let view = {tab:"games", gameId:null, query:"", genre:null, sort:"default", user:null};   // user: username of a profile being viewed (null = mine)
 let otherProfile = null;             // {username, logs, top5, ballot} for someone else's profile
@@ -1312,17 +1354,35 @@ const snapHalf = v => Math.min(10, Math.max(1, Math.floor(v*2)/2));
 
 // ---- averages ------------------------------------------------------------
 const mean = a => a.reduce((s,v)=>s+v,0)/a.length;
+// Merge one local value (my own log, which the server summary excludes) into a server average.
+const mergeAvg = (avg, count, mine) => { let n=+(count||0), sum=n*(+(avg||0)); if (mine!=null){ n++; sum+=+mine; } return n ? { avg:(sum/n).toFixed(1), count:n } : null; };
 function userAverage(id){
+  if (LIVE){ const s=summaryOf(id); return mergeAvg(s?.rating_avg, s?.rating_count, logs[id]?.rating); }
   const all = communityRatings(id); if (logs[id]?.rating!=null) all.push(logs[id].rating);
   return all.length ? { avg:mean(all).toFixed(1), count:all.length } : null;
 }
 function subAverage(id,key){
+  if (LIVE){ const s=summaryOf(id)?.subs?.[key]; return mergeAvg(s?.avg, s?.count, logs[id]?.subs?.[key]); }
   const all = communitySubs(id,key); const mine = logs[id]?.subs?.[key]; if (mine!=null) all.push(mine);
   return all.length ? { avg:mean(all).toFixed(1), count:all.length } : null;
 }
+// Rating distribution as {value: count}, my own log included.
+function distCounts(id){
+  const c = {};
+  if (LIVE){ const d = summaryOf(id)?.dist || {}; Object.entries(d).forEach(([k,v])=> c[String(+k)] = +v); }
+  else communityRatings(id).forEach(v=> c[String(v)] = (c[String(v)]||0)+1);
+  const mine = logs[id]?.rating; if (mine!=null) c[String(mine)] = (c[String(mine)]||0)+1;
+  return c;
+}
 function platAverage(id){
+  const l = logs[id], mineOk = l?.platinum && (l.platDiff!=null || l.platHours!=null);
+  if (LIVE){ const s=summaryOf(id); if (!s) return null;
+    const d = mergeAvg(s.plat_diff_avg, s.plat_diff_count, mineOk ? l.platDiff : null), h = mergeAvg(s.plat_hours_avg, s.plat_hours_count, mineOk ? l.platHours : null);
+    const count = +(s.plat_count||0) + (mineOk ? 1 : 0);
+    if (!d && !h) return null;
+    return { diff: d ? d.avg : null, hours: h ? Math.round(+h.avg) : null, count }; }
   const all = communityPlat(id);
-  const l = logs[id]; if (l?.platinum && (l.platDiff!=null || l.platHours!=null)) all.push([l.platDiff, l.platHours]);
+  if (mineOk) all.push([l.platDiff, l.platHours]);
   const d = all.map(x=>x[0]).filter(v=>v!=null), h = all.map(x=>x[1]).filter(v=>v!=null);
   if (!d.length && !h.length) return null;
   return { diff: d.length ? mean(d).toFixed(1) : null, hours: h.length ? Math.round(mean(h)) : null, count: all.length };
@@ -1585,7 +1645,7 @@ async function loadOtherProfile(username){
   if (!p) return null;
   avatars[p.id] = p.avatar_url;
   const [L, T, B, W, LS] = await Promise.all([
-    sb.from("logs").select("*").eq("user_id", p.id),
+    fetchAll(()=> sb.from("logs").select("*").eq("user_id", p.id)),
     sb.from("top5").select("*").eq("user_id", p.id),
     sb.from("ballots").select("*").eq("user_id", p.id),
     sb.from("wishlist").select("*").eq("user_id", p.id),
@@ -1771,7 +1831,7 @@ function renderLogs(app, P, isMe){
     const flag = !P.excluded;
     if (!confirm(flag ? `Exclude ${P.username}'s ratings from community averages? They won't see any change.` : `Count ${P.username}'s ratings again?`)) return;
     const { error } = await sb.rpc("set_excluded", { target:P.id, flag }); if (error) return dbFail(error);
-    P.excluded = flag; Object.keys(communityCache).forEach(k=>delete communityCache[k]); stats.rows=null; toast(flag ? "Excluded from stats" : "Counting again"); render();
+    P.excluded = flag; clearCommunity(); stats.rows=null; toast(flag ? "Excluded from stats" : "Counting again"); render();
   });
   if (!isMe) return;
   if (profileTab==="following" || profileTab==="followers") wireFollowActions(app);
@@ -2358,9 +2418,9 @@ function profileAwards(ballot, isMe){
 }
 
 // ---- rating distribution chart (profile + game page) -----------------------
-function distChart(ratings){
+function distChart(ratings){            // ratings: array of values, or a {value: count} map
   const steps=[]; for(let v=1;v<=10;v+=0.5) steps.push(v);
-  const counts = steps.map(v=> ratings.filter(r=>r===v).length), max = Math.max(1,...counts);
+  const counts = Array.isArray(ratings) ? steps.map(v=> ratings.filter(r=>r===v).length) : steps.map(v=> +(ratings[String(v)]||0)), max = Math.max(1,...counts);
   return `<div class="dist">${steps.map((v,i)=>`<div class="dcol" title="${counts[i]} rated ${v}">
       <div class="dbarwrap"><div class="dbar" style="height:${counts[i]/max*100}%;background:${counts[i] ? ratingGradient(v) : "var(--panel2)"}"><span>${counts[i]||""}</span></div></div>
       ${v%1===0 ? `<div class="dlab">${v}</div>` : `<div class="dlab"></div>`}
@@ -2452,16 +2512,22 @@ function commCard(g, r){
 
 // ---- game reviews tab ------------------------------------------------------
 let gameTab = "overview", reviewSort = "latest", gameRevShown = 20;
+const REVIEW_SORTS = {
+  latest:  {label:"Latest",     fn:(a,b)=> (b.updated_at||"").localeCompare(a.updated_at||"")},
+  earliest:{label:"Earliest",   fn:(a,b)=> (a.updated_at||"").localeCompare(b.updated_at||"")},
+  highest: {label:"Highest",    fn:(a,b)=> R(b.rating)-R(a.rating)},
+  lowest:  {label:"Lowest",     fn:(a,b)=> R(a.rating)-R(b.rating)},
+  likes:   {label:"Most likes", fn:(a,b)=> 0},   // server-sorted; legacy sorts by like list below
+};
 function gameReviews(g){
-  const rows = (communityCache[g.id]||[]).filter(r=> (r.review||"").trim() && !isBlocked(r.user_id));
-  const sorters = {
-    latest:  {label:"Latest",     fn:(a,b)=> (b.updated_at||"").localeCompare(a.updated_at||"")},
-    earliest:{label:"Earliest",   fn:(a,b)=> (a.updated_at||"").localeCompare(b.updated_at||"")},
-    highest: {label:"Highest",    fn:(a,b)=> R(b.rating)-R(a.rating)},
-    lowest:  {label:"Lowest",     fn:(a,b)=> R(a.rating)-R(b.rating)},
-    likes:   {label:"Most likes", fn:(a,b)=> likesFor(g.id,b.user_id).length - likesFor(g.id,a.user_id).length},
-  };
-  const all = [...rows].sort(sorters[reviewSort].fn), list = all.slice(0, gameRevShown);
+  const sorters = REVIEW_SORTS, st = gameReviewsState[g.id];
+  let list, total;
+  if (st?.local){   // legacy: every review is here, sort + page locally
+    const rows = st.rows.filter(r=> !isBlocked(r.user_id));
+    const fn = reviewSort==="likes" ? (a,b)=> likesFor(g.id,b.user_id).length - likesFor(g.id,a.user_id).length : sorters[reviewSort].fn;
+    const all = [...rows].sort(fn); list = all.slice(0, gameRevShown); total = all.length;
+  } else { list = st?.rows || []; total = st?.total || 0; }
+  const remaining = total - list.length;
   if (!LIVE) return `<div class="empty small">Reviews from other players show up here once accounts are live.</div>`;
   return `
     <div class="filters" style="justify-content:flex-end;margin-top:14px"><label class="sortwrap">Sort <select id="revSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${reviewSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
@@ -2481,7 +2547,7 @@ function gameReviews(g){
           <span class="when">${when}</span>
         </div>
         ${commentsBlock(g.id, uid)}
-      </article>`; }).join("") + (gameRevShown < all.length ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="moreRevs">Show more (${all.length-gameRevShown} left)</button></div>` : "") : `<div class="empty small">No written reviews yet — be the first.</div>`}`;
+      </article>`; }).join("") + (remaining > 0 ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="moreRevs">Show more (${remaining} left)</button></div>` : "") : `<div class="empty small">No written reviews yet — be the first.</div>`}`;
 }
 
 // ---- game page -----------------------------------------------------------
@@ -2494,10 +2560,12 @@ async function renderGame(app){
     if (view.gameId!==(g?.id)) return;
     if (!g){ app.innerHTML = `<button class="back" id="back">← Back</button><div class="empty"><h2>Couldn't load this game</h2></div>`; $("#back").onclick=()=>{view.gameId=null;render();}; return; }
   }
-  if (LIVE && !communityCache[g.id]){
+  const needReviews = LIVE && gameTab==="reviews" && (!gameReviewsState[g.id] || (!gameReviewsState[g.id].local && gameReviewsState[g.id].sort!==reviewSort));
+  if (LIVE && (!communityCache[g.id] || needReviews)){
     app.innerHTML = `<button class="back" id="back">← Back</button><div class="empty"><div class="spinner"></div>Loading…</div>`;
     $("#back").onclick = ()=>{ view.gameId=null; render(); };
     await Promise.all([loadCommunity(g.id), loadCritic(g)]); if (view.gameId!==g.id) return;
+    if (gameTab==="reviews" && !gameReviewsState[g.id]?.local && gameReviewsState[g.id]?.sort!==reviewSort){ await loadGameReviews(g.id, reviewSort); if (view.gameId!==g.id) return; }
   }
   const l = logs[g.id];
   app.innerHTML = `
@@ -2527,7 +2595,7 @@ async function renderGame(app){
           </div>`;
           return ""; })()}
         </div>
-        ${(()=>{ const n=(communityCache[g.id]||[]).filter(r=>(r.review||"").trim()).length; return `
+        ${(()=>{ const n=+(summaryOf(g.id)?.review_count||0); return `
         <div class="seg gseg">
           <button class="segb ${gameTab==="overview"?"on":""}" data-gtab="overview">Overview</button>
           <button class="segb ${gameTab==="reviews"?"on":""}" data-gtab="reviews">Reviews${n?` (${n})`:""}</button>
@@ -2540,16 +2608,18 @@ async function renderGame(app){
         : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}
         ${(()=>{ if (!LIVE || !me) return "";
           const fids = followingIds(); if (!fids.length) return "";
-          const rows = (communityCache[g.id]||[]).filter(r=> fids.includes(r.user_id)).sort((a,b)=> R(b.rating)-R(a.rating));
+          const all = (friendLogs[g.id]||[]).filter(r=> !isBlocked(r.user_id))
+            .sort((a,b)=> ((b.review||"").trim()?1:0)-((a.review||"").trim()?1:0) || R(b.rating)-R(a.rating));   // reviews first, then by rating
+          const FSHOW = 8, showAll = friendsExpanded===g.id, rows = showAll ? all : all.slice(0, FSHOW);
           return `<section class="fsec">
-            <h3>From people you follow</h3>
+            <h3>From people you follow${all.length ? ` <small class="muted">${all.length}</small>` : ""}</h3>
             ${rows.length ? `<div class="frows">${rows.map(r=>{ const name=revNames[r.user_id]||follows.names[r.user_id]||"…"; return `
               <button class="frow" data-fview="${r.user_id}">
                 ${avatarEl(r.user_id, name)}
                 <span class="fname">${esc(name)}${(r.review||"").trim() ? `<small>wrote a review</small>` : `<small>rating only</small>`}</span>
                 ${r.platinum ? PLAT_IMG(+r.rating,"infollow") : ""}
                 ${r.rating!=null ? `<span class="fscore" style="${ratingText(+r.rating)}">${+r.rating}</span>` : `<span class="fscore played">Played</span>`}
-              </button>`; }).join("")}</div>`
+              </button>`; }).join("")}</div>${all.length > FSHOW && !showAll ? `<button class="linklike" id="friendsMore" style="margin-top:8px">Show all ${all.length}</button>` : ""}`
             : `<div class="hint">None of the people you follow have logged this yet.</div>`}
           </section>`; })()}
         ${(()=>{ const p=platAverage(g.id); return p ? `
@@ -2561,8 +2631,8 @@ async function renderGame(app){
           </div>
           <div class="pcount">Based on ${p.count} platinum report${p.count===1?"":"s"}</div>
         </section>` : ""; })()}
-        ${(()=>{ const all = communityRatings(g.id); if (logs[g.id]?.rating!=null) all.push(logs[g.id].rating);
-          return all.length ? `<section class="breakdown"><h3>Rating distribution<span class="hint" style="margin-left:8px">${all.length} rating${all.length===1?"":"s"}</span></h3>${distChart(all)}</section>` : ""; })()}
+        ${(()=>{ const dc = distCounts(g.id), n = Object.values(dc).reduce((a,b)=>a+b,0);
+          return n ? `<section class="breakdown"><h3>Rating distribution<span class="hint" style="margin-left:8px">${n} rating${n===1?"":"s"}</span></h3>${distChart(dc)}</section>` : ""; })()}
         <section class="breakdown">
           <h3>User ratings by category</h3>
           ${SUBS.map(s=>{ const a=subAverage(g.id,s.key); return `
@@ -2581,10 +2651,12 @@ async function renderGame(app){
   app.querySelectorAll("[data-like]").forEach(b=> b.onclick = ()=> toggleLike(g.id, b.dataset.like));
   app.querySelectorAll(".crev [data-user]").forEach(b=> b.onclick = ()=>{ view.tab="logs"; view.gameId=null; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
   $("#revSort") && ($("#revSort").onchange = e=>{ reviewSort=e.target.value; gameRevShown=20; render(); });
-  $("#moreRevs") && ($("#moreRevs").onclick = ()=>{ gameRevShown+=20; render(); });
+  $("#moreRevs") && ($("#moreRevs").onclick = async ()=>{ const b=$("#moreRevs"); b.disabled=true; b.textContent="Loading…";
+    if (gameReviewsState[g.id]?.local) gameRevShown+=20; else await loadGameReviews(g.id, reviewSort, true); render(); });
   wireComments(app);
+  $("#friendsMore") && ($("#friendsMore").onclick = ()=>{ friendsExpanded = g.id; render(); });
   app.querySelectorAll("[data-fview]").forEach(b=> b.onclick = ()=>{
-    const uid=b.dataset.fview, r=(communityCache[g.id]||[]).find(x=>x.user_id===uid); if (!r) return;
+    const uid=b.dataset.fview, r=(friendLogs[g.id]||[]).find(x=>x.user_id===uid); if (!r) return;
     const name = revNames[uid]||follows.names[uid]||"…";
     openT5(g.id, { id: uid, username:name, logs:{ [g.id]: rowToLog(r) }, ballot: ballotFor(g.id, uid) }, false, name);
   });
@@ -3231,7 +3303,7 @@ $("#notifWrap").addEventListener("click", e=>{ if(e.target.id==="notifWrap") clo
 async function loadMyData(){
   const [P, L, T, B, W, LS] = await Promise.all([
     readProfile({ id: me.id }).then(data=>({ data })),
-    sb.from("logs").select("*").eq("user_id", me.id),
+    fetchAll(()=> sb.from("logs").select("*").eq("user_id", me.id)),
     sb.from("top5").select("*").eq("user_id", me.id),
     sb.from("ballots").select("*").eq("user_id", me.id),
     sb.from("wishlist").select("*").eq("user_id", me.id),
@@ -3390,7 +3462,7 @@ async function onAuth(session){
   me = session?.user ? { id:session.user.id, username: session.user.user_metadata?.username || "you" } : null;
   if (me){ if (wasMe!==me.id){ await loadMyData(); toast(`Signed in as ${me.username}`); pushOnSignIn(); } }
   else if (wasMe){ clearMyData(); toast("Signed out"); }
-  Object.keys(communityCache).forEach(k=>delete communityCache[k]); loadedYears.clear(); invalidateHome();
+  clearCommunity(); loadedYears.clear(); invalidateHome();
   if (!me){ notifs={items:[],seenAt:null,unread:0}; }
   paintAuthBtn(); paintBell(); render();
 }
