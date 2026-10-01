@@ -896,6 +896,15 @@
       <div class="subrow">
         <div class="sublabel">Which platinum was this for you?</div>
         <div class="hours"><span>#</span><input type="number" id="platNum" min="1" step="1" inputmode="numeric" placeholder="e.g. 27"><span class="hint" id="platNumHint"></span></div>
+        <div class="hours" style="margin-top:8px"><input type="text" id="platLabel" maxlength="12" placeholder="Version, e.g. PS4" style="width:140px"><span class="hint">optional</span></div>
+      </div>
+      <div class="subrow" id="plat2Row">
+        <button class="linklike" id="plat2Add" type="button">+ Add a second platinum (another version of this game)</button>
+        <div id="plat2Box" hidden>
+          <div class="sublabel">Second platinum <button class="linklike bio-edit" id="plat2Remove" type="button">remove</button></div>
+          <div class="hours"><span>#</span><input type="number" id="plat2Num" min="1" step="1" inputmode="numeric" placeholder="e.g. 149"><input type="text" id="plat2Label" maxlength="12" placeholder="Version, e.g. PS5" style="width:140px"></div>
+          <div class="hours" style="margin-top:8px"><input type="date" id="plat2Date" style="width:auto"><span class="hint">date</span></div>
+        </div>
       </div>
       <button class="mini-toggle" id="showStatsToggle" role="switch" aria-checked="true">
         <span>Show these two stats on my review</span><span class="switch"><i></i></span>
@@ -1677,14 +1686,19 @@ async function renderProfile(app){
   }
   renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
 }
-const bestDate = l => [l.date,l.firstTrophy,l.platDate].filter(Boolean).sort().pop() || "";
+const bestDate = l => [l.date,l.firstTrophy,l.platDate,l.plat2On].filter(Boolean).sort().pop() || "";
+// A log can carry two platinums (e.g. PS4 + PS5 versions). hasPlat2 / platCount / platEntries make that uniform.
+const hasPlat2 = l => !!(l?.platinum && (l.plat2Num || l.plat2On));
+const platCount = l => l?.platinum ? 1 + (hasPlat2(l) ? 1 : 0) : 0;
+const platEntries = (id, l) => !l?.platinum ? [] : [{ id, num:l.platNum, date:l.platDate, label:l.platLabel, second:false }].concat(hasPlat2(l) ? [{ id, num:l.plat2Num, date:l.plat2On, label:l.plat2Label, second:true }] : []);
+const platNumText = l => { const a = l.platNum ? `#${l.platNum}${l.platLabel ? ` (${l.platLabel})` : ""}` : null, b = hasPlat2(l) && l.plat2Num ? `#${l.plat2Num}${l.plat2Label ? ` (${l.plat2Label})` : ""}` : null; return [a,b].filter(Boolean).join(" · "); };
 function renderLogs(app, P, isMe){
   const logs = P.logs, top5 = P.top5;
   const ids = Object.keys(logs).sort((a,b)=> bestDate(logs[b]).localeCompare(bestDate(logs[a])));
   const rated = ids.length;
   const ratedIds = ids.filter(id=>logs[id].rating!=null);
   const avg = ratedIds.length ? mean(ratedIds.map(id=>logs[id].rating)).toFixed(1) : "—";
-  const platIds = ids.filter(id=>logs[id].platinum);
+  const platIds = ids.filter(id=>logs[id].platinum), platTotal = platIds.reduce((n,id)=> n + platCount(logs[id]), 0);
   const reviewIds = ids.filter(id=>logs[id].review);
   const awardYears = Object.keys(P.ballot).filter(y=>Object.keys(P.ballot[y]).length).length;
   const steps=[]; for(let v=1;v<=10;v+=0.5) steps.push(v);
@@ -1692,7 +1706,7 @@ function renderLogs(app, P, isMe){
   const max = Math.max(1,...counts);
 
   const wishIds = Object.keys(P.wishlist||{}).sort((a,b)=> (P.wishlist[b]||"").localeCompare(P.wishlist[a]||""));
-  const TABS = [["overview","Overview",null],["games","All games",rated||null],["reviews","Reviews",reviewIds.length],["platinums","Platinums",platIds.length],["wishlist","Wishlist",wishIds.length||null],["lists","Lists",(P.lists||[]).length||null],["awards","Game awards",awardYears||null]];
+  const TABS = [["overview","Overview",null],["games","All games",rated||null],["reviews","Reviews",reviewIds.length],["platinums","Platinums",platTotal],["wishlist","Wishlist",wishIds.length||null],["lists","Lists",(P.lists||[]).length||null],["awards","Game awards",awardYears||null]];
   if (LIVE){
     const loaded = !isMe && profFollows.for===P.id;
     TABS.push(["following","Following", isMe ? (followingIds().length||null) : (loaded ? (profFollows.following.length||null) : null)]);
@@ -1738,7 +1752,7 @@ function renderLogs(app, P, isMe){
         <label class="sortwrap">Year <select id="pYear"><option value="">All years</option>${years.map(y=>`<option value="${y}" ${gamesYear===y?"selected":""}>${y}</option>`).join("")}</select></label>
         <label class="sortwrap">Sort <select id="pSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${gamesSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label>
       </div>
-      ${list.length ? `<div class="grid">${list.slice(0, pageOf("games")).map(id=>card(getGame(id), logs[id].platinum && logs[id].platNum ? `Platinum #${logs[id].platNum}` : undefined, isMe, !isMe, isMe?null:logs[id])).join("")}</div>${moreBtn("games", list.length)}` : `<div class="empty small">No games match${gamesYear ? ` from ${gamesYear}` : ""}${gamesGenre ? ` in ${esc(gamesGenre)}` : ""}.</div>`}`;
+      ${list.length ? `<div class="grid">${list.slice(0, pageOf("games")).map(id=>card(getGame(id), logs[id].platinum && platNumText(logs[id]) ? `Platinum ${platNumText(logs[id])}` : undefined, isMe, !isMe, isMe?null:logs[id])).join("")}</div>${moreBtn("games", list.length)}` : `<div class="empty small">No games match${gamesYear ? ` from ${gamesYear}` : ""}${gamesGenre ? ` in ${esc(gamesGenre)}` : ""}.</div>`}`;
   }
   else if (profileTab==="reviews"){ if (reviewIds.length) loadProfileLikes(P); body = reviewIds.length ? `
     <div class="filters" style="justify-content:flex-end"><label class="sortwrap">Sort <select id="prSort">${Object.entries(PR_SORTS).map(([k,v])=>`<option value="${k}" ${profRevSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
@@ -1759,19 +1773,21 @@ function renderLogs(app, P, isMe){
       </article>`; }).join("")}</div>${moreBtn("reviews", reviewIds.length)}`
     : `<div class="empty small">${isMe ? "No written reviews yet. Add some words when you log a game and they'll collect here." : "No written reviews yet."}</div>`; }
   else if (profileTab==="platinums"){
+    // one entry per platinum — a log with two versions platinumed appears twice, each with its own # and date
+    const entries = platIds.flatMap(id=> platEntries(id, logs[id])), eDate = e => e.date || bestDate(logs[e.id]);
     const sorters = {
-      num:   {label:"Platinum # (newest first)", fn:(a,b)=> (logs[b].platNum??-1)-(logs[a].platNum??-1) || bestDate(logs[b]).localeCompare(bestDate(logs[a]))},
-      numAsc:{label:"Platinum # (oldest first)", fn:(a,b)=> (logs[a].platNum??Infinity)-(logs[b].platNum??Infinity) || bestDate(logs[a]).localeCompare(bestDate(logs[b]))},
-      date:  {label:"Platinum date",            fn:(a,b)=> (logs[b].platDate||bestDate(logs[b])).localeCompare(logs[a].platDate||bestDate(logs[a]))},
-      diff:  {label:"Highest difficulty",       fn:(a,b)=> (logs[b].platDiff??-1)-(logs[a].platDiff??-1)},
-      hours: {label:"Longest time to platinum", fn:(a,b)=> (logs[b].platHours??-1)-(logs[a].platHours??-1)},
-      high:  {label:"Rating: high → low",       fn:(a,b)=> R(logs[b].rating)-R(logs[a].rating)},
+      num:   {label:"Platinum # (newest first)", fn:(a,b)=> (b.num??-1)-(a.num??-1) || eDate(b).localeCompare(eDate(a))},
+      numAsc:{label:"Platinum # (oldest first)", fn:(a,b)=> (a.num??Infinity)-(b.num??Infinity) || eDate(a).localeCompare(eDate(b))},
+      date:  {label:"Platinum date",            fn:(a,b)=> eDate(b).localeCompare(eDate(a))},
+      diff:  {label:"Highest difficulty",       fn:(a,b)=> (logs[b.id].platDiff??-1)-(logs[a.id].platDiff??-1)},
+      hours: {label:"Longest time to platinum", fn:(a,b)=> (logs[b.id].platHours??-1)-(logs[a.id].platHours??-1)},
+      high:  {label:"Rating: high → low",       fn:(a,b)=> R(logs[b.id].rating)-R(logs[a.id].rating)},
     };
-    const list = [...platIds].sort(sorters[platSort].fn);
-    const cap = id => { const l=logs[id]; const bits=[]; if (l.platNum) bits.push(`#${l.platNum}`); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && l.platDate) bits.push(fmtDate(l.platDate)); return bits.length ? bits.join(" · ") : undefined; };
+    const list = [...entries].sort(sorters[platSort].fn);
+    const cap = e => { const l=logs[e.id]; const bits=[]; if (e.num) bits.push(`#${e.num}`); if (e.label) bits.push(e.label); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && e.date) bits.push(fmtDate(e.date)); return bits.length ? bits.join(" · ") : undefined; };
     body = !platIds.length ? `<div class="empty small">${isMe ? "No platinums yet. Flip on “I platinumed this” when logging a game." : "No platinums yet."}</div>` : `
       <div class="filters" style="justify-content:flex-end"><label class="sortwrap">Sort <select id="platSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${platSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
-      <div class="grid">${list.slice(0, pageOf("platinums")).map(id=>card(getGame(id), cap(id), isMe, !isMe, isMe?null:logs[id])).join("")}</div>${moreBtn("platinums", list.length)}`;
+      <div class="grid">${list.slice(0, pageOf("platinums")).map(e=>card(getGame(e.id), cap(e), isMe, !isMe, isMe?null:logs[e.id])).join("")}</div>${moreBtn("platinums", list.length)}`;
   }
   else if (profileTab==="wishlist") body = wishIds.length
     ? `<div class="grid">${wishIds.slice(0, pageOf("wishlist")).map(id=>{ const g=getGame(+id); return g ? card(g, fmtDate((P.wishlist[id]||"").slice(0,10)) || undefined) : ""; }).join("")}</div>${moreBtn("wishlist", wishIds.length)}`
@@ -1789,7 +1805,7 @@ function renderLogs(app, P, isMe){
         <h1>${esc(P.username)}</h1>
         <div class="statrow">
           <div class="stat"><b>${rated}</b><small>game${rated===1?"":"s"} logged</small></div>
-          <div class="stat"><b>${TROPHY("instat")}${platIds.length}</b><small>platinum${platIds.length===1?"":"s"}</small></div>
+          <div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>
         </div>
         ${P.bio ? `<p class="bio">${esc(P.bio)}${isMe && LIVE ? ` <button class="linklike bio-edit" id="bioEdit">edit</button>` : ""}</p>`
           : (isMe && LIVE ? `<p class="bio muted"><button class="linklike bio-edit" id="bioEdit">+ Add a short bio</button></p>` : "")}
@@ -2428,7 +2444,7 @@ function distChart(ratings){            // ratings: array of values, or a {value
 }
 
 // ---- shared log card (game page + profile reviews) ---------------------------
-const dateLine = l => [l.date && "Played " + fmtDate(l.date), l.firstTrophy && "First trophy " + fmtDate(l.firstTrophy), l.platDate && "Platinum " + fmtDate(l.platDate)].filter(Boolean).join(" · ");
+const dateLine = l => [l.date && "Played " + fmtDate(l.date), l.firstTrophy && "First trophy " + fmtDate(l.firstTrophy), l.platDate && "Platinum " + fmtDate(l.platDate), hasPlat2(l) && l.plat2On && `${l.plat2Label || "2nd"} platinum ` + fmtDate(l.plat2On)].filter(Boolean).join(" · ");
 function logCard(l, g, ballot, isMe){
   const w = l.showAwards ? awardsFor(ballot, g.id) : [];
   const rated = SUBS.filter(s=>l.subs?.[s.key]!=null);
@@ -2436,7 +2452,7 @@ function logCard(l, g, ballot, isMe){
     <div class="top">${l.rating!=null ? `<div class="score"><span style="${ratingText(l.rating)}">${l.rating}</span><small> / 10</small></div>` : `<div class="score played">Played</div>`}${l.platinum ? PLAT_IMG(l.rating,"inlog") : ""}<div class="when">${dateLine(l)}</div></div>
     ${w.length ? `<div class="award-tags">${w.map(x=>awardTag(x, isMe)).join("")}</div>` : ""}
     ${l.review ? `<div class="review">${esc(l.review)}</div>` : `<div class="review" style="color:var(--muted)">No review written.</div>`}
-    ${l.platinum && l.platNum ? `<div class="platnum">Platinum #${l.platNum}</div>` : ""}
+    ${l.platinum && platNumText(l) ? `<div class="platnum">Platinum ${platNumText(l)}</div>` : ""}
     ${l.platinum && l.showPlatStats && (l.platDiff!=null || l.platHours!=null) ? `
       <div class="myplat">
         ${l.platDiff!=null ? `<span>Platinum difficulty <b>${l.platDiff}</b>/10</span>` : ""}
@@ -2724,6 +2740,9 @@ $("#subsToggle").onclick = ()=>{
 $("#platToggle").onclick = ()=>{ draft.platinum = !draft.platinum; paintPlat(); };
 $("#playedToggle").onclick = ()=>{ draft.playedOnly = !draft.playedOnly; paintPlayed(); };
 function paintPlayed(){ $("#playedToggle").setAttribute("aria-checked", !!draft.playedOnly); $("#playedToggle").classList.toggle("on", !!draft.playedOnly); }
+function paintPlat2(open){ $("#plat2Box").hidden = !open; $("#plat2Add").hidden = open; }
+$("#plat2Add").onclick = ()=>{ paintPlat2(true); $("#plat2Num").focus(); };
+$("#plat2Remove").onclick = ()=>{ $("#plat2Num").value=""; $("#plat2Label").value=""; $("#plat2Date").value=""; paintPlat2(false); };
 function paintPlat(){
   $("#platToggle").setAttribute("aria-checked", !!draft.platinum); $("#platToggle").classList.toggle("on", !!draft.platinum);
   $("#platStats").hidden = !draft.platinum;
@@ -2743,8 +2762,10 @@ function openSheet(g){
            platDiff: l.platDiff ?? null, platHours: l.platHours ?? null, showPlatStats: l.showPlatStats ?? true, showAwards: l.showAwards ?? true};
   paintAwardsToggle();
   $("#platHours").value = draft.platHours ?? "";
-  $("#platNum").value = l.platNum ?? "";
-  const nextNum = Math.max(0, ...Object.values(logs).map(x=>x.platNum||0)) + 1;
+  $("#platNum").value = l.platNum ?? ""; $("#platLabel").value = l.platLabel || "";
+  $("#plat2Num").value = l.plat2Num ?? ""; $("#plat2Label").value = l.plat2Label || ""; $("#plat2Date").value = l.plat2On || "";
+  paintPlat2(hasPlat2(l));
+  const nextNum = Math.max(0, ...Object.values(logs).flatMap(x=>[x.platNum||0, x.plat2Num||0])) + 1;
   $("#platNumHint").textContent = l.platNum ? "" : `Next would be #${nextNum}`;
   $("#platNum").placeholder = l.platNum ? "" : String(nextNum);
   paintPlat(); paintPlayed();
@@ -2774,7 +2795,7 @@ $("#saveLog").onclick = async ()=>{
   const hrs = parseFloat($("#platHours").value), pnum = parseInt($("#platNum").value);
   logs[draft.gameId] = { game:getGame(draft.gameId), rating: draft.playedOnly && draft.rating==null ? null : draft.rating, review:$("#reviewText").value.trim(), date:dPlayed, firstTrophy:dTrophy, platDate:dPlat, subs:{...draft.subs},
     platinum:!!draft.platinum, platinumVerified:false,
-    platDiff: draft.platinum ? draft.platDiff : null, platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null, platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null,
+    platDiff: draft.platinum ? draft.platDiff : null, platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null, platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null, ...plat2FromSheet(),
     showPlatStats: !!draft.showPlatStats, showAwards: !!draft.showAwards };
   closeSheet(); render(); toast("Log saved");
   saveLogRow(draft.gameId);
@@ -2835,6 +2856,13 @@ async function deliverImage(blob, filename){
 }
 
 // ---- review card image ------------------------------------------------------
+// Second-platinum fields from the sheet (only when the block is open and the log is a platinum).
+function plat2FromSheet(){
+  const open = draft.platinum && !$("#plat2Box").hidden, n = parseInt($("#plat2Num").value);
+  const lab = s => (s||"").replace(/\s+/g," ").trim().slice(0,12) || null;
+  return { platLabel: draft.platinum ? lab($("#platLabel").value) : null,
+    plat2Num: open && !isNaN(n) && n>0 ? n : null, plat2On: open ? ($("#plat2Date").value||null) : null, plat2Label: open ? lab($("#plat2Label").value) : null };
+}
 function sheetLog(){
   const dP=$("#playedDate").value||null, dT=$("#firstTrophyDate").value||null, dPl=$("#platDate").value||null;
   const hrs=parseFloat($("#platHours").value), pnum=parseInt($("#platNum").value);
@@ -2843,7 +2871,7 @@ function sheetLog(){
     datePlayed:dP, dateTrophy:dT, datePlat:dPl,
     platDiff: draft.platinum ? draft.platDiff : null,
     platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null,
-    platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null,
+    platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null, ...plat2FromSheet(),
     showPlatStats: draft.showPlatStats !== false };
 }
 // Export helpers: sharper canvases. exportScale() picks 3x but steps down so the canvas stays
@@ -2871,9 +2899,9 @@ async function saveReviewImage(g){
   const tags = awardsFor(ballots.me, g.id);
   const cvW=110, cvH=147;
   let H = 56 + cvH + 22;
-  const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null].filter(Boolean);
+  const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null, hasPlat2(l)&&l.plat2On?`${l.plat2Label||"2nd"} platinum ${fmtDate(l.plat2On)}`:null].filter(Boolean);
   H += dparts.length ? 26 : 4;
-  const showPlatLine = l.platinum && (l.platNum || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null)));
+  const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null)));
   if (showPlatLine) H += 34;
   if (rated.length) H += 10 + Math.ceil(rated.length/2)*30 + 8;
   let tagLines = [];
@@ -2914,7 +2942,7 @@ async function saveReviewImage(g){
   y += dparts.length ? 26 : 4;
   if (showPlatLine){
     x.fillStyle=gold; x.font="700 14px Outfit, sans-serif";
-    const pbits=[l.platNum?`Platinum #${l.platNum}`:"Platinum", l.showPlatStats&&l.platDiff!=null?`difficulty ${l.platDiff}/10`:null, l.showPlatStats&&l.platHours!=null?`${l.platHours} hrs`:null].filter(Boolean);
+    const pbits=[platNumText(l) ? `Platinum ${platNumText(l)}` : "Platinum", l.showPlatStats&&l.platDiff!=null?`difficulty ${l.platDiff}/10`:null, l.showPlatStats&&l.platHours!=null?`${l.platHours} hrs`:null].filter(Boolean);
     x.fillText("🏆 " + pbits.join("  ·  "), 44, y+4); y += 34;
   }
   if (rated.length){
@@ -2944,7 +2972,7 @@ async function saveReviewImage(g){
 async function saveProfileImage(P, opts={}){
   try { await document.fonts.ready; } catch(e){}
   const logsP = P.logs, ids = Object.keys(logsP).map(Number);
-  const rated = ids.length, plats = ids.filter(id=>logsP[id].platinum).length;
+  const rated = ids.length, plats = ids.reduce((n,id)=> n + platCount(logsP[id]), 0);
   const top = (P.top5||[]).filter(Boolean).slice(0,5);
   const covers = await Promise.all(top.map(id=>{ const g=getGame(id); return g?.cover ? loadImg(coverHi(g.cover), true) : Promise.resolve(null); }));
   const avatar = avatars[P.id] ? await loadImg(avatars[P.id], true) : null;
@@ -3031,9 +3059,9 @@ async function saveProfileImage(P, opts={}){
 
 // ---- database writes (live mode) ------------------------------------------
 function rowToLog(r){ return { game:r.game, rating: r.rating==null ? null : +r.rating, review:r.review||"", date:r.played_on||"", firstTrophy:r.first_trophy_on||"", platDate:r.platinum_on||"", subs:r.subs||{}, platinum:!!r.platinum, platinumVerified:!!r.platinum_verified,
-  platDiff:r.plat_diff==null?null:+r.plat_diff, platHours:r.plat_hours==null?null:+r.plat_hours, platNum:r.plat_num==null?null:+r.plat_num, showPlatStats:r.show_plat_stats!==false, showAwards:r.show_awards!==false }; }
+  platDiff:r.plat_diff==null?null:+r.plat_diff, platHours:r.plat_hours==null?null:+r.plat_hours, platNum:r.plat_num==null?null:+r.plat_num, platLabel:r.plat_label||null, plat2Num:r.plat2_num==null?null:+r.plat2_num, plat2On:r.plat2_on||null, plat2Label:r.plat2_label||null, showPlatStats:r.show_plat_stats!==false, showAwards:r.show_awards!==false }; }
 function logToRow(id, l){ return { user_id:me.id, game_id:id, game:l.game, rating:l.rating, review:l.review, played_on:l.date||null, first_trophy_on:l.firstTrophy||null, platinum_on:l.platDate||null, subs:l.subs, platinum:l.platinum, platinum_verified:false,
-  plat_diff:l.platDiff, plat_hours:l.platHours, plat_num:l.platNum, show_plat_stats:l.showPlatStats, show_awards:l.showAwards, updated_at:new Date().toISOString() }; }
+  plat_diff:l.platDiff, plat_hours:l.platHours, plat_num:l.platNum, plat_label:l.platLabel||null, plat2_num:l.plat2Num||null, plat2_on:l.plat2On||null, plat2_label:l.plat2Label||null, show_plat_stats:l.showPlatStats, show_awards:l.showAwards, updated_at:new Date().toISOString() }; }
 async function saveLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; const { error } = await sb.from("logs").upsert(logToRow(id, logs[id])); if (error) dbFail(error); }
 async function deleteLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; const { error } = await sb.from("logs").delete().match({user_id:me.id, game_id:id}); if (error) dbFail(error); }
 async function saveTop5(slot, id){ if (!LIVE||!me) return;
