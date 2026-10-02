@@ -693,8 +693,8 @@
     </select></label>
     <div class="sublabel" style="margin-top:16px">Show on each tile</div>
     <div class="wall-opts">
+      <button class="mini-toggle on" data-wopt="badge" role="switch" aria-checked="true"><span>Rating badge</span><span class="switch"><i></i></span></button>
       <button class="mini-toggle on" data-wopt="num" role="switch" aria-checked="true"><span>Platinum #</span><span class="switch"><i></i></span></button>
-      <button class="mini-toggle on" data-wopt="rating" role="switch" aria-checked="true"><span>Rating</span><span class="switch"><i></i></span></button>
       <button class="mini-toggle" data-wopt="diff" role="switch" aria-checked="false"><span>Difficulty</span><span class="switch"><i></i></span></button>
       <button class="mini-toggle" data-wopt="hours" role="switch" aria-checked="false"><span>Hours</span><span class="switch"><i></i></span></button>
     </div>
@@ -1962,7 +1962,7 @@ function paintListEditor(){
 }
 let snapTarget=null, snapChartOn=true, snapBadgesOn=true;
 // ---- platinum wall ------------------------------------------------------------
-let wallOpts = { sort:"num", num:true, rating:true, diff:false, hours:false, highlights:false }, wallTarget=null;
+let wallOpts = { sort:"num", badge:true, num:true, diff:false, hours:false, highlights:false }, wallTarget=null;
 function openWall(P){
   wallTarget = P;
   const n = Object.keys(P.logs).filter(id=>P.logs[id].platinum).length;
@@ -2011,7 +2011,7 @@ async function savePlatinumWall(P, o){
   const cols = o.highlights ? 6 : n<=12 ? 4 : n<=48 ? 6 : n<=120 ? 8 : n<=300 ? 10 : 12;
   const W = 1080, pad = 48, gap = cols>=10 ? 8 : 12, small = cols>=12;
   const cellW = Math.floor((W - pad*2 - gap*(cols-1)) / cols), coverH = Math.round(cellW*4/3);
-  const strips = [o.num, o.rating || o.diff || o.hours].filter(Boolean).length;   // line 1: #, line 2: rating/diff/hours
+  const strips = [o.num, o.diff || o.hours].filter(Boolean).length;   // line 1: #, line 2: difficulty/hours
   const band = strips ? (small ? 8 + strips*15 : 10 + strips*18) : 0, cellH = coverH + band;
   const rows = Math.ceil(n/cols), headH = 150, footH = 64;
   const H = headH + rows*(cellH+gap) - gap + footH;
@@ -2043,28 +2043,23 @@ async function savePlatinumWall(P, o){
   x.textAlign="right"; x.font="800 18px Outfit, sans-serif"; x.fillStyle=text; x.fillText("JOYSTICK", W-pad-14, ay+28); x.fillStyle=gold; x.fillText("D", W-pad, ay+28); x.textAlign="left";
   x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUM WALL", pad, headH-18);
   // tiles
-  const tph = Math.max(22, Math.round(cellW*0.26));      // trophy height, scales with the tile
   items.forEach((it,i)=>{
     const cx = pad + (i%cols)*(cellW+gap), cy = headH + ((i/cols)|0)*(cellH+gap), l=it.l, g=it.g;
     x.save(); x.beginPath(); x.roundRect(cx, cy, cellW, cellH, Math.min(10, cellW/10)); x.clip();
     if (covers[i]) x.drawImage(covers[i], cx, cy, cellW, coverH);
     else { x.fillStyle="#233150"; x.fillRect(cx, cy, cellW, coverH); x.fillStyle=mut; x.textAlign="center"; x.font=`800 ${Math.round(cellW*0.36)}px Outfit, sans-serif`; x.fillText((g.title||"?")[0].toUpperCase(), cx+cellW/2, cy+coverH/2+cellW*0.13); x.textAlign="left"; }
-    // trophy in the top-right corner of the cover, with a soft shadow so it reads on any art
+    // the site's rating badge, top-right of the cover: gradient pill with the trophy and the rating
     const tim = trophyImgs[l.rating!=null ? `${TROPHY_BASE}${l.rating}.png` : `${TROPHY_BASE}10.png`];
-    x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=8; x.shadowOffsetY=2;
-    if (tim && tim.width){ const r=tim.width/tim.height, th=tph, tw=th*r; x.drawImage(tim, cx+cellW-tw-6, cy+6, tw, th); }
-    else { x.font=`${tph}px sans-serif`; x.textAlign="right"; x.fillStyle="#e5e4e2"; x.fillText("\u{1F3C6}", cx+cellW-6, cy+6+tph*0.9); x.textAlign="left"; }
-    x.restore();
+    if (o.badge !== false) drawRatingBadge(x, l, tim, cx+cellW-6, cy+6, Math.max(10, Math.round(cellW*0.115)));
     if (band){
       x.fillStyle="#0b1222"; x.fillRect(cx, cy+coverH, cellW, band);
       let ly = cy + coverH + 5, lines = [];
       if (o.num){ const full = platNumText(l) || "—", compact = [l.platNum, hasPlat2(l) ? l.plat2Num : null].filter(Boolean).map(v=>"#"+v).join(" · ") || full;
         lines.push({ t:full, alt:compact, font:`800 ${cellW>=120?13:small?10:11}px Outfit, sans-serif`, col:gold }); }
       const bits = [];
-      if (o.rating && l.rating!=null) bits.push({ t:String(l.rating), rating:l.rating });
       if (o.diff && l.platDiff!=null) bits.push({ t:`${l.platDiff}/10` });
       if (o.hours && l.platHours!=null) bits.push({ t:`${l.platHours}h` });
-      if (o.rating || o.diff || o.hours) lines.push({ bits, font:`700 ${cellW>=120?12:small?9:10}px Manrope, sans-serif` });
+      if (o.diff || o.hours) lines.push({ bits, font:`700 ${cellW>=120?12:small?9:10}px Manrope, sans-serif` });
       lines.forEach(ln=>{
         x.font = ln.font; x.textAlign="center"; const yy = ly + 13;
         if (ln.t!=null){ x.fillStyle = ln.col; let t=ln.t; if (x.measureText(t).width > cellW-8 && ln.alt) t = ln.alt;   // drop version labels before truncating
@@ -2144,6 +2139,24 @@ function drawTrophy(x, im, rightX, cy, h){
 
 // Canvas version of the site's rating gradient (flat color for whole steps,
 // two-color 135deg blend for halves). Coordinates = the text's bounding box.
+// Canvas twin of the .badge pill (rating + trophy) drawn with its top-right corner at (rx, ry).
+function drawRatingBadge(x, l, trophyImg, rx, ry, fs){
+  const v = l.rating, played = v==null, txt = played ? "\u2713" : String(v);
+  const padX = Math.round(fs*0.55), padY = Math.round(fs*0.25), th = Math.round(fs*1.1);
+  x.font = `800 ${fs}px Outfit, sans-serif`; const tw = x.measureText(txt).width;
+  let iw = 0; if (l.platinum){ iw = trophyImg && trophyImg.width ? th*trophyImg.width/trophyImg.height : th; }
+  const gap = l.platinum ? Math.round(fs*0.25) : 0, w = padX*2 + iw + gap + tw, h = padY*2 + Math.max(th, fs), bx = rx - w, by = ry, r = Math.round(fs*0.55);
+  const cols = played ? null : (v===10 ? ["#c9960c","#ffd84d","#fff1a8"] : ratingColors(snapHalf(v)));
+  x.save(); x.shadowColor="rgba(0,0,0,.45)"; x.shadowBlur=6; x.shadowOffsetY=2;
+  if (cols){ const g = x.createLinearGradient(bx, by, bx+w, by+h); cols.forEach((c,i)=> g.addColorStop(i/(cols.length-1), c)); x.fillStyle = g; } else x.fillStyle = "#1e2a47";
+  x.beginPath(); x.roundRect(bx, by, w, h, r); x.fill(); x.restore();
+  if (!played && v<=1.5){ x.strokeStyle="rgba(255,255,255,.35)"; x.lineWidth=1; x.beginPath(); x.roundRect(bx, by, w, h, r); x.stroke(); }
+  let tx = bx + padX;
+  if (l.platinum){ if (trophyImg && trophyImg.width) x.drawImage(trophyImg, tx, by + (h-th)/2, iw, th);
+    else { x.font=`${th}px sans-serif`; x.fillStyle = played ? "#e5e4e2" : ratingInk(v); x.fillText("\u{1F3C6}", tx, by + h/2 + th*0.35); }
+    tx += iw + gap; }
+  x.font = `800 ${fs}px Outfit, sans-serif`; x.fillStyle = played ? "#e5e4e2" : ratingInk(v); x.textBaseline="middle"; x.fillText(txt, tx, by + h/2 + 1); x.textBaseline="alphabetic";
+}
 function ratingFillCtx(x, v, x0, y0, x1, y1){
   const cols = ratingColors(snapHalf(v));
   if (!cols) return "#8b98b5";
