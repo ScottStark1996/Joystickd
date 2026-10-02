@@ -1429,6 +1429,11 @@ function platAverage(id){
   if (!d.length && !h.length) return null;
   return { diff: d.length ? mean(d).toFixed(1) : null, hours: h.length ? Math.round(mean(h)) : null, count: all.length };
 }
+// Share a link: the native share sheet where it exists (iOS app, mobile browsers), otherwise copy to the clipboard.
+async function shareUrl(url, title, copiedMsg){
+  if (navigator.share){ try { await navigator.share({ title, url }); return; } catch(e){ if (e && e.name==="AbortError") return; } }
+  try { await navigator.clipboard.writeText(url); toast(copiedMsg || "Link copied"); } catch { prompt("Link:", url); }
+}
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1800); }
 
 // ---- render --------------------------------------------------------------
@@ -1858,10 +1863,7 @@ function renderLogs(app, P, isMe){
     $("#snapBadges").hidden = !profileBadges(P).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); });
   $("#avatarFile") && ($("#avatarFile").onchange = e=>{ const f=e.target.files[0]; if (f) uploadAvatar(f); });
   $("#avatarClear") && ($("#avatarClear").onclick = ()=>{ if (confirm(`Remove ${P.username}'s profile picture?`)) clearAvatar(P.id); });
-  $("#shareBtn") && ($("#shareBtn").onclick = async ()=>{
-    const url = location.origin + location.pathname + "?u=" + encodeURIComponent(P.username);
-    try { await navigator.clipboard.writeText(url); toast("Profile link copied"); } catch { prompt("Your profile link:", url); }
-  });
+  $("#shareBtn") && ($("#shareBtn").onclick = ()=> shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(P.username), `${P.username} on Joystickd`, "Profile link copied"));
   app.querySelectorAll("[data-payear]").forEach(b=> b.onclick = ()=>{ profileAwardYear=+b.dataset.payear; render(); });
   app.querySelectorAll("[data-awardsimg]").forEach(b=> b.onclick = ()=> openAwardsImg(P, +b.dataset.awardsimg));
   app.querySelectorAll("[data-plog]").forEach(b=> b.onclick = ()=> openT5(+b.dataset.plog, P, isMe));
@@ -2795,7 +2797,7 @@ async function renderGame(app){
         ${l ? `
           <button class="cta ghost" id="logBtn">Edit your log</button>
           ${logCard(l, g, ballots.me, true)}`
-        : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}
+        : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">↗ Share</button>
         ${(()=>{ if (!LIVE || !me) return "";
           const fids = followingIds(); if (!fids.length) return "";
           const all = (friendLogs[g.id]||[]).filter(r=> !isBlocked(r.user_id))
@@ -2866,6 +2868,7 @@ async function renderGame(app){
     overrides[g.id] = { released:v.trim(), year:+v.slice(0,4) }; applyOverride(g); toast("Release date corrected"); render();
   });
   $("#wishBtn") && ($("#wishBtn").onclick = ()=> toggleWishlist(g));
+  $("#shareGameBtn") && ($("#shareGameBtn").onclick = ()=> shareUrl(location.origin + location.pathname + "?g=" + g.id, `${g.title} on Joystickd`, "Game link copied"));
 }
 
 // ---- log sheet -----------------------------------------------------------
