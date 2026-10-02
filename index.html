@@ -570,6 +570,7 @@
   .actions .cta{margin:0}
   .danger{color:#f28b8b;margin-right:auto;font-weight:600;font-size:14px}
 
+  .updbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:60;background:var(--gold);color:#1a1200;font-weight:700;font-size:14px;padding:10px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.45)}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--gold);color:#1a1200;font-weight:700;padding:11px 18px;border-radius:999px;opacity:0;transition:.2s;z-index:30;pointer-events:none}
   .toast.show{opacity:1;transform:translateX(-50%)}
 
@@ -3720,7 +3721,21 @@ if (window.Capacitor?.Plugins?.App?.addListener){
   }); } catch(e){}
 }
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(e=>console.warn("sw:", e)));
+  addEventListener("load", async ()=>{
+    try {
+      const reg = await navigator.serviceWorker.register("sw.js");
+      // Check for a newer version whenever the app comes back to the foreground (throttled by the browser).
+      document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible") reg.update().catch(()=>{}); });
+      // When a new worker takes over while the page is open, offer a one-tap reload.
+      let had = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>{ if (had) showUpdateBar(); had = true; });
+    } catch(e){ console.warn("sw:", e); }
+  });
+  function showUpdateBar(){
+    if ($("#updBar")) return;
+    const b = document.createElement("button"); b.id="updBar"; b.className="updbar"; b.textContent="Joystickd was updated — tap to reload";
+    b.onclick = ()=> location.reload(); document.body.appendChild(b);
+  }
 }
 buildPips();
 wireReportUI();
