@@ -690,6 +690,7 @@
       <option value="date">Platinum date (latest first)</option>
       <option value="rating">Rating (high → low)</option>
       <option value="diff">Difficulty (hard → easy)</option>
+      <option value="fun">Enjoyability (high → low)</option>
     </select></label>
     <div class="sublabel" style="margin-top:16px">Show on each tile</div>
     <div class="wall-opts">
@@ -697,6 +698,7 @@
       <button class="mini-toggle on" data-wopt="num" role="switch" aria-checked="true"><span>Platinum #</span><span class="switch"><i></i></span></button>
       <button class="mini-toggle" data-wopt="diff" role="switch" aria-checked="false"><span>Difficulty</span><span class="switch"><i></i></span></button>
       <button class="mini-toggle" data-wopt="hours" role="switch" aria-checked="false"><span>Hours</span><span class="switch"><i></i></span></button>
+      <button class="mini-toggle" data-wopt="fun" role="switch" aria-checked="false"><span>Enjoyability</span><span class="switch"><i></i></span></button>
     </div>
     <button class="plat-toggle" id="wallHighlights" role="switch" style="margin-top:12px"><span class="pt-text">Highlights only<small>Your top 24 by the chosen order, as a 6×4 board</small></span><span class="switch"><i></i></span></button>
     <div class="actions"><button class="cta ghost" id="wallCancel">Cancel</button><button class="cta" id="wallGo">Save image</button></div>
@@ -917,6 +919,10 @@
         <div class="subctl"><div class="pips small" id="diffPips"></div><div class="readout small none" id="diffReadout">—</div></div>
       </div>
       <div class="subrow">
+        <div class="sublabel">Platinum enjoyability <span class="hint">optional — how fun was the grind?</span></div>
+        <div class="subctl"><div class="pips small" id="funPips"></div><div class="readout small none" id="funReadout">—</div></div>
+      </div>
+      <div class="subrow">
         <div class="sublabel">Platinum time to complete</div>
         <div class="hours"><input type="number" id="platHours" min="0" step="0.5" inputmode="decimal" placeholder="0"><span>hours</span></div>
       </div>
@@ -934,7 +940,7 @@
         </div>
       </div>
       <button class="mini-toggle" id="showStatsToggle" role="switch" aria-checked="true">
-        <span>Show these two stats on my review</span><span class="switch"><i></i></span>
+        <span>Show these platinum stats on my review</span><span class="switch"><i></i></span>
       </button>
     </div>
 
@@ -1411,12 +1417,12 @@ function distCounts(id){
   return c;
 }
 function platAverage(id){
-  const l = logs[id], mineOk = l?.platinum && (l.platDiff!=null || l.platHours!=null);
+  const l = logs[id], mineOk = l?.platinum && (l.platDiff!=null || l.platHours!=null || l.platFun!=null);
   if (LIVE){ const s=summaryOf(id); if (!s) return null;
-    const d = mergeAvg(s.plat_diff_avg, s.plat_diff_count, mineOk ? l.platDiff : null), h = mergeAvg(s.plat_hours_avg, s.plat_hours_count, mineOk ? l.platHours : null);
+    const d = mergeAvg(s.plat_diff_avg, s.plat_diff_count, mineOk ? l.platDiff : null), h = mergeAvg(s.plat_hours_avg, s.plat_hours_count, mineOk ? l.platHours : null), f = mergeAvg(s.plat_fun_avg, s.plat_fun_count, mineOk ? l.platFun : null);
     const count = +(s.plat_count||0) + (mineOk ? 1 : 0);
-    if (!d && !h) return null;
-    return { diff: d ? d.avg : null, hours: h ? Math.round(+h.avg) : null, count }; }
+    if (!d && !h && !f) return null;
+    return { diff: d ? d.avg : null, hours: h ? Math.round(+h.avg) : null, fun: f ? f.avg : null, count }; }
   const all = communityPlat(id);
   if (mineOk) all.push([l.platDiff, l.platHours]);
   const d = all.map(x=>x[0]).filter(v=>v!=null), h = all.map(x=>x[1]).filter(v=>v!=null);
@@ -1807,11 +1813,12 @@ function renderLogs(app, P, isMe){
       numAsc:{label:"Platinum # (oldest first)", fn:(a,b)=> (a.num??Infinity)-(b.num??Infinity) || eDate(a).localeCompare(eDate(b))},
       date:  {label:"Platinum date",            fn:(a,b)=> eDate(b).localeCompare(eDate(a))},
       diff:  {label:"Highest difficulty",       fn:(a,b)=> (logs[b.id].platDiff??-1)-(logs[a.id].platDiff??-1)},
+      fun:   {label:"Most enjoyable platinum",  fn:(a,b)=> (logs[b.id].platFun??-1)-(logs[a.id].platFun??-1)},
       hours: {label:"Longest time to platinum", fn:(a,b)=> (logs[b.id].platHours??-1)-(logs[a.id].platHours??-1)},
       high:  {label:"Rating: high → low",       fn:(a,b)=> R(logs[b.id].rating)-R(logs[a.id].rating)},
     };
     const list = [...entries].sort(sorters[platSort].fn);
-    const cap = e => { const l=logs[e.id]; const bits=[]; if (e.num) bits.push(`#${e.num}`); if (e.label) bits.push(e.label); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && e.date) bits.push(fmtDate(e.date)); return bits.length ? bits.join(" · ") : undefined; };
+    const cap = e => { const l=logs[e.id]; const bits=[]; if (e.num) bits.push(`#${e.num}`); if (e.label) bits.push(e.label); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10`); if (platSort==="fun" && l.platFun!=null) bits.push(`fun ${l.platFun}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && e.date) bits.push(fmtDate(e.date)); return bits.length ? bits.join(" · ") : undefined; };
     body = !platIds.length ? `<div class="empty small">${isMe ? "No platinums yet. Flip on “I platinumed this” when logging a game." : "No platinums yet."}</div>` : `
       <div class="filters" style="justify-content:flex-end;gap:10px">${isMe && LIVE ? `<button class="cta ghost" id="wallBtn" style="margin:0;padding:9px 14px;font-size:13px">Save platinum wall</button>` : ""}<label class="sortwrap">Sort <select id="platSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${platSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
       <div class="grid">${list.slice(0, pageOf("platinums")).map(e=>card(getGame(e.id), cap(e), isMe, !isMe, isMe?null:logs[e.id])).join("")}</div>${moreBtn("platinums", list.length)}`;
@@ -1962,7 +1969,7 @@ function paintListEditor(){
 }
 let snapTarget=null, snapChartOn=true, snapBadgesOn=true;
 // ---- platinum wall ------------------------------------------------------------
-let wallOpts = { sort:"num", badge:true, num:true, diff:false, hours:false, highlights:false }, wallTarget=null;
+let wallOpts = { sort:"num", badge:true, num:true, diff:false, hours:false, fun:false, highlights:false }, wallTarget=null;
 function openWall(P){
   wallTarget = P;
   const n = Object.keys(P.logs).filter(id=>P.logs[id].platinum).length;
@@ -2002,6 +2009,7 @@ async function savePlatinumWall(P, o){
     date:    (a,b)=> (b.l.plat2On||b.l.platDate||bestDate(b.l)).localeCompare(a.l.plat2On||a.l.platDate||bestDate(a.l)),
     rating:  (a,b)=> R(b.l.rating)-R(a.l.rating) || firstNum(a.l)-firstNum(b.l),
     diff:    (a,b)=> (b.l.platDiff??-1)-(a.l.platDiff??-1) || firstNum(a.l)-firstNum(b.l),
+    fun:     (a,b)=> (b.l.platFun??-1)-(a.l.platFun??-1) || firstNum(a.l)-firstNum(b.l),
   };
   items.sort(sorters[o.sort] || sorters.num);
   const totalGames = items.length, totalPlats = items.reduce((n,x)=> n + platCount(x.l), 0);
@@ -2011,7 +2019,7 @@ async function savePlatinumWall(P, o){
   const cols = o.highlights ? 6 : n<=12 ? 4 : n<=48 ? 6 : n<=120 ? 8 : n<=300 ? 10 : 12;
   const W = 1080, pad = 48, gap = cols>=10 ? 8 : 12, small = cols>=12;
   const cellW = Math.floor((W - pad*2 - gap*(cols-1)) / cols), coverH = Math.round(cellW*4/3);
-  const strips = [o.num, o.diff || o.hours].filter(Boolean).length;   // line 1: #, line 2: difficulty/hours
+  const strips = [o.num, o.diff || o.hours || o.fun].filter(Boolean).length;   // line 1: #, line 2: difficulty/hours/enjoyability
   const band = strips ? (small ? 8 + strips*15 : 10 + strips*18) : 0, cellH = coverH + band;
   const rows = Math.ceil(n/cols), headH = 150, footH = 64;
   const H = headH + rows*(cellH+gap) - gap + footH;
@@ -2059,7 +2067,8 @@ async function savePlatinumWall(P, o){
       const bits = [];
       if (o.diff && l.platDiff!=null) bits.push({ t:`${l.platDiff}/10` });
       if (o.hours && l.platHours!=null) bits.push({ t:`${l.platHours}h` });
-      if (o.diff || o.hours) lines.push({ bits, font:`700 ${cellW>=120?12:small?9:10}px Manrope, sans-serif` });
+      if (o.fun && l.platFun!=null) bits.push({ t:`♥${l.platFun}`, rating:l.platFun });
+      if (o.diff || o.hours || o.fun) lines.push({ bits, font:`700 ${cellW>=120?12:small?9:10}px Manrope, sans-serif` });
       lines.forEach(ln=>{
         x.font = ln.font; x.textAlign="center"; const yy = ly + 13;
         if (ln.t!=null){ x.fillStyle = ln.col; let t=ln.t; if (x.measureText(t).width > cellW-8 && ln.alt) t = ln.alt;   // drop version labels before truncating
@@ -2617,9 +2626,10 @@ function logCard(l, g, ballot, isMe){
     ${w.length ? `<div class="award-tags">${w.map(x=>awardTag(x, isMe)).join("")}</div>` : ""}
     ${l.review ? `<div class="review">${esc(l.review)}</div>` : `<div class="review" style="color:var(--muted)">No review written.</div>`}
     ${l.platinum && platNumText(l) ? `<div class="platnum">Platinum ${platNumText(l)}</div>` : ""}
-    ${l.platinum && l.showPlatStats && (l.platDiff!=null || l.platHours!=null) ? `
+    ${l.platinum && l.showPlatStats && (l.platDiff!=null || l.platHours!=null || l.platFun!=null) ? `
       <div class="myplat">
         ${l.platDiff!=null ? `<span>Platinum difficulty <b>${l.platDiff}</b>/10</span>` : ""}
+        ${l.platFun!=null ? `<span>Enjoyability <b style="${ratingText(l.platFun)}">${l.platFun}</b>/10</span>` : ""}
         ${l.platHours!=null ? `<span>Platinum time <b>${l.platHours}</b> hrs</span>` : ""}
       </div>` : ""}
     ${rated.length ? `<div class="mysubs">${rated.map(s=>`<div class="mysub"><span>${s.label}</span><b style="${ratingText(l.subs[s.key])}">${l.subs[s.key]}</b></div>`).join("")}</div>` : ""}
@@ -2808,6 +2818,7 @@ async function renderGame(app){
           <div class="platgrid">
             <div class="platstat"><div class="pn">${p.diff ?? "—"}<small>${p.diff ? " / 10" : ""}</small></div><div class="pl">Platinum difficulty</div></div>
             <div class="platstat"><div class="pn">${p.hours ?? "—"}<small>${p.hours ? " hrs" : ""}</small></div><div class="pl">Platinum time to complete</div></div>
+            ${p.fun ? `<div class="platstat"><div class="pn"><span style="${ratingText(snapHalf(+p.fun))}">${p.fun}</span><small> / 10</small></div><div class="pl">Platinum enjoyability</div></div>` : ""}
           </div>
           <div class="pcount">Based on ${p.count} platinum report${p.count===1?"":"s"}</div>
         </section>` : ""; })()}
@@ -2882,7 +2893,7 @@ function makePips(box, readout, get, set){
   return paint;
 }
 
-let paintMain, paintSubs=[], paintDiff;
+let paintMain, paintSubs=[], paintDiff, paintFun;
 function buildPips(){
   paintMain = makePips($("#pips"), $("#readout"), ()=>draft.rating, v=>draft.rating=v);
   const wrap = $("#subs"); wrap.innerHTML=""; paintSubs=[];
@@ -2894,8 +2905,9 @@ function buildPips(){
       ()=>draft.subs[s.key] ?? null, v=>{ if(v==null) delete draft.subs[s.key]; else draft.subs[s.key]=v; }));
   });
   paintDiff = makePips($("#diffPips"), $("#diffReadout"), ()=>draft.platDiff, v=>draft.platDiff=v);
+  paintFun  = makePips($("#funPips"),  $("#funReadout"),  ()=>draft.platFun,  v=>draft.platFun=v);
 }
-function paintPips(){ paintMain(); paintSubs.forEach(f=>f()); paintDiff(); }
+function paintPips(){ paintMain(); paintSubs.forEach(f=>f()); paintDiff(); paintFun(); }
 
 $("#subsToggle").onclick = ()=>{
   const open = $("#subs").hidden; $("#subs").hidden = !open;
@@ -2923,7 +2935,7 @@ function paintAwardsToggle(){
 function openSheet(g){
   const l = logs[g.id] || {};
   draft = {gameId:g.id, rating: l.rating ?? null, playedOnly: !!(l.game && l.rating==null), subs:{...(l.subs||{})}, platinum: !!l.platinum,
-           platDiff: l.platDiff ?? null, platHours: l.platHours ?? null, showPlatStats: l.showPlatStats ?? true, showAwards: l.showAwards ?? true};
+           platDiff: l.platDiff ?? null, platFun: l.platFun ?? null, platHours: l.platHours ?? null, showPlatStats: l.showPlatStats ?? true, showAwards: l.showAwards ?? true};
   paintAwardsToggle();
   $("#platHours").value = draft.platHours ?? "";
   $("#platNum").value = l.platNum ?? ""; $("#platLabel").value = l.platLabel || "";
@@ -2959,7 +2971,7 @@ $("#saveLog").onclick = async ()=>{
   const hrs = parseFloat($("#platHours").value), pnum = parseInt($("#platNum").value);
   logs[draft.gameId] = { game:getGame(draft.gameId), rating: draft.playedOnly && draft.rating==null ? null : draft.rating, review:$("#reviewText").value.trim(), date:dPlayed, firstTrophy:dTrophy, platDate:dPlat, subs:{...draft.subs},
     platinum:!!draft.platinum, platinumVerified:false,
-    platDiff: draft.platinum ? draft.platDiff : null, platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null, platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null, ...plat2FromSheet(),
+    platDiff: draft.platinum ? draft.platDiff : null, platFun: draft.platinum ? draft.platFun : null, platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null, platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null, ...plat2FromSheet(),
     showPlatStats: !!draft.showPlatStats, showAwards: !!draft.showAwards };
   closeSheet(); render(); toast("Log saved");
   saveLogRow(draft.gameId);
@@ -3033,7 +3045,7 @@ function sheetLog(){
   return { rating: draft.playedOnly && draft.rating==null ? null : draft.rating,
     review: $("#reviewText").value.trim(), subs: {...draft.subs}, platinum: draft.platinum,
     datePlayed:dP, dateTrophy:dT, datePlat:dPl,
-    platDiff: draft.platinum ? draft.platDiff : null,
+    platDiff: draft.platinum ? draft.platDiff : null, platFun: draft.platinum ? draft.platFun : null,
     platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null,
     platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null, ...plat2FromSheet(),
     showPlatStats: draft.showPlatStats !== false };
@@ -3065,7 +3077,7 @@ async function saveReviewImage(g){
   let H = 56 + cvH + 22;
   const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null, hasPlat2(l)&&l.plat2On?`${l.plat2Label||"2nd"} platinum ${fmtDate(l.plat2On)}`:null].filter(Boolean);
   H += dparts.length ? 26 : 4;
-  const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null)));
+  const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null || l.platFun!=null)));
   if (showPlatLine) H += 34;
   if (rated.length) H += 10 + Math.ceil(rated.length/2)*30 + 8;
   let tagLines = [];
@@ -3106,7 +3118,7 @@ async function saveReviewImage(g){
   y += dparts.length ? 26 : 4;
   if (showPlatLine){
     x.fillStyle=gold; x.font="700 14px Outfit, sans-serif";
-    const pbits=[platNumText(l) ? `Platinum ${platNumText(l)}` : "Platinum", l.showPlatStats&&l.platDiff!=null?`difficulty ${l.platDiff}/10`:null, l.showPlatStats&&l.platHours!=null?`${l.platHours} hrs`:null].filter(Boolean);
+    const pbits=[platNumText(l) ? `Platinum ${platNumText(l)}` : "Platinum", l.showPlatStats&&l.platDiff!=null?`difficulty ${l.platDiff}/10`:null, l.showPlatStats&&l.platFun!=null?`enjoyability ${l.platFun}/10`:null, l.showPlatStats&&l.platHours!=null?`${l.platHours} hrs`:null].filter(Boolean);
     x.fillText("🏆 " + pbits.join("  ·  "), 44, y+4); y += 34;
   }
   if (rated.length){
@@ -3223,9 +3235,9 @@ async function saveProfileImage(P, opts={}){
 
 // ---- database writes (live mode) ------------------------------------------
 function rowToLog(r){ return { game:r.game, rating: r.rating==null ? null : +r.rating, review:r.review||"", date:r.played_on||"", firstTrophy:r.first_trophy_on||"", platDate:r.platinum_on||"", subs:r.subs||{}, platinum:!!r.platinum, platinumVerified:!!r.platinum_verified,
-  platDiff:r.plat_diff==null?null:+r.plat_diff, platHours:r.plat_hours==null?null:+r.plat_hours, platNum:r.plat_num==null?null:+r.plat_num, platLabel:r.plat_label||null, plat2Num:r.plat2_num==null?null:+r.plat2_num, plat2On:r.plat2_on||null, plat2Label:r.plat2_label||null, showPlatStats:r.show_plat_stats!==false, showAwards:r.show_awards!==false }; }
+  platDiff:r.plat_diff==null?null:+r.plat_diff, platFun:r.plat_fun==null?null:+r.plat_fun, platHours:r.plat_hours==null?null:+r.plat_hours, platNum:r.plat_num==null?null:+r.plat_num, platLabel:r.plat_label||null, plat2Num:r.plat2_num==null?null:+r.plat2_num, plat2On:r.plat2_on||null, plat2Label:r.plat2_label||null, showPlatStats:r.show_plat_stats!==false, showAwards:r.show_awards!==false }; }
 function logToRow(id, l){ return { user_id:me.id, game_id:id, game:l.game, rating:l.rating, review:l.review, played_on:l.date||null, first_trophy_on:l.firstTrophy||null, platinum_on:l.platDate||null, subs:l.subs, platinum:l.platinum, platinum_verified:false,
-  plat_diff:l.platDiff, plat_hours:l.platHours, plat_num:l.platNum, plat_label:l.platLabel||null, plat2_num:l.plat2Num||null, plat2_on:l.plat2On||null, plat2_label:l.plat2Label||null, show_plat_stats:l.showPlatStats, show_awards:l.showAwards, updated_at:new Date().toISOString() }; }
+  plat_diff:l.platDiff, plat_fun:l.platFun??null, plat_hours:l.platHours, plat_num:l.platNum, plat_label:l.platLabel||null, plat2_num:l.plat2Num||null, plat2_on:l.plat2On||null, plat2_label:l.plat2Label||null, show_plat_stats:l.showPlatStats, show_awards:l.showAwards, updated_at:new Date().toISOString() }; }
 async function saveLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; const { error } = await sb.from("logs").upsert(logToRow(id, logs[id])); if (error) dbFail(error); }
 async function deleteLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; const { error } = await sb.from("logs").delete().match({user_id:me.id, game_id:id}); if (error) dbFail(error); }
 async function saveTop5(slot, id){ if (!LIVE||!me) return;
