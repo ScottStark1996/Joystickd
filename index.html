@@ -205,6 +205,9 @@
   .hours input:focus{outline:2px solid var(--gold);outline-offset:1px}
   .hours span{color:var(--muted);font-size:14px}
   .mini-toggle{display:flex;align-items:center;gap:12px;width:100%;padding:12px 0;font-size:13px;font-weight:600;color:#c4cddd;text-align:left}
+  .wall-opts{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+  .wall-opts .mini-toggle{border-bottom:1px solid var(--line)}
+  .mini-toggle.on .switch{background:var(--plat)} .mini-toggle.on .switch i{transform:translateX(18px)}
   .mini-toggle .switch{width:36px;height:20px}
   .mini-toggle .switch i{width:14px;height:14px}
   .mini-toggle.on .switch{background:var(--plat)}
@@ -676,6 +679,29 @@
   </div>
 </div>
 
+<div class="sheet-wrap" id="wallWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="wallTitle">
+    <h2 id="wallTitle">Platinum wall</h2>
+    <div class="g" id="wallSub">Every platinum you've earned, as one shareable image.</div>
+    <label class="sortwrap" style="display:flex;align-items:center;gap:10px;margin-top:14px">Order <select id="wallSort" class="txt" style="flex:1">
+      <option value="num">Platinum # (first → latest)</option>
+      <option value="numDesc">Platinum # (latest first)</option>
+      <option value="date">Platinum date (latest first)</option>
+      <option value="rating">Rating (high → low)</option>
+      <option value="diff">Difficulty (hard → easy)</option>
+    </select></label>
+    <div class="sublabel" style="margin-top:16px">Show on each tile</div>
+    <div class="wall-opts">
+      <button class="mini-toggle on" data-wopt="num" role="switch" aria-checked="true"><span>Platinum #</span><span class="switch"><i></i></span></button>
+      <button class="mini-toggle on" data-wopt="rating" role="switch" aria-checked="true"><span>Rating</span><span class="switch"><i></i></span></button>
+      <button class="mini-toggle" data-wopt="diff" role="switch" aria-checked="false"><span>Difficulty</span><span class="switch"><i></i></span></button>
+      <button class="mini-toggle" data-wopt="hours" role="switch" aria-checked="false"><span>Hours</span><span class="switch"><i></i></span></button>
+    </div>
+    <button class="plat-toggle" id="wallHighlights" role="switch" style="margin-top:12px"><span class="pt-text">Highlights only<small>Your top 24 by the chosen order, as a 6×4 board</small></span><span class="switch"><i></i></span></button>
+    <div class="actions"><button class="cta ghost" id="wallCancel">Cancel</button><button class="cta" id="wallGo">Save image</button></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="listWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="listTitle">
     <h2 id="listTitle">Your list</h2>
@@ -896,13 +922,13 @@
       <div class="subrow">
         <div class="sublabel">Which platinum was this for you?</div>
         <div class="hours"><span>#</span><input type="number" id="platNum" min="1" step="1" inputmode="numeric" placeholder="e.g. 27"><span class="hint" id="platNumHint"></span></div>
-        <div class="hours" style="margin-top:8px"><input type="text" id="platLabel" maxlength="12" placeholder="Version, e.g. PS4" style="width:140px"><span class="hint">optional</span></div>
+        <div class="hours" style="margin-top:8px"><input type="text" id="platLabel" maxlength="12" placeholder="PS4, PS5…" style="width:140px"><span class="hint">version (optional)</span></div>
       </div>
       <div class="subrow" id="plat2Row">
         <button class="linklike" id="plat2Add" type="button">+ Add a second platinum (another version of this game)</button>
         <div id="plat2Box" hidden>
           <div class="sublabel">Second platinum <button class="linklike bio-edit" id="plat2Remove" type="button">remove</button></div>
-          <div class="hours"><span>#</span><input type="number" id="plat2Num" min="1" step="1" inputmode="numeric" placeholder="e.g. 149"><input type="text" id="plat2Label" maxlength="12" placeholder="Version, e.g. PS5" style="width:140px"></div>
+          <div class="hours"><span>#</span><input type="number" id="plat2Num" min="1" step="1" inputmode="numeric" placeholder="e.g. 149"><input type="text" id="plat2Label" maxlength="12" placeholder="PS4, PS5…" style="width:140px"></div>
           <div class="hours" style="margin-top:8px"><input type="date" id="plat2Date" style="width:auto"><span class="hint">date</span></div>
         </div>
       </div>
@@ -1786,7 +1812,7 @@ function renderLogs(app, P, isMe){
     const list = [...entries].sort(sorters[platSort].fn);
     const cap = e => { const l=logs[e.id]; const bits=[]; if (e.num) bits.push(`#${e.num}`); if (e.label) bits.push(e.label); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && e.date) bits.push(fmtDate(e.date)); return bits.length ? bits.join(" · ") : undefined; };
     body = !platIds.length ? `<div class="empty small">${isMe ? "No platinums yet. Flip on “I platinumed this” when logging a game." : "No platinums yet."}</div>` : `
-      <div class="filters" style="justify-content:flex-end"><label class="sortwrap">Sort <select id="platSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${platSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
+      <div class="filters" style="justify-content:flex-end;gap:10px">${isMe && LIVE ? `<button class="cta ghost" id="wallBtn" style="margin:0;padding:9px 14px;font-size:13px">Save platinum wall</button>` : ""}<label class="sortwrap">Sort <select id="platSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${platSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
       <div class="grid">${list.slice(0, pageOf("platinums")).map(e=>card(getGame(e.id), cap(e), isMe, !isMe, isMe?null:logs[e.id])).join("")}</div>${moreBtn("platinums", list.length)}`;
   }
   else if (profileTab==="wishlist") body = wishIds.length
@@ -1839,6 +1865,7 @@ function renderLogs(app, P, isMe){
   wireComments(app);
   app.querySelectorAll("[data-plike]").forEach(b=> b.onclick = ()=> toggleLike(+b.dataset.plike, P.id));
   app.querySelectorAll("[data-prreport]").forEach(b=> b.onclick = ()=>{ const gid=+b.dataset.prreport, g=getGame(gid); openReport({ type:"review", gid, targetUser:P.id, label:`Review of ${g?.title||"a game"} by ${P.username}` }); });
+  $("#wallBtn") && ($("#wallBtn").onclick = ()=> openWall(P));
   $("#platSort") && ($("#platSort").onchange = e=>{ platSort=e.target.value; shown={}; render(); });
   $("#fbtn") && ($("#fbtn").onclick = ()=>{ $("#fbtn").dataset.act==="follow" ? follow(P.id, P.username) : unfollow(P.id); });
   $("#profMoreBtn") && ($("#profMoreBtn").onclick = ()=> openProfMenu(P));
@@ -1933,6 +1960,129 @@ function paintListEditor(){
   $("#listGames").querySelectorAll("[data-lrm]").forEach(b=> b.onclick = ()=>{ listDraft.games.splice(+b.dataset.lrm,1); paintListEditor(); });
 }
 let snapTarget=null, snapChartOn=true, snapBadgesOn=true;
+// ---- platinum wall ------------------------------------------------------------
+let wallOpts = { sort:"num", num:true, rating:true, diff:false, hours:false, highlights:false }, wallTarget=null;
+function openWall(P){
+  wallTarget = P;
+  const n = Object.keys(P.logs).filter(id=>P.logs[id].platinum).length;
+  $("#wallSub").textContent = n ? `${n} platinum${n===1?"":"s"} as one shareable image.` : "No platinums yet.";
+  $("#wallSort").value = wallOpts.sort;
+  document.querySelectorAll("[data-wopt]").forEach(b=>{ const on=!!wallOpts[b.dataset.wopt]; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+  $("#wallHighlights").classList.toggle("on", wallOpts.highlights); $("#wallHighlights").setAttribute("aria-checked", wallOpts.highlights);
+  $("#wallWrap").classList.add("open");
+}
+function wireWallUI(){
+  $("#wallCancel").onclick = ()=> $("#wallWrap").classList.remove("open");
+  $("#wallWrap").addEventListener("click", e=>{ if(e.target.id==="wallWrap") $("#wallWrap").classList.remove("open"); });
+  $("#wallSort").onchange = e=>{ wallOpts.sort = e.target.value; };
+  document.querySelectorAll("[data-wopt]").forEach(b=> b.onclick = ()=>{ const k=b.dataset.wopt; wallOpts[k]=!wallOpts[k]; b.classList.toggle("on", wallOpts[k]); b.setAttribute("aria-checked", wallOpts[k]); });
+  $("#wallHighlights").onclick = ()=>{ wallOpts.highlights=!wallOpts.highlights; $("#wallHighlights").classList.toggle("on", wallOpts.highlights); $("#wallHighlights").setAttribute("aria-checked", wallOpts.highlights); };
+  $("#wallGo").onclick = ()=>{ $("#wallWrap").classList.remove("open"); if (wallTarget) savePlatinumWall(wallTarget, { ...wallOpts }); };
+}
+// Load images in batches with a progress toast, so a 300-cover wall doesn't fire 300 requests at once.
+async function loadImgsBatched(urls, label){
+  const out = new Array(urls.length).fill(null); const B = 20;
+  for (let i=0; i<urls.length; i+=B){
+    if (urls.length > B) toast(`${label} ${Math.min(i+B, urls.length)}/${urls.length}…`);
+    const part = await Promise.all(urls.slice(i, i+B).map(u=> u ? loadImg(u, true) : Promise.resolve(null)));
+    part.forEach((im,j)=> out[i+j]=im);
+  }
+  return out;
+}
+async function savePlatinumWall(P, o){
+  try { await document.fonts.ready; } catch(e){}
+  // one tile per GAME (a double-dipped game shows both numbers on its strip)
+  let items = Object.keys(P.logs).map(Number).filter(id=>P.logs[id].platinum).map(id=>({ id, l:P.logs[id], g:getGame(id) })).filter(x=>x.g);
+  if (!items.length){ toast("No platinums to show yet"); return; }
+  const firstNum = l => l.platNum ?? Infinity, lastNum = l => Math.max(l.platNum||0, l.plat2Num||0);
+  const sorters = {
+    num:     (a,b)=> firstNum(a.l)-firstNum(b.l) || bestDate(a.l).localeCompare(bestDate(b.l)),
+    numDesc: (a,b)=> lastNum(b.l)-lastNum(a.l) || bestDate(b.l).localeCompare(bestDate(a.l)),
+    date:    (a,b)=> (b.l.plat2On||b.l.platDate||bestDate(b.l)).localeCompare(a.l.plat2On||a.l.platDate||bestDate(a.l)),
+    rating:  (a,b)=> R(b.l.rating)-R(a.l.rating) || firstNum(a.l)-firstNum(b.l),
+    diff:    (a,b)=> (b.l.platDiff??-1)-(a.l.platDiff??-1) || firstNum(a.l)-firstNum(b.l),
+  };
+  items.sort(sorters[o.sort] || sorters.num);
+  const totalGames = items.length, totalPlats = items.reduce((n,x)=> n + platCount(x.l), 0);
+  if (o.highlights) items = items.slice(0, 24);
+  const n = items.length;
+  // grid shape from the count; tiles shrink a notch for very large walls
+  const cols = o.highlights ? 6 : n<=12 ? 4 : n<=48 ? 6 : n<=120 ? 8 : n<=300 ? 10 : 12;
+  const W = 1080, pad = 48, gap = cols>=10 ? 8 : 12, small = cols>=12;
+  const cellW = Math.floor((W - pad*2 - gap*(cols-1)) / cols), coverH = Math.round(cellW*4/3);
+  const strips = [o.num, o.rating || o.diff || o.hours].filter(Boolean).length;   // line 1: #, line 2: rating/diff/hours
+  const band = strips ? (small ? 8 + strips*15 : 10 + strips*18) : 0, cellH = coverH + band;
+  const rows = Math.ceil(n/cols), headH = 150, footH = 64;
+  const H = headH + rows*(cellH+gap) - gap + footH;
+  // images
+  const covers = await loadImgsBatched(items.map(x=> x.g.cover ? coverHi(x.g.cover) : null), "Loading covers");
+  const trophyUrls = [...new Set(items.map(x=> x.l.rating!=null ? `${TROPHY_BASE}${x.l.rating}.png` : `${TROPHY_BASE}10.png`))];
+  const trophyImgs = {}; (await Promise.all(trophyUrls.map(u=> loadImg(u, true)))).forEach((im,i)=> trophyImgs[trophyUrls[i]]=im);
+  const avatar = avatars[P.id] ? await loadImg(avatars[P.id], true) : null;
+  const badgeList = profileBadges(P), badgeImgs = await Promise.all(badgeList.map(b=> loadImg(b.big, true)));
+  // canvas
+  const c=document.createElement("canvas"); const x=c.getContext("2d");
+  const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  const gold="#f0b429", text="#e6ebf4", mut="#8b98b5", line="#28365a";
+  x.fillStyle="#0e1526"; x.fillRect(0,0,W,H);
+  x.fillStyle="#161f35"; x.strokeStyle=line; x.lineWidth=1; x.beginPath(); x.roundRect(24,24,W-48,H-48,22); x.fill(); x.stroke();
+  // header: avatar + badges, name, counts, wordmark
+  const ax=pad, ay=44, ad=72;
+  if (avatar){ x.save(); x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.clip(); x.drawImage(avatar, ax, ay, ad, ad); x.restore(); }
+  else { x.fillStyle="#233150"; x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.fill(); x.fillStyle=gold; x.font="800 32px Outfit, sans-serif"; x.textAlign="center"; x.fillText((P.username[0]||"?").toUpperCase(), ax+ad/2, ay+ad/2+11); x.textAlign="left"; }
+  badgeList.forEach((b,i)=>{ const im=badgeImgs[i]; if (!im) return; const bd=30; const bx = b.corner==="right" ? ax+ad-bd+8 : ax-8, by = b.corner==="bl" ? ay+ad-bd+6 : ay-6;
+    x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=6; x.shadowOffsetY=2; x.drawImage(im, bx, by, bd, bd); x.restore(); });
+  const nx = ax+ad+20;
+  x.font="800 34px Outfit, sans-serif"; x.fillStyle=text; x.fillText(P.username, nx, ay+30);
+  const dates = items.map(x=> x.l.platDate).filter(Boolean).sort();
+  const sub = [`${totalPlats} platinum${totalPlats===1?"":"s"}${totalPlats!==totalGames ? ` across ${totalGames} games` : ""}`,
+               dates.length ? `first ${fmtDate(dates[0])}` : null, dates.length>1 ? `latest ${fmtDate(dates[dates.length-1])}` : null,
+               o.highlights ? `top ${n} highlights` : null].filter(Boolean).join("  ·  ");
+  x.font="600 15px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(sub, nx, ay+58);
+  x.textAlign="right"; x.font="800 18px Outfit, sans-serif"; x.fillStyle=text; x.fillText("JOYSTICK", W-pad-14, ay+28); x.fillStyle=gold; x.fillText("D", W-pad, ay+28); x.textAlign="left";
+  x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUM WALL", pad, headH-18);
+  // tiles
+  const tph = Math.max(22, Math.round(cellW*0.26));      // trophy height, scales with the tile
+  items.forEach((it,i)=>{
+    const cx = pad + (i%cols)*(cellW+gap), cy = headH + ((i/cols)|0)*(cellH+gap), l=it.l, g=it.g;
+    x.save(); x.beginPath(); x.roundRect(cx, cy, cellW, cellH, Math.min(10, cellW/10)); x.clip();
+    if (covers[i]) x.drawImage(covers[i], cx, cy, cellW, coverH);
+    else { x.fillStyle="#233150"; x.fillRect(cx, cy, cellW, coverH); x.fillStyle=mut; x.textAlign="center"; x.font=`800 ${Math.round(cellW*0.36)}px Outfit, sans-serif`; x.fillText((g.title||"?")[0].toUpperCase(), cx+cellW/2, cy+coverH/2+cellW*0.13); x.textAlign="left"; }
+    // trophy in the top-right corner of the cover, with a soft shadow so it reads on any art
+    const tim = trophyImgs[l.rating!=null ? `${TROPHY_BASE}${l.rating}.png` : `${TROPHY_BASE}10.png`];
+    x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=8; x.shadowOffsetY=2;
+    if (tim && tim.width){ const r=tim.width/tim.height, th=tph, tw=th*r; x.drawImage(tim, cx+cellW-tw-6, cy+6, tw, th); }
+    else { x.font=`${tph}px sans-serif`; x.textAlign="right"; x.fillStyle="#e5e4e2"; x.fillText("\u{1F3C6}", cx+cellW-6, cy+6+tph*0.9); x.textAlign="left"; }
+    x.restore();
+    if (band){
+      x.fillStyle="#0b1222"; x.fillRect(cx, cy+coverH, cellW, band);
+      let ly = cy + coverH + 5, lines = [];
+      if (o.num){ const full = platNumText(l) || "—", compact = [l.platNum, hasPlat2(l) ? l.plat2Num : null].filter(Boolean).map(v=>"#"+v).join(" · ") || full;
+        lines.push({ t:full, alt:compact, font:`800 ${cellW>=120?13:small?10:11}px Outfit, sans-serif`, col:gold }); }
+      const bits = [];
+      if (o.rating && l.rating!=null) bits.push({ t:String(l.rating), rating:l.rating });
+      if (o.diff && l.platDiff!=null) bits.push({ t:`${l.platDiff}/10` });
+      if (o.hours && l.platHours!=null) bits.push({ t:`${l.platHours}h` });
+      if (o.rating || o.diff || o.hours) lines.push({ bits, font:`700 ${cellW>=120?12:small?9:10}px Manrope, sans-serif` });
+      lines.forEach(ln=>{
+        x.font = ln.font; x.textAlign="center"; const yy = ly + 13;
+        if (ln.t!=null){ x.fillStyle = ln.col; let t=ln.t; if (x.measureText(t).width > cellW-8 && ln.alt) t = ln.alt;   // drop version labels before truncating
+          while (x.measureText(t).width > cellW-8 && t.length>3) t = t.slice(0,-2)+"…"; x.fillText(t, cx+cellW/2, yy); }
+        else { const sep="  ·  "; const widths = ln.bits.map(b=> x.measureText(b.t).width), sw = x.measureText(sep).width;
+          let tx = cx + cellW/2 - (widths.reduce((a,b)=>a+b,0) + sw*(ln.bits.length-1))/2; x.textAlign="left";
+          ln.bits.forEach((b,j)=>{ x.fillStyle = b.rating!=null ? ratingFillCtx(x, b.rating, tx, yy-10, tx+widths[j], yy) : mut;
+            if (b.rating!=null && b.rating<=1.5){ x.save(); x.shadowColor="rgba(255,255,255,.45)"; x.shadowBlur=4; x.fillText(b.t, tx, yy); x.restore(); } else x.fillText(b.t, tx, yy); tx += widths[j]; if (j<ln.bits.length-1){ x.fillStyle=mut; x.fillText(sep, tx, yy); tx += sw; } }); }
+        x.textAlign="left"; ly += small ? 15 : 18;
+      });
+    }
+    x.restore();
+    x.strokeStyle=line; x.beginPath(); x.roundRect(cx, cy, cellW, cellH, Math.min(10, cellW/10)); x.stroke();
+  });
+  x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", pad, H-34);
+  const blob = await new Promise(res=> c.toBlob(res, "image/png"));
+  if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${P.username.toLowerCase()}-platinum-wall.png`);
+}
 function wireSnapUI(){
   $("#snapCancel").onclick = ()=> $("#snapWrap").classList.remove("open");
   $("#snapWrap").addEventListener("click", e=>{ if(e.target.id==="snapWrap") $("#snapWrap").classList.remove("open"); });
@@ -2876,7 +3026,7 @@ function sheetLog(){
 }
 // Export helpers: sharper canvases. exportScale() picks 3x but steps down so the canvas stays
 // under iOS Safari's ~16.7M-pixel limit (a too-large canvas silently exports blank on iPhone).
-function exportScale(W,H){ for (const s of [3,2.5,2]) if (W*s*H*s <= 16e6) return s; return 2; }
+function exportScale(W,H){ for (const s of [3,2.5,2,1.5,1]) if (W*s*H*s <= 16e6) return s; return 1; }
 // coverHi(): IGDB cover URL -> 2x variant (528x748) for export drawing only; other URLs pass through.
 function coverHi(url){ return typeof url==="string" ? url.replace("/t_cover_big/", "/t_cover_big_2x/") : url; }
 function loadImg(src, cors){ return new Promise(res=>{ const i=new Image(); if (cors) i.crossOrigin="anonymous"; const t=setTimeout(()=>res(null),2500); i.onload=()=>{clearTimeout(t);res(i)}; i.onerror=()=>{clearTimeout(t);res(null)}; i.src=src; }); }
@@ -3580,6 +3730,7 @@ wireDeleteUI();
 wireBioUI();
 wireListEditor();
 wireSnapUI();
+wireWallUI();
 wirePushListeners();
 (async ()=>{
   const params = new URLSearchParams(location.search);
