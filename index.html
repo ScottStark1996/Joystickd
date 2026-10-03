@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Joystickd">
+<meta name="apple-itunes-app" content="app-id=6808438318">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Joystickd">
 <meta property="og:title" content="Joystickd — log the games you play, rate them your way">
@@ -1377,14 +1378,14 @@ function ratingColors(v){
   if (v==null) return null;
   const lo=Math.floor(v), hi=Math.ceil(v);
   if (v===10) return ["#fff1a8","#ffd84d","#c9960c"];
-  if (v===1) return ["#b0b0b0","#3c3c3c","#1a1a1a"];  // glossy black: highlight → body → shadow, like the 1/10 trophy orb
+  if (v===1) return ["#7a7a7a","#363636","#1a1a1a"];  // glossy black: highlight → body → shadow, like the 1/10 trophy orb
   if (v===2.5) return ["#6b0e0e", SCALE[2]];        // darker red on the 2.5 blend specifically
   return lo===hi ? [SCALE[lo],SCALE[lo]] : [SCALE[hi],SCALE[lo]];
 }
 const ratingGradient = v => { const c=ratingColors(v); return c ? `linear-gradient(135deg,${c.join(",")})` : "var(--gold)"; };
 function ratingText(v){
   const c=ratingColors(v); if(!c) return "";
-  const glow = v<=1.5 ? "filter:drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 5px rgba(255,255,255,.22));" : v===10 ? "filter:drop-shadow(0 0 6px rgba(255,216,77,.55));" : "";
+  const glow = v<=1.5 ? "filter:drop-shadow(0 0 1px rgba(255,255,255,.35)) drop-shadow(0 0 4px rgba(255,255,255,.12));" : v===10 ? "filter:drop-shadow(0 0 6px rgba(255,216,77,.55));" : "";
   return `background:${ratingGradient(v)};-webkit-background-clip:text;background-clip:text;color:transparent;${glow}`;
 }
 const ratingInk = v => (v>=9.5 || (v>=5 && v<8)) ? "#1a1200" : "#fff";
