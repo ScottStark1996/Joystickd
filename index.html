@@ -734,6 +734,7 @@
     <div id="t5Body" style="margin-top:6px"></div>
     <div class="actions">
       <button class="cta ghost" id="t5Close">Close</button>
+      <button class="cta ghost" id="t5Save" hidden title="Save a shareable picture of this review">⤓ Save as image</button>
       <button class="cta" id="t5Open">Open game page</button>
     </div>
   </div>
@@ -1842,7 +1843,8 @@ function renderLogs(app, P, isMe){
         <div class="revfull-body">
           <div class="revfull-head">
             <button class="revfull-title" data-open="${g.id}">${esc(g.title)}<small>${[g.year, g.dev].filter(Boolean).map(esc).join(" · ")}</small></button>
-            ${isMe ? `<span class="revfull-acts"><button class="cta ghost sm" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Image</button><button class="cta ghost sm" data-editlog="${g.id}">Edit log</button></span>` : ""}
+            ${isMe ? `<span class="revfull-acts"><button class="cta ghost sm" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Image</button><button class="cta ghost sm" data-editlog="${g.id}">Edit log</button></span>`
+                   : (l.review ? `<button class="cta ghost sm" data-osave="${g.id}" title="Save a shareable picture of this review">⤓ Image</button>` : "")}
           </div>
           ${logCard(l, g, P.ballot, isMe)}
           ${(LIVE && P.id) ? (()=>{ const lk=likesFor(g.id, P.id), liked=!!lk.find(k=>k.user_id===me?.id);
@@ -1896,6 +1898,7 @@ function renderLogs(app, P, isMe){
     <nav class="ptabs">${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
     ${body}`;
   app.querySelectorAll("[data-ptab]").forEach(b=> b.onclick = ()=>{ profileTab=b.dataset.ptab; shown={}; listView=null; render(); });
+  app.querySelectorAll("[data-osave]").forEach(b=> b.onclick = ()=>{ const id=+b.dataset.osave, g=getGame(id); if (g && logs[id]) saveReviewImage(g, logs[id], { id: P.id, username: P.username, ballot: P.ballot || {} }); });
   app.querySelectorAll("[data-more]").forEach(b=> b.onclick = ()=>{ const t=b.dataset.more; shown[t]=pageOf(t)+PAGE; render(); });
   $("#avatarEdit") && ($("#avatarEdit").onclick = ()=> $("#avatarFile").click());
   document.querySelectorAll("#app [data-badge]").forEach(b=> b.onclick = ()=> openBadge(P, b.dataset.badge));
@@ -2460,6 +2463,8 @@ function openT5(gid, P, isMe){
       if ($("#t5Foot")){ $("#t5Foot").innerHTML = t5HeartHtml(); wireT5Like(); }
     });
   }
+  $("#t5Save").hidden = !(l.review||"").trim();
+  $("#t5Save").onclick = ()=> saveReviewImage(g, l, { id: P.id, username: P.username, ballot: P.ballot || {} });
   $("#t5Open").hidden = view.gameId===gid;
   $("#t5Open").onclick = ()=>{ closeT5(); view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); };
   $("#t5Wrap").classList.add("open");
@@ -2776,6 +2781,7 @@ function gameReviews(g){
         <div class="crev-foot">
           <button class="likebtn ${liked?"on":""}" data-like="${uid}" ${isMine?"disabled":""} aria-label="Like this review">${liked?"♥":"♡"} ${likes.length||""}</button>
           ${(me && !isMine) ? `<button class="cmt-toggle" data-rreport="${uid}" title="Report review">⚑ Report</button>` : ""}
+          <button class="cmt-toggle" data-rsave="${uid}" title="Save a shareable picture of this review">⤓ Image</button>
           ${(me?.isAdmin && !isMine) ? `<button class="cmt-toggle danger-btn" data-rdelete="${uid}">Delete</button>` : ""}
           <span class="when">${when}</span>
         </div>
@@ -2894,6 +2900,9 @@ async function renderGame(app){
     const name = revNames[uid]||follows.names[uid]||"…";
     openT5(g.id, { id: uid, username:name, logs:{ [g.id]: rowToLog(r) }, ballot: ballotFor(g.id, uid) }, false, name);
   });
+  app.querySelectorAll("[data-rsave]").forEach(b=> b.onclick = ()=>{ const uid=b.dataset.rsave, st=gameReviewsState[g.id], r=(st?.rows||[]).find(x=>x.user_id===uid); if (!r) return;
+    const name = uid===me?.id ? (me?.username||"you") : (revNames[uid]||"…");
+    saveReviewImage(g, rowToLog(r), { id: uid, username: name, ballot: ballotFor(g.id, uid) }); });
   app.querySelectorAll("[data-rreport]").forEach(b=> b.onclick = ()=> openReport({type:"review", gid:g.id, targetUser:b.dataset.rreport, label:`Review of ${g.title} by ${whoName(b.dataset.rreport)}`}));
   app.querySelectorAll("[data-rdelete]").forEach(b=> b.onclick = async ()=>{ if (confirm("Delete this review? This can't be undone.")){ await adminDeleteReview(b.dataset.rdelete, g.id); await loadCommunity(g.id); render(); } });
   app.querySelectorAll("[data-gofilter]").forEach(b=> b.onclick = ()=>{ view.tab="games"; view.gameId=null; view.genre=b.dataset.gofilter; render(); });
@@ -3115,16 +3124,20 @@ function logForExport(s){
     platLabel: s.platLabel ?? null, plat2Num: s.plat2Num ?? null, plat2On: s.plat2On ?? null, plat2Label: s.plat2Label ?? null,
     showPlatStats: s.showPlatStats !== false };
 }
-async function saveReviewImage(g, saved){
+// who = { id, username, ballot } — the review's author. Omitted = you (the sheet or your own saved log).
+async function saveReviewImage(g, saved, who){
   try { await document.fonts.ready; } catch(e){}
   const l = saved ? logForExport(saved) : sheetLog(), W=720;
+  const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
+  const isMine = !who || (me && who.id===me.id);
+  const avatar = author.id && avatars[author.id] ? await loadImg(avatars[author.id], true) : null;
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const troph = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating ?? 10}.png`) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
   const measure=document.createElement("canvas").getContext("2d"); measure.font="400 15px Manrope, sans-serif";
   const revLines = l.review ? wrapText(measure, l.review, W-64-32).slice(0,34) : [];
   const rated = SUBS.filter(sc=> l.subs[sc.key]!=null);
-  const tags = awardsFor(ballots.me, g.id);
+  const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const cvW=110, cvH=147;
   let H = 56 + cvH + 22;
   const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null, hasPlat2(l)&&l.plat2On?`${l.plat2Label||"2nd"} platinum ${fmtDate(l.plat2On)}`:null].filter(Boolean);
@@ -3136,7 +3149,7 @@ async function saveReviewImage(g, saved){
   const pills = [], PILL_H = 26, PILL_GAP = 6, PILL_PAD = 10;
   if (tags.length){ measure.font="600 12px Outfit, sans-serif";
     let px = 44, py = 0;
-    tags.forEach(t=>{ const label = `my ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
+    tags.forEach(t=>{ const label = `${isMine ? "my" : "their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
       const w = measure.measureText(label).width + PILL_PAD*2;
       if (px + w > W-44 && px > 44){ px = 44; py += PILL_H + PILL_GAP; }
       pills.push({ label, x:px, y:py, w, goty: t.key==="goty" }); px += w + PILL_GAP; });
@@ -3160,7 +3173,14 @@ async function saveReviewImage(g, saved){
   titleLines.forEach((t,i)=> x.fillText(t, tx, y+16+i*30));
   x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut;
   x.fillText([g.year, g.dev].filter(Boolean).join(" · "), tx, y+20+titleLines.length*30);
-  x.fillText(`${me?.username || "a Joystickd player"}'s review`, tx, y+42+titleLines.length*30);
+  // author line: small round avatar + "name's review"
+  { const ly = y+42+titleLines.length*30, ad=26, ax=tx, ay=ly-19;
+    if (avatar){ x.save(); x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.clip(); x.drawImage(avatar, ax, ay, ad, ad); x.restore(); }
+    else { x.fillStyle="#233150"; x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.fill();
+      x.fillStyle=gold; x.font="800 13px Outfit, sans-serif"; x.textAlign="center"; x.fillText((author.username[0]||"?").toUpperCase(), ax+ad/2, ay+ad/2+5); x.textAlign="left"; }
+    x.font="700 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(author.username, ax+ad+8, ly);
+    const nw = x.measureText(author.username).width;
+    x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("'s review", ax+ad+8+nw, ly); }
   const sc = l.rating!=null ? String(l.rating) : "Played";
   x.textAlign="right"; x.font = l.rating!=null ? "800 46px Outfit, sans-serif" : "800 22px Outfit, sans-serif";
   const scY = y+cvH-30;
@@ -3206,7 +3226,7 @@ async function saveReviewImage(g, saved){
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  await deliverImage(blob, `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}.png`);
+  await deliverImage(blob, `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}${isMine ? "" : "-by-"+String(author.username).toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,24)}.png`);
 }
 
 // ---- profile snapshot image --------------------------------------------------
