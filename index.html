@@ -3131,6 +3131,12 @@ async function saveReviewImage(g, saved, who){
   const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
   const isMine = !who || (me && who.id===me.id);
   const avatar = author.id && avatars[author.id] ? await loadImg(avatars[author.id], true) : null;
+  // profile badges (founder / emblem) in the corners of the avatar, same placement as on their profile
+  let prof = isMine ? me : (("founder" in author || "emblemUrl" in author) ? author : null);
+  if (!prof && LIVE && author.id){ try { const { data } = await sb.from("profiles").select("founder,badge_layout,emblem_url,emblem_name,emblem_desc").eq("id", author.id).maybeSingle();
+    if (data) prof = { username: author.username, founder: !!data.founder, badgeLayout: data.badge_layout||null, emblemUrl: data.emblem_url||null, emblemName: data.emblem_name||null, emblemDesc: data.emblem_desc||null }; } catch(e){} }
+  const badgeList = prof ? profileBadges(prof) : [];
+  const badgeImgs = await Promise.all(badgeList.map(b=> loadImg(b.big, true)));
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const troph = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating ?? 10}.png`) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
@@ -3139,7 +3145,12 @@ async function saveReviewImage(g, saved, who){
   const rated = SUBS.filter(sc=> l.subs[sc.key]!=null);
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const cvW=110, cvH=147;
-  let H = 56 + cvH + 22;
+  const AV=52;                                                                   // avatar size on the card
+  const tx0 = g.cover ? 44+cvW+18 : 44;
+  measure.font="800 26px Outfit, sans-serif"; const titleLines = wrapText(measure, g.title, W-tx0-150).slice(0,2);
+  const authY = 42 + titleLines.length*30;                                       // baseline of "name's review", relative to y
+  const hdrExtra = Math.max(0, (authY + 10 + AV) - (cvH - 12));                  // header grows if the avatar would run past the cover
+  let H = 56 + cvH + 22 + hdrExtra;
   const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null, hasPlat2(l)&&l.plat2On?`${l.plat2Label||"2nd"} platinum ${fmtDate(l.plat2On)}`:null].filter(Boolean);
   H += dparts.length ? 26 : 4;
   const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null || l.platFun!=null)));
@@ -3169,18 +3180,20 @@ async function saveReviewImage(g, saved, who){
   if (cover){ x.save(); x.beginPath(); x.roundRect(44,y-12,cvW,cvH,10); x.clip(); x.drawImage(cover,44,y-12,cvW,cvH); x.restore(); }
   const tx = cover ? 44+cvW+18 : 44;
   x.font="800 26px Outfit, sans-serif"; x.fillStyle=text;
-  const titleLines = wrapText(x, g.title, W-tx-150).slice(0,2);
   titleLines.forEach((t,i)=> x.fillText(t, tx, y+16+i*30));
   x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut;
   x.fillText([g.year, g.dev].filter(Boolean).join(" · "), tx, y+20+titleLines.length*30);
-  // author line: small round avatar + "name's review"
-  { const ly = y+42+titleLines.length*30, ad=26, ax=tx, ay=ly-19;
+  // author line ("name's review"), then their avatar below it with profile badges on the corners
+  { const ly = y+authY, ad=AV, ax=tx, ay=ly+10;
+    x.font="700 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(author.username, ax, ly);
+    const nw = x.measureText(author.username).width;
+    x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("'s review", ax+nw, ly);
     if (avatar){ x.save(); x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.clip(); x.drawImage(avatar, ax, ay, ad, ad); x.restore(); }
     else { x.fillStyle="#233150"; x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.fill();
-      x.fillStyle=gold; x.font="800 13px Outfit, sans-serif"; x.textAlign="center"; x.fillText((author.username[0]||"?").toUpperCase(), ax+ad/2, ay+ad/2+5); x.textAlign="left"; }
-    x.font="700 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(author.username, ax+ad+8, ly);
-    const nw = x.measureText(author.username).width;
-    x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("'s review", ax+ad+8+nw, ly); }
+      x.fillStyle=gold; x.font="800 24px Outfit, sans-serif"; x.textAlign="center"; x.fillText((author.username[0]||"?").toUpperCase(), ax+ad/2, ay+ad/2+9); x.textAlign="left"; }
+    badgeList.forEach((b,i)=>{ const im=badgeImgs[i]; if (!im) return; const bd=24;
+      const bx = b.corner==="right" ? ax+ad-bd+6 : ax-6, by = b.corner==="bl" ? ay+ad-bd+5 : ay-5;
+      x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=5; x.shadowOffsetY=1; x.drawImage(im, bx, by, bd, bd); x.restore(); }); }
   const sc = l.rating!=null ? String(l.rating) : "Played";
   x.textAlign="right"; x.font = l.rating!=null ? "800 46px Outfit, sans-serif" : "800 22px Outfit, sans-serif";
   const scY = y+cvH-30;
@@ -3190,7 +3203,7 @@ async function saveReviewImage(g, saved, who){
   if (l.rating!=null){ x.font="700 15px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("/ 10", W-56, scY+20); }
   if (troph){ const th=62, tw=troph.width*th/troph.height; x.drawImage(troph, W-56-tw, scY-th-40, tw, th); }
   x.textAlign="left";
-  y += cvH + 22;
+  y += cvH + 22 + hdrExtra;
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut;
   if (dparts.length) x.fillText(dparts.join("   ·   "), 44, y);
   y += dparts.length ? 26 : 4;
