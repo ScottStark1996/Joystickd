@@ -272,6 +272,11 @@
   .ptab.on{color:var(--text);border-bottom-color:var(--gold)}
   .ptab b{color:var(--gold);margin-left:5px;font-size:12px}
   .reviews{display:flex;flex-direction:column;gap:12px}
+  .rev-open{display:flex;align-items:center;gap:8px;background:none;border:0;padding:0;cursor:pointer}
+  .rev-text{display:block;width:100%;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+  .rev-text:hover{color:#fff}
+  .rev-title small .ulink{display:inline-flex;align-items:center;gap:5px;vertical-align:middle}
+  .ulink .avatar.sm{width:18px;height:18px;font-size:9px}
   .rev{display:flex;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
   .rev-cover{width:64px;aspect-ratio:3/4;border-radius:8px;flex-shrink:0;background-color:var(--panel2);align-self:flex-start}
   .rev .review.clamp{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
@@ -381,7 +386,8 @@
   .editchip:hover{background:var(--gold);color:#1a1200;border-color:var(--gold)}
   .slot .editchip{left:auto;right:6px;top:6px}
   .revfull-head{display:flex;align-items:flex-start;gap:12px}
-  .revfull-head .cta{margin-left:auto;flex-shrink:0}
+  .revfull-head .cta,.revfull-head .revfull-acts{margin-left:auto;flex-shrink:0}
+  .revfull-acts{display:flex;gap:6px}.revfull-acts .cta{margin-left:0}
   .scores{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;margin-top:18px}
   .scores .avg{margin-top:0}
   .scores .critic{margin-top:0;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
@@ -743,6 +749,7 @@
       <button class="set-row" id="setPush" hidden>Turn on notifications</button>
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setBadges" hidden>Profile badges…</button>
+      <button class="set-row" id="setPlats">Platinum count on profile: <b id="setPlatsState">shown</b></button>
       <button class="set-row" data-guidelines>Community guidelines</button>
       <button class="set-row" data-privacy>Privacy</button>
       <button class="set-row danger-btn" id="setSignout">Sign out</button>
@@ -850,8 +857,10 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pmTitle">
     <h2 id="pmTitle">User options</h2>
     <div class="g" id="pmSub"></div>
+    <button class="set-row" id="pmShare">↗ Share profile</button>
+    <button class="set-row" id="pmSnap">Save profile snapshot</button>
     <button class="set-row" id="pmBlock">Block</button>
-    <button class="set-row" id="pmReport">\u2691 Report profile</button>
+    <button class="set-row" id="pmReport">⚑ Report profile</button>
     <div class="actions"><button class="cta ghost" id="pmCancel">Cancel</button></div>
   </div>
 </div>
@@ -1369,7 +1378,7 @@ const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeou
 
 // Rating-coloured platinum trophies (your artwork) — one PNG per half-step in the trophies/ folder.
 const TROPHY_BASE = "";   // trophy PNGs sit next to index.html
-const PLAT_IMG = (rating, cls="") => rating==null ? TROPHY(cls) : `<img class="plat ${cls}" src="${TROPHY_BASE}${rating}.png" alt="Platinum trophy" title="Platinum" loading="lazy">`;
+const PLAT_IMG = (rating, cls="") => (rating==null || !(rating>=1)) ? TROPHY(cls) : `<img class="plat ${cls}" src="${TROPHY_BASE}${rating}.png" alt="Platinum trophy" title="Platinum" loading="lazy" onerror="this.outerHTML=TROPHY('${cls}')">`;
 const TROPHY = (cls="") => `<span class="trophy ${cls}" title="Platinum" aria-label="Platinum trophy"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 3h10v2h3v3c0 2.4-1.8 4.4-4.2 4.9A5 5 0 0 1 13 15.9V18h3v2H8v-2h3v-2.1a5 5 0 0 1-2.8-3C5.8 12.4 4 10.4 4 8V5h3V3zm0 4H6v1c0 1.2.7 2.2 1.7 2.7A9 9 0 0 1 7 8V7zm10 0v1c0 .9-.2 1.8-.7 2.7C17.3 10.2 18 9.2 18 8V7h-1z"/></svg></span>`;
 
 // ---- rating colour scale --------------------------------------------------
@@ -1492,7 +1501,30 @@ function renderGrid(app){
 
 // ---- home page -------------------------------------------------------------
 const YEAR = new Date().getFullYear();
-let home = { loaded:false, loading:false, topYear:[], friendLogs:[], friendPopular:[], error:null };
+let home = { loaded:false, loading:false, topYear:[], friendLogs:[], friendPopular:[], latest:[], error:null };
+// Open the expanded review sheet for a feed item (someone else's log, with the stats/awards they chose to show).
+function openFeedReview(f){
+  const P = { id:f.userId, username:f.user, logs:{ [f.gameId]: f.log }, ballot:f.ballot||{} };
+  openT5(f.gameId, P, !!(me && f.userId===me.id));
+}
+// One feed card (shared by "New from people you follow" and "Latest community reviews")
+function feedCard(f, idx, kind){
+  const g=getGame(f.gameId), l=f.log; if (!g) return "";
+  const lk = LIVE && me ? likesFor(g.id, f.userId) : [], liked = !!lk.find(k=>k.user_id===me?.id), mine = !!(me && f.userId===me.id);
+  const open = `data-fopen="${kind}:${idx}"`;
+  return `
+        <article class="rev">
+          <button class="rev-cover" data-open="${g.id}" style="${coverStyle(g)}"></button>
+          <div class="rev-body">
+            <div class="rev-top">
+              <div class="rev-title"><button class="rev-tbtn" data-open="${g.id}">${esc(g.title)}</button><small><button class="ulink" data-user="${esc(f.user)}">${avatarEl(f.userId, f.user)} ${esc(f.user)}</button> · ${fmtDate((f.when||"").slice(0,10))}</small></div>
+              <button class="rev-open" ${open} title="Open this log">${l.rating!=null ? `<span class="rev-score" style="${ratingText(l.rating)}">${l.rating}</span>` : `<span class="rev-score played">Played</span>`}${l.platinum ? PLAT_IMG(l.rating,"inrev") : ""}</button>
+            </div>
+            ${l.review ? `<button class="review clamp rev-text" ${open}>${esc(l.review)}</button>` : ""}
+            <div class="crev-foot">${LIVE && me && !mine && l.review ? `<button class="likebtn ${liked?"on":""}" data-hlike="${g.id}:${f.userId}" aria-label="Like this review">${liked?"♥":"♡"} ${lk.length||""}</button><button class="cmt-toggle" data-freport="${g.id}:${f.userId}" title="Report review">⚑ Report</button>` : ""}<button class="cmt-toggle" ${open}>Open log →</button></div>
+          </div>
+        </article>`;
+}
 const invalidateHome = ()=>{ home.loaded=false; };
 async function loadHome(){
   if (home.loading) return; home.loading = true; home.error = null;
@@ -1510,7 +1542,20 @@ async function loadHome(){
       home.topYear = top.slice(0,20);
       const rows = fl.data || [];
       rows.forEach(r=>cacheGame(r.game));
-      home.friendLogs = rows.slice(0,10).map(r=>({ user:follows.names[r.user_id]||"someone", userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at }));
+      home.friendLogs = rows.slice(0,10).map(r=>({ user:follows.names[r.user_id]||"someone", userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot:{} }));
+      // awards those people gave these games, so the opened log shows their award tags
+      if (home.friendLogs.length){
+        const { data: bl } = await sb.from("ballots").select("user_id,game_id,year,category").in("user_id", [...new Set(home.friendLogs.map(f=>f.userId))]).in("game_id", [...new Set(home.friendLogs.map(f=>f.gameId))]);
+        (bl||[]).forEach(b=> home.friendLogs.filter(f=> f.userId===b.user_id && f.gameId===b.game_id).forEach(f=> ((f.ballot[b.year] ||= {})[b.category] = b.game_id)));
+      }
+      // Latest written reviews across the whole site (server filters blocked users)
+      try {
+        const { data: lr, error: lrErr } = await sb.rpc("latest_reviews", { lim: 10 });
+        home.latest = lrErr ? [] : (lr||[]).map(r=>{ cacheGame(r.game); revNames[r.user_id]=r.username; avatars[r.user_id]=r.avatar_url||null;
+          const ballot={}; (r.awards||[]).forEach(a=> ((ballot[a.year] ||= {})[a.category] = r.game_id));
+          likesCache[r.game_id] = [...(likesCache[r.game_id]||[]).filter(k=>k.review_user!==r.user_id), ...Array.from({length:r.like_count||0},(_,i)=>({ user_id:(r.liked_by_me && i===0 && me) ? me.id : "·"+i, review_user:r.user_id }))];
+          return { user:r.username, userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot }; });
+      } catch(e){ home.latest = []; }
       // Likes for the feed's written reviews, so the hearts have data on first paint
       const revRows = home.friendLogs.filter(f=> (f.log.review||"").trim());
       if (revRows.length){
@@ -1615,28 +1660,23 @@ function renderHome(app){
     </section>
     <section class="hsec">
       <h2>New from people you follow<span>Latest 10 logs</span></h2>
-      ${friendNote || (home.friendLogs.length ? `<div class="reviews">${home.friendLogs.map(f=>{ const g=getGame(f.gameId), l=f.log; return `
-        <article class="rev">
-          <button class="rev-cover" data-open="${g.id}" style="${coverStyle(g)}"></button>
-          <div class="rev-body">
-            <div class="rev-top">
-              <div class="rev-title"><button class="rev-tbtn" data-open="${g.id}">${esc(g.title)}</button><small><button class="ulink" data-user="${esc(f.user)}">${esc(f.user)}</button> · ${fmtDate(f.when.slice(0,10))}</small></div>
-              ${l.rating!=null ? `<span class="rev-score" style="${ratingText(l.rating)}">${l.rating}</span>` : `<span class="rev-score played">Played</span>`}${l.platinum ? PLAT_IMG(l.rating,"inrev") : ""}
-            </div>
-            ${l.review ? `<div class="review clamp">${esc(l.review)}</div><button class="morelink" data-morerev hidden>Read more</button>${LIVE && me ? (()=>{ const lk=likesFor(g.id, f.userId), liked=!!lk.find(k=>k.user_id===me.id);
-              return `<div class="crev-foot"><button class="likebtn ${liked?"on":""}" data-hlike="${g.id}:${f.userId}" aria-label="Like this review">${liked?"\u2665":"\u2661"} ${lk.length||""}</button><button class="cmt-toggle" data-freport="${g.id}:${f.userId}" title="Report review">\u2691 Report</button></div>`; })() : ""}` : ""}
-          </div>
-        </article>`; }).join("")}</div>` : `<div class="empty small">No logs from people you follow yet.</div>`)}
+      ${friendNote || (home.friendLogs.length ? `<div class="reviews">${home.friendLogs.map((f,i)=> feedCard(f,i,"f")).join("")}</div>` : `<div class="empty small">No logs from people you follow yet.</div>`)}
     </section>
     <section class="hsec">
       <h2>Popular with people you follow<span>Most logged</span></h2>
       ${friendNote || (home.friendPopular.length ? row(home.friendPopular.map(x=>x.game), (g,i)=>{ const x=home.friendPopular[i]; return `${x.n} log${x.n===1?"":"s"}${x.avg ? ` · avg ${x.avg}` : ""}`; }) : `<div class="empty small">Nothing yet.</div>`)}
-    </section>`}
+    </section>
+    ${LIVE && home.latest.length ? `
+    <section class="hsec">
+      <h2>Latest community reviews<span>Newest 10 across Joystickd</span></h2>
+      <div class="reviews">${home.latest.map((f,i)=> feedCard(f,i,"l")).join("")}</div>
+    </section>` : ""}`}
     <div class="hint" style="text-align:center;margin:26px 0 6px">Game data from IGDB \u00b7 Critic scores from OpenCritic</div>`;
   $("#heroJoin") && ($("#heroJoin").onclick = ()=> openAuth("signup"));
   $("#heroIn") && ($("#heroIn").onclick = ()=> openAuth("signin"));
   app.querySelectorAll("[data-user]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="logs"; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
   app.querySelectorAll("[data-hlike]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.hlike.indexOf(":"); toggleLike(+b.dataset.hlike.slice(0,i), b.dataset.hlike.slice(i+1)); });
+  app.querySelectorAll("[data-fopen]").forEach(b=> b.onclick = ()=>{ const [k,i]=b.dataset.fopen.split(":"); const f=(k==="l" ? home.latest : home.friendLogs)[+i]; if (f) openFeedReview(f); });
   app.querySelectorAll("[data-freport]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.freport.indexOf(":"); const gid=+b.dataset.freport.slice(0,i), uid=b.dataset.freport.slice(i+1), g=getGame(gid);
     openReport({ type:"review", gid, targetUser:uid, label:`Review of ${g?.title||"a game"} by ${follows.names[uid]||"a user"}` }); });
   app.querySelectorAll("[data-morerev]").forEach(b=>{
@@ -1707,7 +1747,7 @@ async function loadOtherProfile(username){
   const fc = await followCounts(p.id);
   await refreshGames(Object.keys(L2).map(Number));
   let excluded = null; if (me?.isAdmin){ const { data: ex } = await sb.rpc("is_excluded", { target:p.id }); excluded = !!ex; }
-  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
+  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
 }
 async function renderProfile(app){
   const wantOther = LIVE && view.user && view.user.toLowerCase()!==me?.username?.toLowerCase();
@@ -1723,7 +1763,7 @@ async function renderProfile(app){
     app.innerHTML = `<div class="empty"><h2>Your profile</h2>Sign in to log games, pick a top 5 and vote on awards.<br><br><button class="cta" id="promptAuth">Sign in or create an account</button></div>`;
     $("#promptAuth").onclick = openAuth; return;
   }
-  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
+  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
 }
 const bestDate = l => [l.date,l.firstTrophy,l.platDate,l.plat2On].filter(Boolean).sort().pop() || "";
 // A log can carry two platinums (e.g. PS4 + PS5 versions). hasPlat2 / platCount / platEntries make that uniform.
@@ -1802,7 +1842,7 @@ function renderLogs(app, P, isMe){
         <div class="revfull-body">
           <div class="revfull-head">
             <button class="revfull-title" data-open="${g.id}">${esc(g.title)}<small>${[g.year, g.dev].filter(Boolean).map(esc).join(" · ")}</small></button>
-            ${isMe ? `<button class="cta ghost sm" data-editlog="${g.id}">Edit log</button>` : ""}
+            ${isMe ? `<span class="revfull-acts"><button class="cta ghost sm" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Image</button><button class="cta ghost sm" data-editlog="${g.id}">Edit log</button></span>` : ""}
           </div>
           ${logCard(l, g, P.ballot, isMe)}
           ${(LIVE && P.id) ? (()=>{ const lk=likesFor(g.id, P.id), liked=!!lk.find(k=>k.user_id===me?.id);
@@ -1845,7 +1885,7 @@ function renderLogs(app, P, isMe){
         <h1>${esc(P.username)}</h1>
         <div class="statrow">
           <div class="stat"><b>${rated}</b><small>game${rated===1?"":"s"} logged</small></div>
-          <div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>
+          ${P.hidePlats ? "" : `<div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>`}
         </div>
         ${P.bio ? `<p class="bio">${esc(P.bio)}${isMe && LIVE ? ` <button class="linklike bio-edit" id="bioEdit">edit</button>` : ""}</p>`
           : (isMe && LIVE ? `<p class="bio muted"><button class="linklike bio-edit" id="bioEdit">+ Add a short bio</button></p>` : "")}
@@ -2796,7 +2836,7 @@ async function renderGame(app){
         ${gameTab==="reviews" ? gameReviews(g) : `
         ${g.blurb ? `<p class="desc">${esc(g.blurb)}</p>` : ""}
         ${l ? `
-          <button class="cta ghost" id="logBtn">Edit your log</button>
+          <button class="cta ghost" id="logBtn">Edit your log</button>${(l.review||"").trim() ? `<button class="cta ghost" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Save as image</button>` : ""}
           ${logCard(l, g, ballots.me, true)}`
         : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">↗ Share</button>
         ${(()=>{ if (!LIVE || !me) return "";
@@ -2810,7 +2850,7 @@ async function renderGame(app){
               <button class="frow" data-fview="${r.user_id}">
                 ${avatarEl(r.user_id, name)}
                 <span class="fname">${esc(name)}${(r.review||"").trim() ? `<small>wrote a review</small>` : `<small>rating only</small>`}</span>
-                ${r.platinum ? PLAT_IMG(+r.rating,"infollow") : ""}
+                ${r.platinum ? PLAT_IMG(r.rating==null ? null : +r.rating,"infollow") : ""}
                 ${r.rating!=null ? `<span class="fscore" style="${ratingText(+r.rating)}">${+r.rating}</span>` : `<span class="fscore played">Played</span>`}
               </button>`; }).join("")}</div>${all.length > FSHOW && !showAll ? `<button class="linklike" id="friendsMore" style="margin-top:8px">Show all ${all.length}</button>` : ""}`
             : `<div class="hint">None of the people you follow have logged this yet.</div>`}
@@ -3067,9 +3107,17 @@ function wrapText(ctx, text, maxW){
     out.push(line); }
   return out;
 }
-async function saveReviewImage(g){
+// A saved log (logs[id]) in the shape the exporter expects, so "Save as image" works without opening the sheet.
+function logForExport(s){
+  return { rating: s.rating ?? null, review: (s.review||"").trim(), subs: {...(s.subs||{})}, platinum: !!s.platinum,
+    datePlayed: s.date||null, dateTrophy: s.firstTrophy||null, datePlat: s.platDate||null,
+    platDiff: s.platDiff ?? null, platFun: s.platFun ?? null, platHours: s.platHours ?? null, platNum: s.platNum ?? null,
+    platLabel: s.platLabel ?? null, plat2Num: s.plat2Num ?? null, plat2On: s.plat2On ?? null, plat2Label: s.plat2Label ?? null,
+    showPlatStats: s.showPlatStats !== false };
+}
+async function saveReviewImage(g, saved){
   try { await document.fonts.ready; } catch(e){}
-  const l = sheetLog(), W=720;
+  const l = saved ? logForExport(saved) : sheetLog(), W=720;
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const troph = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating ?? 10}.png`) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
@@ -3084,10 +3132,16 @@ async function saveReviewImage(g){
   const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null || l.platFun!=null)));
   if (showPlatLine) H += 34;
   if (rated.length) H += 10 + Math.ceil(rated.length/2)*30 + 8;
-  let tagLines = [];
-  if (tags.length){ measure.font="700 13px Outfit, sans-serif";
-    tagLines = wrapText(measure, "★ " + tags.map(t=>`my ${t.year} ${t.label}`).join("  ·  "), W-88);
-    H += tagLines.length*22 + 14; }
+  // award pills, laid out like the site's .award-tag chips (wrap into rows, measured before sizing the canvas)
+  const pills = [], PILL_H = 26, PILL_GAP = 6, PILL_PAD = 10;
+  if (tags.length){ measure.font="600 12px Outfit, sans-serif";
+    let px = 44, py = 0;
+    tags.forEach(t=>{ const label = `my ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
+      const w = measure.measureText(label).width + PILL_PAD*2;
+      if (px + w > W-44 && px > 44){ px = 44; py += PILL_H + PILL_GAP; }
+      pills.push({ label, x:px, y:py, w, goty: t.key==="goty" }); px += w + PILL_GAP; });
+    H += (pills.length ? pills[pills.length-1].y + PILL_H : 0) + 14; }
+  const tagLines = pills;
   if (revLines.length) H += 18 + revLines.length*23;
   H += 70;
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -3135,8 +3189,15 @@ async function saveReviewImage(g){
       x.fillStyle=ratingFillCtx(x, v, rx-tw, by-13, rx, by); x.textAlign="right"; x.fillText(t, rx, by); x.textAlign="left"; });
     y += Math.ceil(rated.length/2)*30 + 8;
   }
-  if (tagLines.length){ x.font="700 13px Outfit, sans-serif"; x.fillStyle=gold;
-    tagLines.forEach((ln,i)=> x.fillText(ln, 44, y + i*22)); y += tagLines.length*22 + 14; }
+  if (pills.length){
+    const top = y - 14;
+    pills.forEach(pl=>{
+      x.beginPath(); x.roundRect(pl.x, top + pl.y, pl.w, PILL_H, 13);
+      x.fillStyle = pl.goty ? "#5a4514" : "#1e2a47"; x.fill();
+      if (!pl.goty){ x.strokeStyle = "#28365a"; x.lineWidth = 1; x.stroke(); }
+      x.font="600 12px Outfit, sans-serif"; x.fillStyle = pl.goty ? gold : "#c9d3e0"; x.textBaseline="middle";
+      x.fillText(pl.label, pl.x + PILL_PAD, top + pl.y + PILL_H/2 + 1); x.textBaseline="alphabetic"; });
+    y += pills[pills.length-1].y + PILL_H + 14; }
   if (revLines.length){
     x.font="400 15px Manrope, sans-serif"; x.fillStyle="#d7deea";
     revLines.forEach((ln,i)=> x.fillText(ln, 44, y + 8 + i*23));
@@ -3192,10 +3253,10 @@ async function saveProfileImage(P, opts={}){
   const w1 = x.measureText(String(rated)).width;
   x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("GAMES LOGGED", nx, sy+26);
   const nx2 = nx + Math.max(w1, x.measureText("GAMES LOGGED").width) + 34;
-  if (troph){ const th=22, tw=troph.width*th/troph.height; x.drawImage(troph, nx2, sy-8, tw, th);
+  if (P.hidePlats){ /* platinum count hidden by the player */ } else if (troph){ const th=22, tw=troph.width*th/troph.height; x.drawImage(troph, nx2, sy-8, tw, th);
     x.font="800 24px Outfit, sans-serif"; x.fillStyle=text; x.fillText(String(plats), nx2+tw+7, sy+10);
   } else { x.font="800 24px Outfit, sans-serif"; x.fillStyle=text; x.fillText(String(plats), nx2, sy+10); }
-  x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUMS", nx2, sy+26);
+  if (!P.hidePlats){ x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUMS", nx2, sy+26); }
   // top 5
   if (top.length){
     const ty = 176;
@@ -3337,6 +3398,7 @@ function openSettings(){
   $("#setMe").innerHTML = `${avatarEl(me.id, me.username, "big")}<div><b>${esc(me.username)}</b><small>${me.isAdmin ? "Admin" : "Signed in"}</small></div>`;
   $("#setPush").hidden = !pushPlugin();
   $("#setBadges").hidden = !hasBadges();
+  $("#setPlatsState").textContent = me.hidePlats ? "hidden" : "shown";
   $("#setWrap").classList.add("open");
 }
 function closeSettings(){ $("#setWrap").classList.remove("open"); }
@@ -3424,6 +3486,10 @@ function wireSettingsUI(){
   $("#badgeClose").onclick = ()=> $("#badgeWrap").classList.remove("open");
   $("#badgeWrap").addEventListener("click", e=>{ if(e.target.id==="badgeWrap") $("#badgeWrap").classList.remove("open"); });
   $("#setBadges").onclick = ()=>{ closeSettings(); if (me) openBadgeSettings(); };
+  // Hide the big platinum stat under the username (for players who don't chase platinums)
+  $("#setPlats").onclick = async ()=>{ if (!me) return; const next = !me.hidePlats;
+    const { error } = await sb.from("profiles").update({ hide_plats: next }).eq("id", me.id); if (error) return dbFail(error);
+    me.hidePlats = next; $("#setPlatsState").textContent = next ? "hidden" : "shown"; toast(next ? "Platinum count hidden from your profile" : "Platinum count shown on your profile"); render(); };
   $("#bdCancel").onclick = ()=> $("#badgeSetWrap").classList.remove("open");
   $("#badgeSetWrap").addEventListener("click", e=>{ if(e.target.id==="badgeSetWrap") $("#badgeSetWrap").classList.remove("open"); });
   // a badge can only be in one corner: picking it on one side clears it on the other
@@ -3436,6 +3502,11 @@ function wireSettingsUI(){
   $("#pmCancel").onclick = ()=> $("#profMenuWrap").classList.remove("open");
   $("#pmBlock").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
     isBlocked(profMenuCtx.id) ? unblockUser(profMenuCtx.id, profMenuCtx.username) : blockUser(profMenuCtx.id, profMenuCtx.username); };
+  $("#pmShare").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
+    shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(profMenuCtx.username), `${profMenuCtx.username} on Joystickd`, "Profile link copied"); };
+  $("#pmSnap").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
+    snapTarget = profMenuCtx; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
+    $("#snapBadges").hidden = !profileBadges(profMenuCtx).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); };
   $("#pmReport").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
     openReport({ type:"profile", targetUser:profMenuCtx.id, label:`Profile of ${profMenuCtx.username}` }); };
   $("#setSignout").onclick = async ()=>{ closeSettings(); await pushOnSignOut(); await sb.auth.signOut(); };
@@ -3444,7 +3515,7 @@ function wireSettingsUI(){
 
 // Read a profile by id or username, surviving a missing optional column.
 async function readProfile(where){
-  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc", basic = "id,username";
+  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc,hide_plats", basic = "id,username";
   let q = sb.from("profiles").select(full); q = where.id ? q.eq("id", where.id) : q.ilike("username", where.username);
   let { data, error } = await q.maybeSingle();
   if (error){ let q2 = sb.from("profiles").select(basic); q2 = where.id ? q2.eq("id", where.id) : q2.ilike("username", where.username); ({ data } = await q2.maybeSingle()); console.warn("profile columns missing:", error.message); }
@@ -3517,7 +3588,7 @@ async function loadMyData(){
     sb.from("wishlist").select("*").eq("user_id", me.id),
     sb.from("lists").select("*").eq("user_id", me.id).order("updated_at",{ascending:false}),
   ]);
-  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; }
+  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; }
   wishlist = {}; (W.data||[]).forEach(r=>{ wishlist[r.game_id]=r.added_at; cacheGame(r.game); });
   myLists = LS.error ? [] : (LS.data||[]); myLists.forEach(l=> (l.games||[]).forEach(cacheGame));
   if (me.isAdmin) await loadReports();
@@ -3739,6 +3810,8 @@ async function pushOnSignOut(){                           // stop pushes to this
 // ---- global nav ----------------------------------------------------------
 document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{ view.tab=b.dataset.tab; view.gameId=null; view.user=null; if (location.search) history.replaceState(null,"",location.pathname); render(); });
 document.addEventListener("click", e=>{
+  const si=e.target.closest("[data-saveimg]");
+  if (si){ e.preventDefault(); e.stopPropagation(); const id=+si.dataset.saveimg, g=getGame(id); if (g && logs[id]) saveReviewImage(g, logs[id]); return; }
   const ed=e.target.closest("[data-editlog]");
   if (ed){ e.preventDefault(); e.stopPropagation(); if (requireAuth()){ const g=getGame(+ed.dataset.editlog); if (g) openSheet(g); } return; }
   const c=e.target.closest("[data-open]"); if(c){ view.gameId=+c.dataset.open; gameTab="overview"; gameRevShown=20; render(); window.scrollTo(0,0);} });
