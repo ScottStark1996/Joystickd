@@ -1788,6 +1788,7 @@ function renderLogs(app, P, isMe){
   const wishIds = Object.keys(P.wishlist||{}).sort((a,b)=> (P.wishlist[b]||"").localeCompare(P.wishlist[a]||""));
   const TABS = [["overview","Overview",null],["games","All games",rated||null],["reviews","Reviews",reviewIds.length],["platinums","Platinums",platTotal],["wishlist","Wishlist",wishIds.length||null],["lists","Lists",(P.lists||[]).length||null],["awards","Game awards",awardYears||null]];
   if (LIVE){
+    if (isMe) refreshFollows();                     // keeps the Followers/Following counts current while the app stays open
     const loaded = !isMe && profFollows.for===P.id;
     TABS.push(["following","Following", isMe ? (followingIds().length||null) : (loaded ? (profFollows.following.length||null) : null)]);
     TABS.push(["followers","Followers", isMe ? (followerIds().length||null) : (loaded ? (profFollows.followers.length||null) : null)]);
@@ -2688,8 +2689,8 @@ function logCard(l, g, ballot, isMe){
 let stats = { rows:null, loading:false }, commSort = "high", commMin = 1, commShown = 30;
 async function loadStats(){
   if (!LIVE || stats.loading) return; stats.loading = true;
-  const { data, error } = await sb.from("game_stats").select("*").limit(2000);
-  stats.rows = error ? [] : (data||[]); stats.loading = false;
+  const { data, error } = await fetchAll(()=> sb.from("game_stats").select("*").order("game_id"));
+  stats.rows = error && !data.length ? [] : (data||[]); stats.loading = false; stats.at = Date.now();
   stats.rows.forEach(r=>cacheGame(r.game));
   if (view.tab==="community") render();
 }
@@ -2707,6 +2708,7 @@ const COMM_SORTS = {
 function renderCommunity(app){
   if (!LIVE){ app.innerHTML = `<div class="empty"><h2>Community</h2>Needs the live database.</div>`; return; }
   if (!stats.rows){ loadStats(); app.innerHTML = `<div class="empty"><div class="spinner"></div>Loading…</div>`; return; }
+  if (stats.at && Date.now() - stats.at > 120000 && !stats.loading){ stats.at = Date.now(); loadStats(); }   // quietly refresh stale numbers
   let list = stats.rows.filter(r=> (commSort==="high"||commSort==="low") ? r.rating_count>=commMin : true);
   if (commSort==="plat") list = list.filter(r=>r.platinum_count>0);
   if (commSort==="reviewed") list = list.filter(r=>r.review_count>0);
@@ -3690,6 +3692,14 @@ async function loadFollows(){
   const ids = [...new Set(follows.rows.flatMap(r=>[r.follower,r.followee]))].filter(id=>id!==me.id);
   if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ follows.names[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
 }
+// Your follower list was only loaded at sign-in, so people who followed you while the app stayed open
+// never appeared until a relaunch. Re-fetch when the tab opens (throttled) and re-render if it changed.
+let followsAt = 0;
+function refreshFollows(){
+  if (!LIVE || !me || Date.now() - followsAt < 20000) return; followsAt = Date.now();
+  const before = JSON.stringify(follows.rows);
+  loadFollows().then(()=>{ if (JSON.stringify(follows.rows) !== before) render(); }).catch(()=>{});
+}
 const isFollowing  = id => follows.rows.some(r=> r.follower===me?.id && r.followee===id);
 const followingIds = ()=> follows.rows.filter(r=>r.follower===me.id).map(r=>r.followee);
 const followerIds  = ()=> follows.rows.filter(r=>r.followee===me.id).map(r=>r.follower);
@@ -3748,7 +3758,7 @@ function followListTab(P, isMe, kind){
     <input class="search" id="peopleSearch" placeholder="Find people by username" value="${esc(peopleQuery)}">
     ${peopleQuery.trim() ? `<section class="psec"><h2>People</h2>${peopleResults.length ? peopleResults.map(p=>userRow(p.id, followAction(p.id))).join("") : `<div class="empty small">No one by that name yet.</div>`}</section>` : ""}` : "";
   let ids2;
-  if (isMe) ids2 = kind==="following" ? followingIds() : followerIds();
+  if (isMe){ refreshFollows(); ids2 = kind==="following" ? followingIds() : followerIds(); }
   else {
     loadProfileFollows(P);
     if (profFollows.for !== P.id) return searchBlock + `<div class="empty small"><div class="spinner"></div>Loading\u2026</div>`;
@@ -3787,7 +3797,8 @@ document.addEventListener("visibilitychange", ()=>{
   if (document.visibilityState !== "visible" || !LIVE || !me) return;
   const now = Date.now(); if (now - lastFgRefresh < 20000) return;   // at most every 20s
   lastFgRefresh = now;
-  loadNotifs();
+  loadNotifs(); refreshFollows();
+  if (stats.rows) stats.rows = null;            // community stats reload next time the tab opens
 });
 
 // ---- iOS push notifications (native app only) -----------------------------
