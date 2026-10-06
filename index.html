@@ -252,8 +252,8 @@
   div.award[data-awexpand]:hover{border-color:var(--gold)}
   button.award-game{background:none;border:0;padding:0;cursor:pointer;text-align:left}
   button.award-game:hover{text-decoration:underline}
-  .award-top3{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;margin:-4px 0 6px;padding:10px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius)}
-  .top3-row{display:flex;align-items:center;gap:10px;background:none;border:0;color:var(--text);font:inherit;padding:5px 2px;cursor:pointer;text-align:left;width:100%}
+  .award-top3{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;margin:-4px 0 6px;padding:10px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden}
+  .top3-row{display:flex;align-items:center;gap:10px;background:none;border:0;color:var(--text);font:inherit;padding:5px 2px;cursor:pointer;text-align:left;width:100%;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden}
   .top3-row:hover .top3-title{text-decoration:underline}
   .top3-rank{width:24px;flex:none;font-size:15px}
   .top3-cover{width:26px;height:34px;border-radius:5px;background:var(--panel2);flex:none}
@@ -3217,7 +3217,7 @@ async function saveReviewImage(g, saved, who){
   if (rated.length){
     y += 10;
     rated.forEach((sr,i)=>{ const col=i%2, row=Math.floor(i/2); const bx=44+col*((W-88)/2), by=y+row*30;
-      const SHORT = { visuals:"Visuals", sound:"Soundtrack", gameplay:"Gameplay", animation:"Cinematic flair", levels:"Pacing", narrative:"Narrative", fun:"Fun factor", original:"Creativity" };
+      const SHORT = { visuals:"Visuals / art direction", sound:"Soundtrack / score", gameplay:"Gameplay / mechanics", animation:"Cinematic flair / animations", levels:"Pacing / progression", narrative:"Narrative / writing", fun:"Fun factor", original:"Creativity / originality" };
       const shortLabel = SHORT[sr.key] || sr.label.split(/[,(&]/)[0].trim();
       x.font="600 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(shortLabel, bx, by);
       const v=l.subs[sr.key]; x.font="800 16px Outfit, sans-serif"; const t=String(v), tw=x.measureText(t).width, rx=bx+(W-88)/2-24;
