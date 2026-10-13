@@ -445,6 +445,9 @@
   .hero h1{font-size:34px;line-height:1.05;font-weight:800;max-width:18ch}
   .hero h1 span{color:var(--gold)}
   .hero p{margin:12px 0 0;max-width:62ch;line-height:1.55;color:#c4cddd;font-size:15px}
+  .push-ico{font-size:44px;text-align:center;margin:4px 0 8px}
+  .push-pts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .push-pts span{font-size:15px;font-weight:600;padding:11px 14px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
   .hero-pts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
   .hero-pts span{font-size:13px;font-weight:600;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
   .hero-cta{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:20px}
@@ -815,6 +818,24 @@
     <h2 class="badge-name" id="badgeName"></h2>
     <p class="badge-desc" id="badgeDesc"></p>
     <div class="actions"><button class="cta ghost" id="badgeClose">Close</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="pushWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pushTitle">
+    <div class="push-ico">🔔</div>
+    <h2 id="pushTitle" style="text-align:center">Know when people react</h2>
+    <p class="badge-desc">Turn on notifications and we'll let you know when someone</p>
+    <div class="push-pts">
+      <span>♥ likes one of your reviews</span>
+      <span>💬 comments on a review</span>
+      <span>👥 starts following you</span>
+    </div>
+    <p class="hint" style="margin-top:12px">Only those three. No marketing, and no daily nagging. You can change this anytime in settings.</p>
+    <div class="actions">
+      <button class="cta ghost" id="pushLater">Not now</button>
+      <button class="cta" id="pushOn">Turn on notifications</button>
+    </div>
   </div>
 </div>
 
@@ -3065,7 +3086,7 @@ $("#saveLog").onclick = async ()=>{
     showPlatStats: !!draft.showPlatStats, showAwards: !!draft.showAwards };
   closeSheet(); render(); toast("Log saved");
   saveLogRow(draft.gameId);
-  maybeAskPush();
+  maybeAskPush("firstlog");
 };
 $("#deleteLog").onclick = ()=>{ const id=draft.gameId; delete logs[id]; closeSheet(); render(); toast("Log removed"); deleteLogRow(id); };
 
@@ -3877,7 +3898,7 @@ async function onAuth(session){
   // here used to wipe the bio so the profile showed "Add a short bio" until relaunch.
   if (session?.user && wasMe === session.user.id){ paintAuthBtn(); return; }
   me = session?.user ? { id:session.user.id, username: session.user.user_metadata?.username || "you" } : null;
-  if (me){ if (wasMe!==me.id){ await loadMyData(); toast(`Signed in as ${me.username}`); pushOnSignIn(); } }
+  if (me){ if (wasMe!==me.id){ await loadMyData(); toast(`Signed in as ${me.username}`); pushOnSignIn(); setTimeout(()=> maybeAskPush("signin"), 1800); } }
   else if (wasMe){ clearMyData(); toast("Signed out"); }
   clearCommunity(); loadedYears.clear(); invalidateHome();
   if (!me){ notifs={items:[],seenAt:null,unread:0}; }
@@ -3930,10 +3951,24 @@ async function enablePush(){
     return true;
   } catch(e){ console.warn("push enable:", e); return false; }
 }
-function maybeAskPush(){                                  // once, after the first saved log
+// Pre-permission sheet. iOS shows its own "Allow notifications?" dialog ONCE per install, so we never
+// fire it cold: we explain first, and only "Turn on" triggers the system dialog. "Not now" keeps the
+// system ask unused and we offer once more (after their first saved log), then stop asking.
+//   localStorage.pushPrompt: "done" = system dialog was used (or user is already decided); "later:N" = declined N times
+async function maybeAskPush(reason){                       // reason: "signin" | "firstlog"
   const p = pushPlugin(); if (!p || !LIVE || !me) return;
-  try { if (localStorage.getItem("pushAsked")) return; localStorage.setItem("pushAsked", "1"); } catch(e){ return; }
-  setTimeout(async ()=>{ if (await enablePush()) toast("Notifications on"); }, 800);
+  let state = null; try { state = localStorage.getItem("pushPrompt") || (localStorage.getItem("pushAsked") ? "done" : null); } catch(e){ return; }
+  if (state === "done") return;
+  const declined = state && state.startsWith("later:") ? +state.slice(6) : 0;
+  if (declined >= 2) return;                                // asked twice, leave them alone
+  try { const st = await p.checkPermissions(); if (st.receive === "granted" || st.receive === "denied"){ localStorage.setItem("pushPrompt","done"); if (st.receive==="granted") p.register().catch(()=>{}); return; } } catch(e){}
+  if (document.querySelector(".sheet-wrap.open")) return;  // don't stack on top of another sheet
+  $("#pushWrap").classList.add("open");
+  $("#pushOn").onclick = async ()=>{ $("#pushWrap").classList.remove("open");
+    try { localStorage.setItem("pushPrompt","done"); } catch(e){}
+    if (await enablePush()) toast("Notifications on"); else toast("You can turn notifications on later in Settings"); };
+  $("#pushLater").onclick = ()=>{ $("#pushWrap").classList.remove("open"); try { localStorage.setItem("pushPrompt", "later:" + (declined+1)); } catch(e){} };
+  $("#pushWrap").onclick = e=>{ if (e.target.id==="pushWrap") $("#pushLater").onclick(); };
 }
 async function pushOnSignIn(){                            // silent refresh when already allowed
   const p = pushPlugin(); if (!p || !LIVE || !me) return;
