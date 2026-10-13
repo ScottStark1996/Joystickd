@@ -412,6 +412,9 @@
   .cmt-input:focus{outline:2px solid var(--gold);outline-offset:1px}
   .linklike{color:var(--gold);font-weight:600;padding:0;text-decoration:underline}
   select.txt{appearance:auto}
+  .pwwrap{position:relative}.pwwrap .txt{padding-right:64px}
+  .pweye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--muted);font:inherit;font-size:12px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer}
+  .pweye:hover{color:var(--text)}
   .guide{margin-top:12px;line-height:1.6;color:#d4dbe8;font-size:14px}
   .guide ul{padding-left:20px;margin:10px 0}
   .guide li{margin-bottom:6px}
@@ -624,9 +627,12 @@
       <input type="text" id="authUser" class="txt" placeholder="3–20 letters, numbers, underscores" autocomplete="username" maxlength="20">
     </div>
     <label for="authEmail">Email</label>
-    <input type="email" id="authEmail" class="txt" placeholder="you@example.com" autocomplete="email">
+    <input type="email" id="authEmail" class="txt" placeholder="you@example.com" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email">
     <label for="authPass">Password</label>
-    <input type="password" id="authPass" class="txt" placeholder="At least 6 characters" autocomplete="current-password">
+    <div class="pwwrap">
+      <input type="password" id="authPass" class="txt" placeholder="At least 6 characters" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <button type="button" class="pweye" id="authEye" aria-label="Show password" title="Show password">Show</button>
+    </div>
     <div class="hint" style="margin-top:10px" id="authFoot"></div>
     <div class="autherr" id="authErr" hidden></div>
     <div class="actions">
@@ -3096,6 +3102,28 @@ async function toggleWishlist(g){
 // ---- image delivery ----------------------------------------------------------
 // In the iOS app: write to a temp file and open the native share sheet (has "Save Image").
 // In browsers: web share if available, else download.
+// Several images in one go (e.g. a long review split into parts): one share sheet / one "Saved" toast.
+async function deliverImages(items){
+  if (items.length===1) return deliverImage(items[0].blob, items[0].filename);
+  const cap = window.Capacitor;
+  if (cap?.isNativePlatform?.() && cap.Plugins?.Filesystem){
+    try {
+      const uris = [];
+      for (const it of items){
+        const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.readAsDataURL(it.blob); });
+        const w = await cap.Plugins.Filesystem.writeFile({ path: it.filename, data: b64, directory: "CACHE" }); uris.push(w.uri);
+      }
+      if (cap.Plugins.Media?.savePhoto){
+        try { for (const u of uris) await cap.Plugins.Media.savePhoto({ path: u }); toast(`Saved ${uris.length} images to Photos`); return; }
+        catch(e){ console.warn("photo save:", e); }
+      }
+      if (cap.Plugins.Share){ await cap.Plugins.Share.share({ files: uris }); return; }
+    } catch(e){ if (e && /cancel/i.test(String(e.message||e))) return; console.warn("native share:", e); }
+  }
+  const files = items.map(it=> new File([it.blob], it.filename, { type:"image/png" }));
+  if (navigator.canShare && navigator.canShare({ files })){ try { await navigator.share({ files }); return; } catch(e){ if (e && e.name==="AbortError") return; } }
+  for (const it of items){ await deliverImage(it.blob, it.filename); await new Promise(r=>setTimeout(r, 400)); }
+}
 async function deliverImage(blob, filename){
   const cap = window.Capacitor;
   if (cap?.isNativePlatform?.() && cap.Plugins?.Filesystem){
@@ -3172,7 +3200,13 @@ async function saveReviewImage(g, saved, who){
   const troph = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating ?? 10}.png`) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
   const measure=document.createElement("canvas").getContext("2d"); measure.font="400 16px Manrope, sans-serif";
-  const revLines = l.review ? wrapText(measure, l.review, W-64-32).slice(0,34) : [];
+  // Long reviews become a series: part 1 is the full card, later parts are continuation cards.
+  const allLines = l.review ? wrapText(measure, l.review, W-64-32) : [];
+  const PART1 = 34, PARTN = 46, MAXPARTS = 4;
+  const parts = [allLines.slice(0, PART1)];
+  for (let i = PART1; i < allLines.length && parts.length < MAXPARTS; i += PARTN) parts.push(allLines.slice(i, i+PARTN));
+  if (allLines.length > PART1 + PARTN*(MAXPARTS-1)){ const last = parts[parts.length-1]; last[last.length-1] = last[last.length-1].replace(/\s*$/, "") + " \u2026"; }
+  const revLines = parts[0], nParts = parts.length;
   const rated = SUBS.filter(sc=> l.subs[sc.key]!=null);
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const cvW=110, cvH=147;
@@ -3268,9 +3302,29 @@ async function saveReviewImage(g, saved, who){
     y += 18 + revLines.length*25;
   }
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
+  if (nParts > 1){ x.textAlign="right"; x.fillStyle=gold; x.font="700 13px Outfit, sans-serif"; x.fillText(`Part 1 of ${nParts}  \u2192`, W-44, H-40); x.textAlign="left"; }
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  await deliverImage(blob, `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}${isMine ? "" : "-by-"+String(author.username).toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,24)}.png`);
+  const base = `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}${isMine ? "" : "-by-"+String(author.username).toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,24)}`;
+  const items = [{ blob, filename: nParts > 1 ? `${base}-part-1.png` : `${base}.png` }];
+  // continuation cards: compact header (title + author), then the next slice of the review
+  for (let pi = 1; pi < nParts; pi++){
+    const lines = parts[pi], c2 = document.createElement("canvas"), x2 = c2.getContext("2d");
+    const H2 = 56 + 40 + 26 + 18 + lines.length*25 + 70;
+    const S2 = exportScale(W, H2); c2.width = W*S2; c2.height = H2*S2; x2.scale(S2, S2);
+    x2.fillStyle="#0e1526"; x2.fillRect(0,0,W,H2);
+    x2.fillStyle="#161f35"; x2.strokeStyle="#28365a"; x2.lineWidth=1; x2.beginPath(); x2.roundRect(20,20,W-40,H2-40,18); x2.fill(); x2.stroke();
+    x2.textAlign="right"; x2.font="800 16px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText("JOYSTICK", W-56, 48); x2.fillStyle=gold; x2.fillText("D", W-44, 48); x2.textAlign="left";
+    x2.font="800 22px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText(wrapText(x2, g.title, W-88-150)[0] || "", 44, 70);
+    x2.font="700 14px Manrope, sans-serif"; x2.fillStyle=soft; x2.fillText(author.username, 44, 96);
+    const nw2 = x2.measureText(author.username).width; x2.font="600 14px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText(`'s review \u00b7 continued`, 44+nw2, 96);
+    x2.font="400 16px Manrope, sans-serif"; x2.fillStyle="#d7deea";
+    lines.forEach((ln,i)=> x2.fillText(ln, 44, 140 + i*25));
+    x2.font="600 13px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText("joystickd.com", 44, H2-40);
+    x2.textAlign="right"; x2.fillStyle=gold; x2.font="700 13px Outfit, sans-serif"; x2.fillText(`Part ${pi+1} of ${nParts}${pi+1<nParts ? "  \u2192" : ""}`, W-44, H2-40); x2.textAlign="left";
+    const b2 = await new Promise(res=> c2.toBlob(res, "image/png")); if (b2) items.push({ blob: b2, filename: `${base}-part-${pi+1}.png` });
+  }
+  await deliverImages(items);
 }
 
 // ---- profile snapshot image --------------------------------------------------
@@ -3385,6 +3439,9 @@ function paintAuth(){
   $("#authTitle").textContent = up ? "Create your account" : "Sign in";
   $("#authSub").textContent = up ? "Pick a username — it's what people will see on your profile." : "Welcome back.";
   $("#authUserField").hidden = !up; $("#authGo").textContent = up ? "Create account" : "Sign in";
+  // "new-password" on sign-up makes Safari/iOS offer to SAVE the password to the keychain (with
+  // "current-password" it often silently didn't, so people couldn't recall what they'd typed later).
+  $("#authPass").setAttribute("autocomplete", up ? "new-password" : "current-password");
   $("#authSwitch").textContent = up ? "I already have an account" : "Create an account";
   $("#authFoot").innerHTML = up
     ? `By creating an account you agree to the <button class="linklike" data-guidelines>Terms of Use &amp; Community Guidelines</button> and our <button class="linklike" data-privacy>privacy policy</button>.`
@@ -3419,6 +3476,7 @@ function wirePwUI(){
 }
 function showAuthErr(msg, ok=false){ const e=$("#authErr"); e.textContent=msg; e.hidden=false; e.classList.toggle("ok", ok); }
 $("#authSwitch").onclick = ()=>{ authMode = authMode==="signup" ? "signin" : "signup"; paintAuth(); $("#authErr").hidden=true; };
+$("#authEye").onclick = ()=>{ const i=$("#authPass"), show = i.type==="password"; i.type = show ? "text" : "password"; $("#authEye").textContent = show ? "Hide" : "Show"; $("#authEye").setAttribute("aria-label", show ? "Hide password" : "Show password"); i.focus(); };
 $("#authCancel").onclick = closeAuth;
 $("#authWrap").addEventListener("click", e=>{ if(e.target.id==="authWrap") closeAuth(); });
 $("#authGo").onclick = async ()=>{
@@ -3450,7 +3508,15 @@ $("#authGo").onclick = async ()=>{
       }
       if (!data.session){ showAuthErr("Check your email for a confirmation link, then come back and sign in. If it's not there after a minute, check your junk or spam folder — first emails sometimes land there.", true); return; }
     } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error;
+      let { error } = await sb.auth.signInWithPassword({ email, password });
+      // a stray space (keyboard autocorrect) at either end shouldn't lock someone out
+      if (error && password !== password.trim()){ ({ error } = await sb.auth.signInWithPassword({ email, password: password.trim() })); }
+      if (error){
+        const m=(error.message||"").toLowerCase();
+        if (m.includes("invalid login") || m.includes("invalid credentials")) throw new Error("That email and password don't match. If you created your account in Safari, it may have saved a different password than the one you remember — tap “Show” to check what you typed, or use “Forgot your password?” to set a new one.");
+        if (m.includes("not confirmed")) throw new Error("This email hasn't been confirmed yet — check your inbox (and junk folder) for the confirmation link, then sign in.");
+        throw error;
+      }
     }
     closeAuth();
   } catch(e){ showAuthErr(e.message || String(e)); }
