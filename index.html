@@ -860,6 +860,7 @@
       <button class="set-row" id="setPush" hidden>Turn on notifications</button>
       <button class="set-row" id="setPro">Joystickd Pro: <b id="setProState">get Pro</b></button>
       <button class="set-row" id="setLook">Profile look &amp; avatar frame… <span class="protag">Pro</span></button>
+      <button class="set-row" id="setShelf">Add a shelf to my profile… <span class="protag">Pro</span></button>
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
       <button class="set-row" id="setBadges" hidden>Profile badges…</button>
@@ -1131,7 +1132,7 @@ const PRO_FEATURES = [
   { key:"frames",  ic:"\uD83D\uDD36", name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
   { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
   { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review, wall and profile images you save.", built:false },
-  { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:false },
+  { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:true },
   { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:false },
 ];
 // Gate: true if the current user is Pro; otherwise opens the Pro sheet and returns false.
@@ -2018,7 +2019,7 @@ async function loadOtherProfile(username){
   await refreshGames(Object.keys(L2).map(Number));
   let excluded = null; if (me?.isAdmin){ const { data: ex } = await sb.rpc("is_excluded", { target:p.id }); excluded = !!ex; }
   notePro(p);
-  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, proUntil:p.pro_until||null, theme:p.theme||null, logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
+  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, proUntil:p.pro_until||null, theme:p.theme||null, shelves: Array.isArray(p.shelves) ? p.shelves : [], logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
 }
 async function renderProfile(app){
   const wantOther = LIVE && view.user && view.user.toLowerCase()!==me?.username?.toLowerCase();
@@ -2034,7 +2035,7 @@ async function renderProfile(app){
     app.innerHTML = `<div class="empty"><h2>Your profile</h2>Sign in to log games, pick a top 5 and vote on awards.<br><br><button class="cta" id="promptAuth">Sign in or create an account</button></div>`;
     $("#promptAuth").onclick = openAuth; return;
   }
-  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
+  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, shelves: me?.shelves||[], logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
 }
 const bestDate = l => [l.date,l.firstTrophy,l.platDate,l.plat2On].filter(Boolean).sort().pop() || "";
 // A log can carry two platinums (e.g. PS4 + PS5 versions). hasPlat2 / platCount / platEntries make that uniform.
@@ -2152,6 +2153,7 @@ function renderLogs(app, P, isMe){
           : `<${tag} class="slot" ${isMe?`data-slot="${i}"`:""}><span class="rank">${i+1}</span><span class="plus">${isMe?"+":""}</span></${tag}>`; }).join("")}
       </div>
     </section>
+    ${shelvesHtml(P, isMe)}
     <section class="psec">
       <h2>Latest games logged</h2>
       ${rated ? `<div class="hrow">${ids.slice(0,10).map(id=>card(getGame(id), fmtDate(bestDate(logs[id])) || undefined, isMe, !isMe, isMe?null:logs[id])).join("")}</div>`
@@ -2293,6 +2295,48 @@ function renderLogs(app, P, isMe){
   app.querySelectorAll("[data-slot]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); const i=+b.dataset.slot;
     openPicker({ title:`Choose your #${i+1}`, current:top5[i], taken:id=>{ const u=top5.indexOf(id); return u>-1&&u!==i ? `#${u+1}` : null; },
       onPick:id=>{ top5[i]=id; toast(`Set as #${i+1}`); saveTop5(i, id); }, onClear:()=>{ top5[i]=null; toast("Slot cleared"); saveTop5(i, null); } }); });
+  wireShelves(app);
+}
+// ---- Pro: extra shelves (self-titled Top 5s on the profile overview) ----------------
+let shelfEdit = null;                                   // index of the shelf being edited, or null
+const slotGame = g => g ? (getGame(g.id) || g) : null;
+function shelvesHtml(P, isMe){
+  const shelves = (isPro(P) ? (P.shelves||[]) : []).slice(0,2);
+  return shelves.map((sh,si)=>{ const editing = isMe && shelfEdit===si;
+    return `<section class="psec">
+      <h2>${esc(sh.title||"Shelf")}${isMe ? ` <button class="linklike bio-edit" data-shelfedit="${si}">${editing ? "done" : "edit"}</button>` : ""}${editing ? ` <button class="linklike bio-edit" data-shelfrename="${si}">rename</button> <button class="linklike bio-edit danger-btn" data-shelfdel="${si}">delete</button>` : ""}</h2>
+      <div class="top5">
+        ${Array.from({length:5},(_,i)=>{ const g=slotGame((sh.games||[])[i]); const tag=isMe?"button":"div"; return g
+          ? `<button class="slot filled" data-open="${g.id}">${g.cover ? `<img class="slot-img" src="${esc(g.cover)}" alt="" loading="lazy">` : `<span class="slot-img" style="${coverStyle(g)}"></span>`}<span class="rank">${i+1}</span>${editing?`<span class="editchip" data-shelfslot="${si}:${i}" role="button" aria-label="Change slot" title="Change this pick">\u270e</span>`:""}</button>`
+          : `<${tag} class="slot" ${isMe?`data-shelfslot="${si}:${i}"`:""}><span class="rank">${i+1}</span><span class="plus">${isMe?"+":""}</span></${tag}>`; }).join("")}
+      </div>
+    </section>`; }).join("");
+}
+// Adding a shelf lives in Settings so an untouched profile stays clean.
+function addShelf(){
+  if (!requirePro("shelves")) return;
+  if ((me.shelves||[]).length >= 2){ toast("You already have two shelves \u2014 edit or delete one on your profile"); return; }
+  const t = prompt("Name this shelf (up to 30 characters):", ""); if (!t || !t.trim()) return;
+  me.shelves = [...(me.shelves||[]), { title: t.trim().slice(0,30), games: [null,null,null,null,null] }]; shelfEdit = me.shelves.length-1;
+  view.tab="logs"; view.gameId=null; view.user=null; profileTab="overview"; if (location.search) history.replaceState(null,"",location.pathname);
+  saveShelves(); window.scrollTo(0,0);
+}
+async function saveShelves(){
+  const payload = (me.shelves||[]).slice(0,2).map(sh=> ({ title: String(sh.title||"").slice(0,30), games: Array.from({length:5},(_,i)=>{ const g=(sh.games||[])[i]; return g ? { id:g.id, title:g.title, year:g.year||null, dev:g.dev||null, cover:g.cover||null } : null; }) }));
+  const { error } = await sb.from("profiles").update({ shelves: payload.length ? payload : null }).eq("id", me.id);
+  if (error){ if (/PRO_REQUIRED/.test(error.message||"")) return openPro("shelves"); return dbFail(error); }
+  render();
+}
+function wireShelves(app){
+  app.querySelectorAll("[data-shelfedit]").forEach(b=> b.onclick = ()=>{ const i=+b.dataset.shelfedit; shelfEdit = shelfEdit===i ? null : i; render(); });
+  app.querySelectorAll("[data-shelfrename]").forEach(b=> b.onclick = ()=>{ const i=+b.dataset.shelfrename; const t = prompt("Rename shelf:", me.shelves[i].title); if (t && t.trim()){ me.shelves[i].title = t.trim().slice(0,30); saveShelves(); } });
+  app.querySelectorAll("[data-shelfdel]").forEach(b=> b.onclick = ()=>{ const i=+b.dataset.shelfdel; if (!confirm(`Delete the "${me.shelves[i].title}" shelf?`)) return; me.shelves.splice(i,1); shelfEdit=null; saveShelves(); });
+  app.querySelectorAll("[data-shelfslot]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); if (!requirePro("shelves")) return;
+    const [si,i] = b.dataset.shelfslot.split(":").map(Number); const sh = me.shelves[si]; if (!sh) return; sh.games ||= [null,null,null,null,null];
+    openPicker({ title:`${sh.title} \u00b7 #${i+1}`, current: sh.games[i]?.id || null,
+      taken:id=>{ const u=sh.games.findIndex(g=>g&&g.id===id); return u>-1&&u!==i ? `#${u+1}` : null; },
+      onPick:id=>{ const g=getGame(id); sh.games[i] = g ? { id:g.id, title:g.title, year:g.year, dev:g.dev, cover:g.cover } : { id }; toast(`Set as #${i+1}`); saveShelves(); },
+      onClear:()=>{ sh.games[i]=null; toast("Slot cleared"); saveShelves(); } }); });
 }
 
 // ---- custom lists ------------------------------------------------------------
@@ -4010,6 +4054,7 @@ function wireSettingsUI(){
   $("#setBlocked").onclick = ()=>{ closeSettings(); openBlocked(); };
   $("#setPro").onclick = ()=>{ closeSettings(); openPro(); };
   $("#setLook").onclick = ()=>{ closeSettings(); openLook(); };
+  $("#setShelf").onclick = ()=>{ closeSettings(); addShelf(); };
   $("#lookCancel").onclick = ()=> $("#lookWrap").classList.remove("open");
   $("#lookWrap").addEventListener("click", e=>{ if(e.target.id==="lookWrap") $("#lookWrap").classList.remove("open"); });
   $("#lookSave").onclick = ()=> saveLook(cleanTheme(lookDraft));
@@ -4057,7 +4102,7 @@ function wireSettingsUI(){
 
 // Read a profile by id or username, surviving a missing optional column.
 async function readProfile(where){
-  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc,hide_plats,pro_until,theme", basic = "id,username";
+  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc,hide_plats,pro_until,theme,shelves", basic = "id,username";
   let q = sb.from("profiles").select(full); q = where.id ? q.eq("id", where.id) : q.ilike("username", where.username);
   let { data, error } = await q.maybeSingle();
   if (error){ let q2 = sb.from("profiles").select(basic); q2 = where.id ? q2.eq("id", where.id) : q2.ilike("username", where.username); ({ data } = await q2.maybeSingle()); console.warn("profile columns missing:", error.message); }
@@ -4130,7 +4175,7 @@ async function loadMyData(){
     sb.from("wishlist").select("*").eq("user_id", me.id),
     sb.from("lists").select("*").eq("user_id", me.id).order("updated_at",{ascending:false}),
   ]);
-  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; me.proUntil = P.data.pro_until||null; me.theme = P.data.theme||null; notePro(P.data); }
+  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; me.proUntil = P.data.pro_until||null; me.theme = P.data.theme||null; me.shelves = Array.isArray(P.data.shelves) ? P.data.shelves : []; me.shelves.forEach(sh=> (sh.games||[]).forEach(g=> g && cacheGame(g))); notePro(P.data); }
   wishlist = {}; (W.data||[]).forEach(r=>{ wishlist[r.game_id]=r.added_at; cacheGame(r.game); });
   myLists = LS.error ? [] : (LS.data||[]); myLists.forEach(l=> (l.games||[]).forEach(cacheGame));
   if (me.isAdmin) await loadReports();
