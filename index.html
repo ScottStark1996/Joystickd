@@ -445,6 +445,48 @@
   .hero h1{font-size:34px;line-height:1.05;font-weight:800;max-width:18ch}
   .hero h1 span{color:var(--gold)}
   .hero p{margin:12px 0 0;max-width:62ch;line-height:1.55;color:#c4cddd;font-size:15px}
+  /* Pro: profile look (accent / pattern / tint) and avatar frames */
+  .profile-head.themed{padding:18px 16px;margin:-6px -16px 26px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
+  @media(max-width:640px){.profile-head.themed{margin-left:-12px;margin-right:-12px}}
+  .profile-head.themed h1{color:var(--acc)}
+  .ptabs.themed .ptab.on{border-bottom-color:var(--acc)}.ptabs.themed .ptab b{color:var(--acc)}
+  .avatar.fr{box-shadow:0 0 0 2px var(--bg),0 0 0 4.5px var(--fa),0 0 0 6px var(--fb),0 0 14px var(--fg)}
+  .avatar.fr.sm{box-shadow:0 0 0 1.5px var(--bg),0 0 0 3px var(--fa),0 0 0 4px var(--fb),0 0 8px var(--fg)}
+  .ulink .avatar.fr.sm,.rev-title .avatar.fr.sm{box-shadow:0 0 0 1px var(--bg),0 0 0 2px var(--fa),0 0 0 2.8px var(--fb)}
+  .avatar.fr.big{box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--fa),0 0 0 8px var(--fb),0 0 18px var(--fg)}
+  .look-prev{border-radius:16px;padding:14px;margin-bottom:12px;border:1px solid var(--line)}
+  .look-prev .profile-head{margin:0;padding:12px;border-radius:14px}
+  .look-sec{margin-top:14px}.look-sec h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .swatch{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0}
+  .swatch.on{border-color:var(--text)}
+  .swatch.custom{width:auto;height:30px;border-radius:999px;padding:0 10px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font:inherit;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .swatch.custom input{width:22px;height:22px;border:0;padding:0;background:none}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{padding:8px 12px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+  .chip.on{color:var(--text);border-color:var(--gold)}
+  .frames{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .framebtn{background:none;border:2px solid transparent;border-radius:14px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+  .framebtn.on{border-color:var(--gold);color:var(--text)}
+  .toggle-row{text-transform:none;letter-spacing:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);font-weight:600;font-size:14px}
+  /* Pro: small text tag next to a username (deliberately not an avatar emblem) */
+  .protag{display:inline-block;vertical-align:middle;margin-left:6px;padding:2px 7px;border-radius:6px;font-family:Outfit;font-weight:800;font-size:10px;letter-spacing:.08em;line-height:1.3;color:#1a1200;background:linear-gradient(135deg,#ffd166,#f0b429);box-shadow:0 1px 0 rgba(0,0,0,.25);text-transform:uppercase}
+  h1 .protag{font-size:12px;padding:3px 8px;margin-left:10px;vertical-align:middle;position:relative;top:-3px}
+  .pro-hero{text-align:center;padding:6px 0 10px}
+  .pro-hero .pro-word{font-family:Outfit;font-weight:800;font-size:30px;letter-spacing:-.01em;color:var(--text)}
+  .pro-hero .pro-word b{color:var(--gold)}
+  .pro-feats{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .pro-feats div{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:600;padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+  .pro-feats div span.ic{font-size:18px;line-height:1.2;flex:none}
+  .pro-feats small{display:block;font-weight:500;color:var(--muted);margin-top:2px}
+  .pro-feats .soon{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-left:auto;flex:none;padding-top:2px}
+  .pro-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .pro-plan{background:var(--panel2);border:2px solid var(--line);border-radius:14px;padding:12px;text-align:center;cursor:pointer;color:var(--text);font:inherit}
+  .pro-plan.best{border-color:var(--gold)}
+  .pro-plan b{display:block;font-family:Outfit;font-size:22px;font-weight:800}
+  .pro-plan small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .pro-plan .save{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;color:#1a1200;background:var(--gold);border-radius:999px;padding:2px 8px}
+  .pro-status{text-align:center;font-weight:600;color:var(--muted);font-size:13px;margin-top:10px}
   .push-ico{font-size:44px;text-align:center;margin:4px 0 8px}
   .push-pts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
   .push-pts span{font-size:15px;font-weight:600;padding:11px 14px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
@@ -754,6 +796,35 @@
   </div>
 </div>
 
+<div class="sheet-wrap" id="lookWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="lookTitle">
+    <h2 id="lookTitle">Profile look</h2>
+    <div class="g">Pick an accent, a header style and an avatar frame. Pro only — everyone sees it.</div>
+    <div class="look-prev" id="lookPrev"></div>
+    <div class="look-sec"><h3>Accent color</h3><div class="swatches" id="lookSwatches"></div></div>
+    <div class="look-sec"><h3>Header pattern</h3><div class="chips" id="lookPatterns"></div></div>
+    <div class="look-sec"><h3>Header tint</h3><div class="chips" id="lookTints"></div></div>
+    <div class="look-sec"><h3>Avatar frame</h3><div class="frames" id="lookFrames"></div></div>
+    <div class="look-sec"><label class="toggle-row"><span>Color my username everywhere<br><small style="font-weight:500;color:var(--muted)">Feed, reviews, comments — not just my profile</small></span><input type="checkbox" id="lookNameColor"></label></div>
+    <div class="actions"><button class="cta ghost" id="lookReset">Reset to default</button><button class="cta ghost" id="lookCancel">Cancel</button><button class="cta" id="lookSave">Save</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="proWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="proTitle">
+    <div class="pro-hero"><div class="pro-word">JOYSTICK<b>D</b> <span class="protag" style="font-size:14px;padding:4px 10px;top:-6px;position:relative">Pro</span></div>
+      <div class="g" id="proTitle" style="margin-top:6px">Make your profile yours.</div></div>
+    <div class="pro-feats" id="proFeats"></div>
+    <div class="pro-plans" id="proPlans">
+      <button class="pro-plan" data-plan="monthly"><b>$5.99</b><small>per month</small></button>
+      <button class="pro-plan best" data-plan="yearly"><b>$29.99</b><small>per year</small><span class="save">save 58%</span></button>
+    </div>
+    <div class="pro-status" id="proStatus"></div>
+    <p class="hint" style="margin-top:12px;text-align:center">Everything you can do today stays free, forever. Pro is extra.</p>
+    <div class="actions"><button class="cta ghost" id="proRestore" hidden>Restore purchase</button><button class="cta ghost" id="proClose">Close</button></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="setWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
     <h2 id="setTitle">Settings</h2>
@@ -762,7 +833,10 @@
       <button class="set-row" id="setProfile">View my profile</button>
       <button class="set-row" id="setPassword">Change password</button>
       <button class="set-row" id="setPush" hidden>Turn on notifications</button>
+      <button class="set-row" id="setPro">Joystickd Pro: <b id="setProState">get Pro</b></button>
+      <button class="set-row" id="setLook">Profile look &amp; avatar frame… <span class="protag">Pro</span></button>
       <button class="set-row" id="setBlocked">Blocked users</button>
+      <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
       <button class="set-row" id="setBadges" hidden>Profile badges…</button>
       <button class="set-row" id="setPlats">Platinum count on profile: <b id="setPlatsState">shown</b></button>
       <button class="set-row" data-guidelines>Community guidelines</button>
@@ -1017,6 +1091,122 @@ const AUTH_LINK = (()=>{
 })();
 const sb = LIVE ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 let me = null;                       // {id, username} when signed in (live mode)
+// ---- Joystickd Pro -----------------------------------------------------------
+// Source of truth: profiles.pro_until (set by payment webhooks / admin). Pro = pro_until in the future.
+const proUntilOf = {};                                        // user id -> pro_until (filled as profiles are fetched)
+const themeOf = {};
+function notePro(p){ if (p && p.id){ proUntilOf[p.id] = p.pro_until || null; if ("theme" in p) themeOf[p.id] = p.theme || null; } }
+const proActive = until => !!until && new Date(until).getTime() > Date.now();
+function isPro(P){ if (!P) return false; if (P.id && P.id===me?.id) return proActive(me.proUntil); return proActive(P.proUntil ?? proUntilOf[P.id]); }
+const isProId = uid => proActive(uid===me?.id ? me?.proUntil : proUntilOf[uid]);
+const proTag = uid => isProId(uid) ? `<span class="protag" title="Joystickd Pro">Pro</span>` : "";
+// Features (built ones are gated with requirePro(); the rest show as coming soon on the Pro sheet)
+const PRO_FEATURES = [
+  { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:false },
+  { key:"frames",  ic:"\uD83D\uDD36", name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
+  { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
+  { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review, wall and profile images you save.", built:false },
+  { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:false },
+  { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:false },
+];
+// Gate: true if the current user is Pro; otherwise opens the Pro sheet and returns false.
+function requirePro(featureKey){ if (!LIVE) { toast("Pro needs the live site"); return false; } if (!me){ openAuth("signin"); return false; } if (isPro(me)) return true; openPro(featureKey); return false; }
+function openPro(highlight){
+  $("#proFeats").innerHTML = PRO_FEATURES.map(f=> `<div ${f.key===highlight ? 'style="border-color:var(--gold)"' : ""}><span class="ic">${f.ic}</span><span>${f.name}<small>${f.desc}</small></span>${f.built ? "" : `<span class="soon">soon</span>`}</div>`).join("");
+  const pro = me && isPro(me);
+  $("#proPlans").hidden = !!pro;
+  $("#proStatus").textContent = pro ? `You're Pro${me.proUntil ? ` until ${fmtDate(String(me.proUntil).slice(0,10))}` : ""}. Thank you for supporting Joystickd.` : (PRO_PURCHASE_LIVE ? "" : "Subscriptions are opening soon \u2014 features unlock the moment they ship.");
+  $("#proRestore").hidden = !(window.Capacitor?.isNativePlatform?.() && !pro);
+  $("#proWrap").classList.add("open");
+}
+// Flip to true when the App Store (RevenueCat) / Stripe wiring is live. Until then the plan buttons explain.
+const PRO_PURCHASE_LIVE = false;
+async function startProPurchase(plan){
+  if (!me){ openAuth("signin"); return; }
+  if (!PRO_PURCHASE_LIVE){ toast("Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
+  const cap = window.Capacitor;
+  if (cap?.isNativePlatform?.() && window.Purchases){                       // RevenueCat (iOS): wired in the native build
+    try { const offs = await window.Purchases.getOfferings(); const pkg = offs.current?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("no package");
+      await window.Purchases.purchasePackage({ aPackage: pkg }); await refreshPro(); toast("Welcome to Pro!"); $("#proWrap").classList.remove("open"); }
+    catch(e){ if (!/cancel/i.test(String(e?.message||e))) toast("Purchase didn't go through"); }
+    return;
+  }
+  // Web: Stripe Checkout via edge function (returns a hosted checkout URL)
+  try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { plan } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; }
+  catch(e){ toast("Couldn't start checkout \u2014 try again in a moment"); }
+}
+// ---- Profile look + avatar frames (Pro) --------------------------------------
+const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks" };
+const TINTS = { off:"Off", soft:"Soft", bold:"Bold" };
+const FRAMES = {
+  none:    { name:"None",     a:null },
+  gold:    { name:"Gold",     a:"#ffd166", b:"#b8820f" },
+  platinum:{ name:"Platinum", a:"#eef2f8", b:"#8c9bb5" },
+  neon:    { name:"Neon",     a:"#00f0ff", b:"#ff2bd6" },
+  ember:   { name:"Ember",    a:"#ff8a1f", b:"#c0202a" },
+  emerald: { name:"Emerald",  a:"#2fd37a", b:"#0f6f44" },
+  royal:   { name:"Royal",    a:"#b06cf0", b:"#4a2380" },
+  ice:     { name:"Ice",      a:"#9be8ff", b:"#3b6fd6" },
+  rose:    { name:"Rose",     a:"#ff5ab0", b:"#b8306f" },
+  onyx:    { name:"Onyx",     a:"#3a4a73", b:"#0b1020" },
+  sunset:  { name:"Sunset",   a:"#ffb347", b:"#ff5ab0" },
+  mint:    { name:"Mint",     a:"#a3e635", b:"#00c2d1" },
+};
+const DEFAULT_THEME = { accent:"#f0b429", pattern:"none", tint:"soft", nameColor:true, frame:"none" };
+const hexRgb = h => { const m=/^#?([0-9a-f]{6})$/i.exec(h||""); if (!m) return [240,180,41]; const n=parseInt(m[1],16); return [n>>16&255, n>>8&255, n&255]; };
+const rgba = (h,a) => { const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
+function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
+  accent: /^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent,
+  pattern: PATTERNS[t.pattern] ? t.pattern : "none", tint: TINTS[t.tint] ? t.tint : "soft",
+  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none" }; }
+// The theme that should be shown for a user: only while they're Pro.
+function themeFor(uid, P){ if (!isProId(uid) && !(P && isPro(P))) return null; const t = P && "theme" in P ? P.theme : themeOf[uid]; return t ? cleanTheme(t) : null; }
+function patternCss(t){ const c = a => rgba(t.accent, a);
+  switch (t.pattern){
+    case "dots":    return [`radial-gradient(${c(.28)} 1.3px, transparent 1.8px)`, "14px 14px"];
+    case "grid":    return [`linear-gradient(${c(.16)} 1px, transparent 1px), linear-gradient(90deg, ${c(.16)} 1px, transparent 1px)`, "22px 22px"];
+    case "stripes": return [`repeating-linear-gradient(135deg, ${c(.13)} 0 7px, transparent 7px 20px)`, "auto"];
+    case "rings":   return [`repeating-radial-gradient(circle at 100% 0, ${c(.14)} 0 2px, transparent 2px 20px)`, "auto"];
+    case "checks":  return [`conic-gradient(${c(.11)} 25%, transparent 0 50%, ${c(.11)} 0 75%, transparent 0)`, "24px 24px"];
+    default: return ["none", "auto"]; } }
+// Inline style for a themed profile header (null = default look)
+function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
+  return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
+const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? ` style="color:${t.accent}"` : ""; };
+const frameAttrs = uid => { const t = themeFor(uid); const f = t && FRAMES[t.frame]; return f && f.a ? { cls:" fr", style:` style="--fa:${f.a};--fb:${f.b};--fg:${rgba(f.a,.55)}"` } : { cls:"", style:"" }; };
+// Canvas: ring around an avatar on exported images
+function drawFrameRing(x, cx, cy, r, uid, scale=1){ const t = themeFor(uid); const f = t && FRAMES[t.frame]; if (!f || !f.a) return;
+  x.save(); x.lineWidth = 3*scale; x.strokeStyle = f.b; x.beginPath(); x.arc(cx, cy, r + 5.5*scale, 0, 7); x.stroke();
+  x.lineWidth = 3.5*scale; x.strokeStyle = f.a; x.shadowColor = f.a; x.shadowBlur = 10*scale; x.beginPath(); x.arc(cx, cy, r + 2.5*scale, 0, 7); x.stroke(); x.restore(); }
+// ---- the Profile look sheet
+let lookDraft = null;
+function openLook(){ if (!requirePro("theme")) return; lookDraft = cleanTheme(me.theme); paintLook(); $("#lookWrap").classList.add("open"); }
+function paintLook(){
+  const t = lookDraft, P = { id: me.id, username: me.username, proUntil: me.proUntil, theme: t };
+  const fr = FRAMES[t.frame];
+  $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
+    <div class="avatar-wrap">${avatarEl(me.id, me.username, "big", fr && fr.a ? { cls:" fr", style:` style="--fa:${fr.a};--fb:${fr.b};--fg:${rgba(fr.a,.55)}"` } : null)}</div>
+    <div><h1 style="color:${t.accent};font-size:24px">${esc(me.username)}${proTag(me.id)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
+  $("#lookSwatches").innerHTML = ACCENTS.map(c=> `<button class="swatch ${t.accent===c?"on":""}" data-acc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
+    + `<label class="swatch custom ${ACCENTS.includes(t.accent)?"":"on"}">Custom <input type="color" id="lookCustom" value="${t.accent}"></label>`;
+  $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
+  $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
+  $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.a ? { cls:" fr", style:` style="--fa:${f.a};--fb:${f.b};--fg:${rgba(f.a,.55)}"` } : null)}<span>${f.name}</span></button>`).join("");
+  $("#lookNameColor").checked = t.nameColor;
+  $("#lookSwatches").querySelectorAll("[data-acc]").forEach(b=> b.onclick = ()=>{ lookDraft.accent=b.dataset.acc; paintLook(); });
+  $("#lookCustom").oninput = e=>{ lookDraft.accent = e.target.value.toLowerCase(); paintLook(); $("#lookCustom").focus(); };
+  $("#lookPatterns").querySelectorAll("[data-pat]").forEach(b=> b.onclick = ()=>{ lookDraft.pattern=b.dataset.pat; paintLook(); });
+  $("#lookTints").querySelectorAll("[data-tint]").forEach(b=> b.onclick = ()=>{ lookDraft.tint=b.dataset.tint; paintLook(); });
+  $("#lookFrames").querySelectorAll("[data-frame]").forEach(b=> b.onclick = ()=>{ lookDraft.frame=b.dataset.frame; paintLook(); });
+  $("#lookNameColor").onchange = e=>{ lookDraft.nameColor = e.target.checked; };
+}
+async function saveLook(theme){
+  const { error } = await sb.from("profiles").update({ theme }).eq("id", me.id);
+  if (error){ if (/PRO_REQUIRED/.test(error.message||"")) { $("#lookWrap").classList.remove("open"); openPro("theme"); return; } return dbFail(error); }
+  me.theme = theme; notePro({ id: me.id, pro_until: me.proUntil, theme }); $("#lookWrap").classList.remove("open"); toast(theme ? "Profile look saved" : "Back to the default look"); render();
+}
+async function refreshPro(){ if (!LIVE || !me) return; const { data } = await sb.from("profiles").select("pro_until").eq("id", me.id).maybeSingle(); if (data){ me.proUntil = data.pro_until||null; notePro({ id: me.id, pro_until: me.proUntil }); } render(); }
 const requireAuth = ()=>{ if (LIVE && !me){ openAuth(); return false; } return true; };
 // Supabase returns at most 1000 rows per request. fetchAll() pages through a query so popular games
 // (and prolific users) aren't silently truncated. `build` must return a fresh query each call.
@@ -1150,14 +1340,15 @@ async function loadCommunityLegacy(id){
   friendLogs[id] = rows.filter(r=> fids.includes(r.user_id));
   gameReviewsState[id] = { local:true, sort:null, rows: rows.filter(r=>(r.review||"").trim()), total: 0 };
   const ids = [...new Set(rows.map(r=>r.user_id))].filter(u=>u!==me?.id && !revNames[u]);
-  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
+  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
 }
 const likesCache = {}, revNames = {}, gameBallots = {};
 const avatars = {};                   // user id -> avatar_url (or null)
 // Small avatar: image if the user has one, otherwise the initial circle.
-function avatarEl(uid, name, cls="sm"){
+function avatarEl(uid, name, cls="sm", frame){
   const url = uid ? avatars[uid] : null;
-  return url ? `<img class="avatar ${cls} img" src="${esc(url)}" alt="">` : `<span class="avatar ${cls}">${esc(((name||"?")[0]||"?").toUpperCase())}</span>`;
+  const f = frame === undefined ? frameAttrs(uid) : (frame || { cls:"", style:"" });
+  return url ? `<img class="avatar ${cls} img${f.cls}" src="${esc(url)}" alt=""${f.style}>` : `<span class="avatar ${cls}${f.cls}"${f.style}>${esc(((name||"?")[0]||"?").toUpperCase())}</span>`;
 }
 
 // ---- reports & moderation -----------------------------------------------------
@@ -1188,7 +1379,7 @@ async function loadReports(){
   const { data } = await sb.from("reports").select("*").eq("status","open").order("created_at",{ascending:false}).limit(100);
   reports = data || [];
   const ids = [...new Set(reports.flatMap(r=>[r.reporter, r.target_user]))].filter(u=>u!==me.id && !revNames[u] && !follows.names[u]);
-  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
+  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
   const gids = [...new Set(reports.map(r=>r.game_id))].filter(g=>!getGame(g));
   if (gids.length){ try { await igdb("games",{ids:gids}); } catch(e){} }
   const cids = reports.filter(r=>r.comment_id).map(r=>r.comment_id);
@@ -1256,7 +1447,7 @@ async function loadComments(gid, uid){
   const { data } = await sb.from("review_comments").select("id,user_id,body,created_at").eq("game_id", gid).eq("review_user", uid).order("created_at",{ascending:true});
   commentsCache[ckey(gid,uid)] = data || [];
   const ids = [...new Set((data||[]).map(c=>c.user_id))].filter(u=>u!==me?.id && !revNames[u] && !follows.names[u]);
-  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
+  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
 }
 async function loadCommentCounts(gid){
   if (!LIVE) return;
@@ -1288,7 +1479,7 @@ function commentsBlock(gid, uid){
     ${open ? `<div class="cmt-list">
       ${!list ? `<div class="hint">Loading…</div>` : list.length ? list.map(c=>`
         <div class="cmt">
-          <button class="cmt-who" data-user="${esc(whoName(c.user_id))}">${esc(whoName(c.user_id))}</button>
+          <button class="cmt-who" data-user="${esc(whoName(c.user_id))}"${nameStyle(c.user_id)}>${esc(whoName(c.user_id))}</button>
           <span class="cmt-when">${c.created_at ? fmtDate(c.created_at.slice(0,10)) : ""}</span>
           <span class="cmt-acts">${(me && c.user_id!==me.id) ? `<button class="cmt-del" data-creport="${gid}:${uid}:${c.id}" title="Report comment">⚑</button>` : ""}${(me && (c.user_id===me.id || uid===me.id || me.isAdmin)) ? `<button class="cmt-del" data-cdel="${gid}:${uid}:${c.id}" aria-label="Delete comment">✕</button>` : ""}</span>
           <div class="cmt-body">${esc(c.body)}</div>
@@ -1550,7 +1741,7 @@ function feedCard(f, idx, kind){
           <button class="rev-cover" data-open="${g.id}" style="${coverStyle(g)}"></button>
           <div class="rev-body">
             <div class="rev-top">
-              <div class="rev-title"><button class="rev-tbtn" data-open="${g.id}">${esc(g.title)}</button><small><button class="ulink" data-user="${esc(f.user)}">${avatarEl(f.userId, f.user)} ${esc(f.user)}</button> · ${fmtDate((f.when||"").slice(0,10))}</small></div>
+              <div class="rev-title"><button class="rev-tbtn" data-open="${g.id}">${esc(g.title)}</button><small><button class="ulink" data-user="${esc(f.user)}"${nameStyle(f.userId)}>${avatarEl(f.userId, f.user)} ${esc(f.user)}${proTag(f.userId)}</button> · ${fmtDate((f.when||"").slice(0,10))}</small></div>
               <button class="rev-open" ${open} title="Open this log">${l.rating!=null ? `<span class="rev-score" style="${ratingText(l.rating)}">${l.rating}</span>` : `<span class="rev-score played">Played</span>`}${l.platinum ? PLAT_IMG(l.rating,"inrev") : ""}</button>
             </div>
             ${l.review ? `<button class="review clamp rev-text" ${open}>${esc(l.review)}</button>` : ""}
@@ -1665,8 +1856,8 @@ const searchUsers = debounce(async ()=>{
   const q = view.query.trim(); if (!q || searchMode!=="users") return;
   if (!LIVE){ drawUsers(); return; }
   userLoading = true; drawUsers();
-  const { data } = await sb.from("profiles").select("id,username,avatar_url").ilike("username", `%${q.replace(/[%_]/g,"")}%`).order("username").limit(30);
-  (data||[]).forEach(p=>{ avatars[p.id]=p.avatar_url; follows.names[p.id]=p.username; });
+  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").ilike("username", `%${q.replace(/[%_]/g,"")}%`).order("username").limit(30);
+  (data||[]).forEach(p=>{ avatars[p.id]=p.avatar_url; notePro(p); follows.names[p.id]=p.username; });
   userResults = data||[]; userLoading = false;
   if (view.query.trim()===q) drawUsers();
 }, 350);
@@ -1801,7 +1992,8 @@ async function loadOtherProfile(username){
   const fc = await followCounts(p.id);
   await refreshGames(Object.keys(L2).map(Number));
   let excluded = null; if (me?.isAdmin){ const { data: ex } = await sb.rpc("is_excluded", { target:p.id }); excluded = !!ex; }
-  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
+  notePro(p);
+  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, proUntil:p.pro_until||null, theme:p.theme||null, logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
 }
 async function renderProfile(app){
   const wantOther = LIVE && view.user && view.user.toLowerCase()!==me?.username?.toLowerCase();
@@ -1817,7 +2009,7 @@ async function renderProfile(app){
     app.innerHTML = `<div class="empty"><h2>Your profile</h2>Sign in to log games, pick a top 5 and vote on awards.<br><br><button class="cta" id="promptAuth">Sign in or create an account</button></div>`;
     $("#promptAuth").onclick = openAuth; return;
   }
-  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
+  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
 }
 const bestDate = l => [l.date,l.firstTrophy,l.platDate,l.plat2On].filter(Boolean).sort().pop() || "";
 // A log can carry two platinums (e.g. PS4 + PS5 versions). hasPlat2 / platCount / platEntries make that uniform.
@@ -1935,10 +2127,10 @@ function renderLogs(app, P, isMe){
   else body = profileAwards(P.ballot, isMe);
 
   app.innerHTML = `
-    <div class="profile-head">
+    ${(()=>{ const t = themeFor(P.id, P); return `<div class="profile-head${t?" themed":""}" ${headStyle(t)}>`; })()}
       <div class="avatar-wrap">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
       <div>
-        <h1>${esc(P.username)}</h1>
+        <h1>${esc(P.username)}${proTag(P.id)}</h1>
         <div class="statrow">
           <div class="stat"><b>${rated}</b><small>game${rated===1?"":"s"} logged</small></div>
           ${P.hidePlats ? "" : `<div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>`}
@@ -1949,7 +2141,7 @@ function renderLogs(app, P, isMe){
       ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button><button class="cta ghost" id="snapBtn" style="margin:0;padding:9px 14px;font-size:13px">Snapshot</button></div>` : followButton(P)}
       ${(!isMe && me?.isAdmin && P.excluded!=null) ? `<button class="cta ghost ${P.excluded?"danger-btn":""}" id="exclBtn" style="margin:0;padding:9px 14px;font-size:13px" title="Admin: this account's ratings ${P.excluded?"do NOT":""} count toward community averages">${P.excluded ? "Excluded from stats" : "Counts in stats"}</button>` : ""}
     </div>
-    <nav class="ptabs">${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
+    <nav class="ptabs${themeFor(P.id, P)?" themed":""}">${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
     ${body}`;
   app.querySelectorAll("[data-ptab]").forEach(b=> b.onclick = ()=>{ profileTab=b.dataset.ptab; shown={}; listView=null; render(); });
   app.querySelectorAll("[data-osave]").forEach(b=> b.onclick = ()=>{ const id=+b.dataset.osave, g=getGame(id); if (g && logs[id]) saveReviewImage(g, logs[id], { id: P.id, username: P.username, ballot: P.ballot || {} }); });
@@ -2500,7 +2692,7 @@ function openT5(gid, P, isMe){
   if (!l){ $("#t5Wrap").classList.remove("open"); view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); return; }
   $("#t5Title").innerHTML = `<button class="t5-title" id="t5TitleBtn">${esc(g.title)}</button>`;
   $("#t5TitleBtn").onclick = ()=>{ closeT5(); view.tab="games"; view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); };
-  $("#t5Sub").innerHTML = `<button class="linklike" data-t5user="${esc(P.username)}">${esc(P.username)}</button>'s log${g.year ? ` · ${g.year}` : ""}`;
+  $("#t5Sub").innerHTML = `<button class="linklike" data-t5user="${esc(P.username)}"${nameStyle(P.id, P)}>${esc(P.username)}</button>${proTag(P.id)}'s log${g.year ? ` · ${g.year}` : ""}`;
   $("#t5Sub").querySelector("[data-t5user]").onclick = ()=>{ closeT5(); view.tab="logs"; view.gameId=null; view.user=P.username; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(P.username)); render(); window.scrollTo(0,0); };
   const myL = !isMe ? logs[gid] : null;
   const canLike = LIVE && me && P.id && P.id!==me.id && !isBlocked(P.id) && (l.review||"").trim();
@@ -2768,8 +2960,8 @@ function renderCommunity(app){
   let list = stats.rows.filter(r=> (commSort==="high"||commSort==="low") ? r.rating_count>=commMin : true);
   if (commSort==="plat") list = list.filter(r=>r.platinum_count>0);
   if (commSort==="reviewed") list = list.filter(r=>r.review_count>0);
-  if (commSort==="hardest"||commSort==="easiest") list = list.filter(r=>r.avg_plat_diff!=null);
-  if (commSort==="longest"||commSort==="shortest") list = list.filter(r=>r.avg_plat_hours!=null);
+  if (commSort==="hardest"||commSort==="easiest") list = list.filter(r=>r.avg_plat_diff!=null && +(r.plat_diff_count||0) >= commMin);
+  if (commSort==="longest"||commSort==="shortest") list = list.filter(r=>r.avg_plat_hours!=null && +(r.plat_hours_count||0) >= commMin);
   const total = list.length;
   list = [...list].sort(COMM_SORTS[commSort].fn).slice(0, commShown);
   const cap = r => commSort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}`
@@ -2782,7 +2974,8 @@ function renderCommunity(app){
     </div>
     <div class="filters">
       <div class="genres">${Object.entries(COMM_SORTS).map(([k,v])=>`<button class="gchip ${commSort===k?"on":""}" data-csort="${k}">${v.label}</button>`).join("")}</div>
-      ${(commSort==="high"||commSort==="low") ? `<label class="sortwrap">Min ratings <select id="commMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${commMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}
+      ${(()=>{ const ratingSort = commSort==="high"||commSort==="low", platSort = ["hardest","easiest","longest","shortest"].includes(commSort);
+        return (ratingSort || platSort) ? `<label class="sortwrap">${ratingSort ? "Min ratings" : "Min reports"} <select id="commMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${commMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""; })()}
     </div>
     ${list.length ? `<div class="grid">${list.map(r=>{ const g=getGame(r.game_id)||r.game; return commCard(g, r); }).join("")}</div>${commShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="commMore">Show more (${total-commShown} left)</button></div>` : ""}`
       : `<div class="empty small">Nothing here yet — it fills in as people log games.</div>`}`;
@@ -2833,7 +3026,7 @@ function gameReviews(g){
       const when = r.updated_at ? fmtDate(r.updated_at.slice(0,10)) : "";
       return `<article class="crev">
         <div class="crev-top">
-          <button class="uname" data-user="${esc(name)}">${avatarEl(uid, name)}${esc(name)}${isMine?" (you)":""}</button>
+          <button class="uname" data-user="${esc(name)}"${nameStyle(uid)}>${avatarEl(uid, name)}${esc(name)}${isMine?" (you)":""}${proTag(uid)}</button>
         </div>
         ${logCard(rowToLog(r), g, ballotFor(g.id, uid), isMine)}
         <div class="crev-foot">
@@ -2902,7 +3095,7 @@ async function renderGame(app){
         ${l ? `
           <button class="cta ghost" id="logBtn">Edit your log</button>${(l.review||"").trim() ? `<button class="cta ghost" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Save as image</button>` : ""}
           ${logCard(l, g, ballots.me, true)}`
-        : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">↗ Share</button>
+        : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">Share</button>${userAverage(g.id) ? `<button class="cta ghost" id="commImgBtn" title="Save a picture of the community's ratings for this game">Save community image</button>` : ""}
         ${(()=>{ if (!LIVE || !me) return "";
           const fids = followingIds(); if (!fids.length) return "";
           const all = (friendLogs[g.id]||[]).filter(r=> !isBlocked(r.user_id))
@@ -2977,6 +3170,7 @@ async function renderGame(app){
   });
   $("#wishBtn") && ($("#wishBtn").onclick = ()=> toggleWishlist(g));
   $("#shareGameBtn") && ($("#shareGameBtn").onclick = ()=> shareUrl(location.origin + location.pathname + "?g=" + g.id, `${g.title} on Joystickd`, "Game link copied"));
+  $("#commImgBtn") && ($("#commImgBtn").onclick = ()=> saveCommunityImage(g));
 }
 
 // ---- log sheet -----------------------------------------------------------
@@ -3274,6 +3468,7 @@ async function saveReviewImage(g, saved, who){
     x.font="700 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(author.username, ax, ly);
     const nw = x.measureText(author.username).width;
     x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("'s review", ax+nw, ly);
+    drawFrameRing(x, ax+ad/2, ay+ad/2, ad/2, author.id, 0.8);
     if (avatar){ x.save(); x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.clip(); x.drawImage(avatar, ax, ay, ad, ad); x.restore(); }
     else { x.fillStyle="#233150"; x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.fill();
       x.fillStyle=gold; x.font="800 24px Outfit, sans-serif"; x.textAlign="center"; x.fillText((author.username[0]||"?").toUpperCase(), ax+ad/2, ay+ad/2+9); x.textAlign="left"; }
@@ -3348,6 +3543,79 @@ async function saveReviewImage(g, saved, who){
   await deliverImages(items);
 }
 
+// ---- community image (game page) ----------------------------------------------
+// Everything the community has said about one game: average + distribution, category averages, platinum stats.
+async function saveCommunityImage(g){
+  try { await document.fonts.ready; } catch(e){}
+  const W=720, ua = userAverage(g.id); if (!ua){ toast("No community ratings yet"); return; }
+  const dist = distCounts(g.id), steps=[]; for (let v=1; v<=10; v+=0.5) steps.push(v);
+  const counts = steps.map(v=> +(dist[String(v)]||0)), max = Math.max(1, ...counts);
+  const cats = SUBS.map(sc=> ({ sc, a: subAverage(g.id, sc.key) })).filter(x=> x.a && x.a.count>0);
+  const pa = platAverage(g.id);
+  const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
+  const troph = pa ? await loadImg(`${TROPHY_BASE}10.png`) : null;
+  const cvW=110, cvH=147, chartH=150;
+  let H = 56 + cvH + 30 + 26 + chartH + 30;
+  if (cats.length) H += 36 + Math.ceil(cats.length/2)*30 + 10;
+  if (pa) H += 36 + 60;
+  H += 60;
+  const c=document.createElement("canvas"); const x=c.getContext("2d");
+  const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  const gold="#f0b429", text="#e6ebf4", mut="#8b98b5", soft="#c4cddd";
+  x.fillStyle="#0e1526"; x.fillRect(0,0,W,H);
+  x.fillStyle="#161f35"; x.strokeStyle="#28365a"; x.lineWidth=1; x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.fill(); x.stroke();
+  x.textAlign="right"; x.font="800 16px Outfit, sans-serif"; x.fillStyle=text; x.fillText("JOYSTICK", W-56, 48); x.fillStyle=gold; x.fillText("D", W-44, 48); x.textAlign="left";
+  let y=56;
+  if (cover){ x.save(); x.beginPath(); x.roundRect(44,y-12,cvW,cvH,10); x.clip(); x.drawImage(cover,44,y-12,cvW,cvH); x.restore(); }
+  const tx = cover ? 44+cvW+18 : 44;
+  x.font="800 26px Outfit, sans-serif"; x.fillStyle=text;
+  const titleLines = wrapText(x, g.title, W-tx-170).slice(0,2); titleLines.forEach((t,i)=> x.fillText(t, tx, y+16+i*30));
+  x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText([g.year, g.dev].filter(Boolean).join(" \u00b7 "), tx, y+20+titleLines.length*30);
+  x.font="700 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText("What the Joystickd community thinks", tx, y+44+titleLines.length*30);
+  // big average
+  const avgV = +ua.avg, scY = y+cvH-30;
+  x.textAlign="right"; x.font="800 46px Outfit, sans-serif";
+  { const cols=ratingColors(snapHalf(avgV)); const grd=x.createLinearGradient(W-160, scY-40, W-56, scY); cols.forEach((cc,i)=>grd.addColorStop(cols.length===1?0:i/(cols.length-1), cc)); x.fillStyle=grd; }
+  x.fillText(ua.avg, W-56, scY);
+  x.font="700 14px Outfit, sans-serif"; x.fillStyle=mut; x.fillText(`/ 10 \u00b7 ${ua.count} rating${ua.count===1?"":"s"}`, W-56, scY+20); x.textAlign="left";
+  y += cvH + 30;
+  // distribution
+  x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("RATING DISTRIBUTION", 44, y);
+  const areaX=44, areaW=W-88, bw=(areaW-(steps.length-1)*4)/steps.length, base=y+16+chartH-22;
+  steps.forEach((v,i)=>{ const bx=areaX+i*(bw+4), bh=Math.max(3, counts[i]/max*(chartH-44));
+    const cols=ratingColors(snapHalf(v)); const grd=x.createLinearGradient(0, base-bh, 0, base); cols.forEach((cc,j)=>grd.addColorStop(cols.length===1?0:j/(cols.length-1), cc));
+    x.fillStyle = counts[i] ? grd : "rgba(255,255,255,.05)"; x.beginPath(); x.roundRect(bx, base-bh, bw, bh, 3); x.fill();
+    if (counts[i]){ x.font="700 11px Outfit, sans-serif"; x.fillStyle=mut; x.textAlign="center"; x.fillText(String(counts[i]), bx+bw/2, base-bh-6); x.textAlign="left"; }
+    if (v%1===0){ x.font="600 11px Manrope, sans-serif"; x.fillStyle=mut; x.textAlign="center"; x.fillText(String(v), bx+bw/2, base+18); x.textAlign="left"; } });
+  y = base + 30 + 30;
+  // categories
+  if (cats.length){
+    x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("BY CATEGORY", 44, y); y += 26;
+    const SHORT = { visuals:"Visuals / art direction", sound:"Soundtrack / score", gameplay:"Gameplay / mechanics", animation:"Cinematic flair / animations", levels:"Pacing / progression", narrative:"Narrative / writing", fun:"Fun factor", original:"Creativity / originality" };
+    cats.forEach((it,i)=>{ const col=i%2, row=Math.floor(i/2); const bx=44+col*((W-88)/2), by=y+row*30;
+      x.font="600 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(SHORT[it.sc.key] || it.sc.label.split(/[,(&]/)[0].trim(), bx, by);
+      const v=+it.a.avg, t=it.a.avg, rx=bx+(W-88)/2-48; x.font="800 16px Outfit, sans-serif"; const tw=x.measureText(t).width;
+      x.fillStyle=ratingFillCtx(x, v, rx-tw, by-13, rx, by); x.textAlign="right"; x.fillText(t, rx, by); x.textAlign="left";
+      x.font="600 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(`(${it.a.count})`, rx+5, by); });
+    y += Math.ceil(cats.length/2)*30 + 10;
+  }
+  // platinum
+  if (pa){
+    x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUM", 44, y); y += 30;
+    const cells = [[pa.diff!=null ? `${pa.diff}/10` : "\u2014", "avg difficulty"], [pa.hours!=null ? `${pa.hours} hrs` : "\u2014", "avg time"], [pa.fun!=null ? `${pa.fun}/10` : "\u2014", "avg enjoyability"], [String(pa.count), `report${pa.count===1?"":"s"}`]];
+    const cw=(W-88-3*10)/4;
+    cells.forEach(([big, small], i)=>{ const bx=44+i*(cw+10);
+      x.fillStyle="#1e2a47"; x.beginPath(); x.roundRect(bx, y-4, cw, 56, 12); x.fill();
+      x.font="800 20px Outfit, sans-serif"; x.fillStyle = i===3 ? gold : text; x.fillText(big, bx+12, y+22);
+      x.font="600 11px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(small, bx+12, y+40); });
+    if (troph){ const th=26, tw=troph.width*th/troph.height; x.drawImage(troph, 44+86, y-30-6, tw, th); }
+    y += 60 + 6;
+  }
+  x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-community.png`);
+}
+
 // ---- profile snapshot image --------------------------------------------------
 async function saveProfileImage(P, opts={}){
   try { await document.fonts.ready; } catch(e){}
@@ -3377,6 +3645,7 @@ async function saveProfileImage(P, opts={}){
   x.textAlign="left";
   // avatar
   const ax=52, ay=52, ad=84;
+  drawFrameRing(x, ax+ad/2, ay+ad/2, ad/2, P.id, 1.1);
   if (avatar){ x.save(); x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.clip(); x.drawImage(avatar, ax, ay, ad, ad); x.restore(); }
   else { x.fillStyle="#233150"; x.beginPath(); x.arc(ax+ad/2, ay+ad/2, ad/2, 0, 7); x.fill();
     x.fillStyle=gold; x.font="800 38px Outfit, sans-serif"; x.textAlign="center"; x.fillText((P.username[0]||"?").toUpperCase(), ax+ad/2, ay+ad/2+13); x.textAlign="left"; }
@@ -3549,6 +3818,8 @@ function openSettings(){
   $("#setMe").innerHTML = `${avatarEl(me.id, me.username, "big")}<div><b>${esc(me.username)}</b><small>${me.isAdmin ? "Admin" : "Signed in"}</small></div>`;
   $("#setPush").hidden = !pushPlugin();
   $("#setBadges").hidden = !hasBadges();
+  $("#setProState").textContent = isPro(me) ? `active${me.proUntil ? " until " + fmtDate(String(me.proUntil).slice(0,10)) : ""}` : "get Pro";
+  $("#setGrantPro").hidden = !me.isAdmin;
   $("#setPlatsState").textContent = me.hidePlats ? "hidden" : "shown";
   $("#setWrap").classList.add("open");
 }
@@ -3634,6 +3905,23 @@ function wireSettingsUI(){
   $("#setPassword").onclick = ()=>{ closeSettings(); openPw(); };
   $("#setPush").onclick = async ()=>{ closeSettings(); if (await enablePush()) toast("Notifications on"); else toast("Enable notifications in iOS Settings \u2192 Joystickd"); };
   $("#setBlocked").onclick = ()=>{ closeSettings(); openBlocked(); };
+  $("#setPro").onclick = ()=>{ closeSettings(); openPro(); };
+  $("#setLook").onclick = ()=>{ closeSettings(); openLook(); };
+  $("#lookCancel").onclick = ()=> $("#lookWrap").classList.remove("open");
+  $("#lookWrap").addEventListener("click", e=>{ if(e.target.id==="lookWrap") $("#lookWrap").classList.remove("open"); });
+  $("#lookSave").onclick = ()=> saveLook(cleanTheme(lookDraft));
+  $("#lookReset").onclick = ()=> saveLook(null);
+  $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
+  $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
+  $("#proPlans").querySelectorAll("[data-plan]").forEach(b=> b.onclick = ()=> startProPurchase(b.dataset.plan));
+  $("#proRestore").onclick = async ()=>{ if (window.Purchases){ try { await window.Purchases.restorePurchases(); await refreshPro(); toast(isPro(me) ? "Pro restored" : "No Pro purchase found for this Apple ID"); } catch(e){ toast("Couldn't restore"); } } else toast("Restore is available in the app"); };
+  // Admin: gift Pro by username (also how you give yourself Pro for testing)
+  $("#setGrantPro").onclick = async ()=>{ closeSettings(); if (!me?.isAdmin) return;
+    const who = prompt("Username to grant Pro to:"); if (!who) return;
+    const days = parseInt(prompt("Days of Pro (0 removes Pro):", "365")); if (isNaN(days)) return;
+    const { data, error } = await sb.rpc("grant_pro", { target: who.trim(), days, source: "gift" }); if (error) return dbFail(error);
+    toast(days > 0 ? `${who} is Pro until ${fmtDate(String(data).slice(0,10))}` : `Removed Pro from ${who}`);
+    if (who.trim().toLowerCase() === me.username.toLowerCase()) await refreshPro(); else render(); };
   $("#badgeClose").onclick = ()=> $("#badgeWrap").classList.remove("open");
   $("#badgeWrap").addEventListener("click", e=>{ if(e.target.id==="badgeWrap") $("#badgeWrap").classList.remove("open"); });
   $("#setBadges").onclick = ()=>{ closeSettings(); if (me) openBadgeSettings(); };
@@ -3666,7 +3954,7 @@ function wireSettingsUI(){
 
 // Read a profile by id or username, surviving a missing optional column.
 async function readProfile(where){
-  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc,hide_plats", basic = "id,username";
+  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc,hide_plats,pro_until,theme", basic = "id,username";
   let q = sb.from("profiles").select(full); q = where.id ? q.eq("id", where.id) : q.ilike("username", where.username);
   let { data, error } = await q.maybeSingle();
   if (error){ let q2 = sb.from("profiles").select(basic); q2 = where.id ? q2.eq("id", where.id) : q2.ilike("username", where.username); ({ data } = await q2.maybeSingle()); console.warn("profile columns missing:", error.message); }
@@ -3691,7 +3979,7 @@ async function loadNotifs(){
     ...(CM.data||[]).map(r=>({ type:"comment", uid:r.user_id, gameId:r.game_id, at:r.created_at })),
   ].sort((a,b)=> (b.at||"").localeCompare(a.at||"")).slice(0,30);
   const ids = [...new Set(items.map(i=>i.uid))].filter(u=>!revNames[u] && !follows.names[u]);
-  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
+  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
   if (me.isAdmin && reports.length) items.unshift({ type:"reports", n:reports.length, at:reports[0].created_at });
   notifs.items = items;
   notifs.unread = notifs.seenAt ? items.filter(i=> i.at > notifs.seenAt).length : items.length;
@@ -3739,7 +4027,7 @@ async function loadMyData(){
     sb.from("wishlist").select("*").eq("user_id", me.id),
     sb.from("lists").select("*").eq("user_id", me.id).order("updated_at",{ascending:false}),
   ]);
-  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; }
+  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; me.proUntil = P.data.pro_until||null; me.theme = P.data.theme||null; notePro(P.data); }
   wishlist = {}; (W.data||[]).forEach(r=>{ wishlist[r.game_id]=r.added_at; cacheGame(r.game); });
   myLists = LS.error ? [] : (LS.data||[]); myLists.forEach(l=> (l.games||[]).forEach(cacheGame));
   if (me.isAdmin) await loadReports();
@@ -3790,8 +4078,8 @@ async function openBlocked(){
   $("#blockedList").innerHTML = blocks.size ? `<div class="hint">Loading…</div>` : `<div class="empty small">You haven't blocked anyone.</div>`;
   wrap.classList.add("open");
   if (!blocks.size) return;
-  const { data } = await sb.from("profiles").select("id,username,avatar_url").in("id", [...blocks]);
-  (data||[]).forEach(p=>{ avatars[p.id]=p.avatar_url; });
+  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", [...blocks]);
+  (data||[]).forEach(p=>{ avatars[p.id]=p.avatar_url; notePro(p); });
   $("#blockedList").innerHTML = (data||[]).length ? (data||[]).map(p=>
     `<div class="urow">${avatarEl(p.id, p.username)}<span style="font-weight:700">${esc(p.username)}</span><div class="uacts" style="margin-left:auto"><button class="cta ghost sm" data-unblock="${p.id}" data-name="${esc(p.username)}">Unblock</button></div></div>`).join("")
     : `<div class="empty small">You haven't blocked anyone.</div>`;
@@ -3806,7 +4094,7 @@ async function loadFollows(){
   const { data } = await sb.from("follows").select("follower,followee").or(`follower.eq.${me.id},followee.eq.${me.id}`);
   follows.rows = data || [];
   const ids = [...new Set(follows.rows.flatMap(r=>[r.follower,r.followee]))].filter(id=>id!==me.id);
-  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids); (ps||[]).forEach(p=>{ follows.names[p.id]=p.username; avatars[p.id]=p.avatar_url; }); }
+  if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ follows.names[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
 }
 // Your follower list was only loaded at sign-in, so people who followed you while the app stayed open
 // never appeared until a relaunch. Re-fetch when the tab opens (throttled) and re-render if it changed.
@@ -3843,8 +4131,8 @@ let peopleQuery = "", peopleResults = [];
 const searchPeople = debounce(async ()=>{
   const q = peopleQuery.trim();
   if (!q){ peopleResults=[]; return render(); }
-  const { data } = await sb.from("profiles").select("id,username,avatar_url").ilike("username", `%${q.replace(/[%_]/g,"")}%`).limit(10);
-  peopleResults = (data||[]).filter(p=>p.id!==me.id); peopleResults.forEach(p=>{ follows.names[p.id]=p.username; avatars[p.id]=p.avatar_url; });
+  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").ilike("username", `%${q.replace(/[%_]/g,"")}%`).limit(10);
+  peopleResults = (data||[]).filter(p=>p.id!==me.id); peopleResults.forEach(p=>{ follows.names[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); });
   if (peopleQuery.trim()===q) render();
 }, 300);
 // Follow lists for any profile. Own lists come from the already-loaded
@@ -3860,8 +4148,8 @@ async function loadProfileFollows(P){
   const ids = [...new Set([...(a.data||[]).map(r=>r.followee), ...(b.data||[]).map(r=>r.follower)])];
   const profs = {};
   if (ids.length){
-    const { data } = await sb.from("profiles").select("id,username,avatar_url").in("id", ids);
-    (data||[]).forEach(p=>{ profs[p.id]=p; avatars[p.id]=p.avatar_url; follows.names[p.id]=p.username; });
+    const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids);
+    (data||[]).forEach(p=>{ profs[p.id]=p; avatars[p.id]=p.avatar_url; notePro(p); follows.names[p.id]=p.username; });
   }
   profFollows = { for:P.id, loading:false,
     following: (a.data||[]).map(r=>r.followee).filter(id=>profs[id]),
