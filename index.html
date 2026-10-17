@@ -4101,12 +4101,23 @@ function wireSettingsUI(){
 }
 
 // Read a profile by id or username, surviving a missing optional column.
+// If a newer optional column hasn't been added in Supabase yet, drop just that column and retry —
+// the bio, badges and everything else still load. (Used to fall back to id+username only.)
+const PROFILE_COLS = ["id","username","avatar_url","bio","is_admin","founder","badge_layout","emblem_url","emblem_name","emblem_desc","hide_plats","pro_until","theme","shelves"];
+let profileCols = PROFILE_COLS.slice();
 async function readProfile(where){
-  const full = "id,username,avatar_url,bio,is_admin,founder,badge_layout,emblem_url,emblem_name,emblem_desc,hide_plats,pro_until,theme,shelves", basic = "id,username";
-  let q = sb.from("profiles").select(full); q = where.id ? q.eq("id", where.id) : q.ilike("username", where.username);
-  let { data, error } = await q.maybeSingle();
-  if (error){ let q2 = sb.from("profiles").select(basic); q2 = where.id ? q2.eq("id", where.id) : q2.ilike("username", where.username); ({ data } = await q2.maybeSingle()); console.warn("profile columns missing:", error.message); }
-  return data;
+  for (let attempt = 0; attempt < 8; attempt++){
+    let q = sb.from("profiles").select(profileCols.join(",")); q = where.id ? q.eq("id", where.id) : q.ilike("username", where.username);
+    const { data, error } = await q.maybeSingle();
+    if (!error) return data;
+    const m = /column\s+(?:profiles\.)?"?([a-z_]+)"?\s+does not exist/i.exec(error.message||"") || /'?([a-z_]+)'?\s+column/i.exec(error.message||"");
+    const bad = m && profileCols.includes(m[1]) && !["id","username"].includes(m[1]) ? m[1] : null;
+    console.warn("profile load:", error.message);
+    if (bad) profileCols = profileCols.filter(c=> c!==bad);                 // remember for this session
+    else if (profileCols.length > 2) profileCols = profileCols.slice(0, Math.max(2, profileCols.length-1));   // unknown error: shed the newest column
+    else { const q2 = sb.from("profiles").select("id,username"); return (await (where.id ? q2.eq("id", where.id) : q2.ilike("username", where.username)).maybeSingle()).data; }
+  }
+  return null;
 }
 
 // ---- notifications ---------------------------------------------------------
