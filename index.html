@@ -445,6 +445,31 @@
   .hero h1{font-size:34px;line-height:1.05;font-weight:800;max-width:18ch}
   .hero h1 span{color:var(--gold)}
   .hero p{margin:12px 0 0;max-width:62ch;line-height:1.55;color:#c4cddd;font-size:15px}
+  /* Pro: Stats tab */
+  .stiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:26px}
+  .stile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px}
+  .stile b{display:block;font-family:Outfit;font-weight:800;font-size:26px;line-height:1.1;color:var(--text)}
+  .stile small{display:block;margin-top:4px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stile .sub{display:block;font-size:12px;color:var(--muted);margin-top:4px;font-weight:600}
+  .ssec{margin-bottom:30px}.ssec h2{font-size:18px;color:var(--plat);margin-bottom:4px}.ssec .g{margin-bottom:12px}
+  .sbars{display:flex;flex-direction:column;gap:7px}
+  .sbar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;align-items:center;gap:10px;font-size:13px;font-weight:600}
+  .sbar .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+  .sbar .trk{height:10px;border-radius:999px;background:rgba(255,255,255,.05);overflow:hidden}
+  .sbar .fill{display:block;height:100%;border-radius:999px;background:var(--gold)}
+  .sbar .val{color:var(--muted);font-size:12px;white-space:nowrap;min-width:60px;text-align:right}
+  .sbar .val b{color:var(--text);font-family:Outfit}
+  .scols{display:flex;align-items:flex-end;gap:4px;height:110px;padding-top:18px}
+  .scol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;position:relative}
+  .scol i{display:block;width:100%;border-radius:4px 4px 2px 2px;background:var(--gold);min-height:3px}
+  .scol i.dim{background:rgba(255,255,255,.07)}
+  .scol em{position:absolute;top:-16px;font-style:normal;font-size:10px;font-weight:700;color:var(--muted)}
+  .scol small{margin-top:6px;font-size:10px;color:var(--muted);white-space:nowrap}
+  .slist{display:flex;flex-wrap:wrap;gap:8px}
+  .slist button{text-align:left;display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;color:var(--text);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .slist .mini{width:22px;height:30px;border-radius:4px;background-size:cover;background-position:center;background-color:var(--panel)}
+  .slock{text-align:center;padding:36px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+  .slock h3{font-size:20px;margin:8px 0 6px}.slock p{color:var(--muted);font-size:14px;max-width:420px;margin:0 auto 16px}
   /* Pro: profile look (accent / pattern / tint) and avatar frames */
   .profile-head.themed{padding:18px 16px;margin:-6px -16px 26px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
   @media(max-width:640px){.profile-head.themed{margin-left:-12px;margin-right:-12px}}
@@ -1102,7 +1127,7 @@ const isProId = uid => proActive(uid===me?.id ? me?.proUntil : proUntilOf[uid]);
 const proTag = uid => isProId(uid) ? `<span class="protag" title="Joystickd Pro">Pro</span>` : "";
 // Features (built ones are gated with requirePro(); the rest show as coming soon on the Pro sheet)
 const PRO_FEATURES = [
-  { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:false },
+  { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:true },
   { key:"frames",  ic:"\uD83D\uDD36", name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
   { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
   { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review, wall and profile images you save.", built:false },
@@ -2017,6 +2042,82 @@ const hasPlat2 = l => !!(l?.platinum && (l.plat2Num || l.plat2On));
 const platCount = l => l?.platinum ? 1 + (hasPlat2(l) ? 1 : 0) : 0;
 const platEntries = (id, l) => !l?.platinum ? [] : [{ id, num:l.platNum, date:l.platDate, label:l.platLabel, second:false }].concat(hasPlat2(l) ? [{ id, num:l.plat2Num, date:l.plat2On, label:l.plat2Label, second:true }] : []);
 const platNumText = l => { const a = l.platNum ? `#${l.platNum}${l.platLabel ? ` (${l.platLabel})` : ""}` : null, b = hasPlat2(l) && l.plat2Num ? `#${l.plat2Num}${l.plat2Label ? ` (${l.plat2Label})` : ""}` : null; return [a,b].filter(Boolean).join(" · "); };
+// ---- Stats tab (Pro) ----------------------------------------------------------
+// Everything is computed from the logs already loaded for the profile; no extra queries.
+function profileStats(P, isMe){
+  const L = P.logs, ids = Object.keys(L).map(Number), N = ids.length;
+  if (!N) return `<div class="empty small">${isMe ? "Log a few games and your stats will appear here." : `${esc(P.username)} hasn't logged anything yet.`}</div>`;
+  const you = isMe ? "You" : esc(P.username);
+  const ratings = ids.map(id=>L[id].rating).filter(v=>v!=null);
+  const avg = ratings.length ? mean(ratings) : null;
+  const sorted = [...ratings].sort((a,b)=>a-b), median = sorted.length ? (sorted.length%2 ? sorted[(sorted.length-1)/2] : (sorted[sorted.length/2-1]+sorted[sorted.length/2])/2) : null;
+  const tens = ids.filter(id=>L[id].rating===10), lows = ratings.length ? Math.min(...ratings) : null;
+  const reviews = ids.filter(id=>(L[id].review||"").trim()).length;
+  const words = ids.reduce((n,id)=> n + ((L[id].review||"").trim() ? L[id].review.trim().split(/\s+/).length : 0), 0);
+  const plats = ids.filter(id=>L[id].platinum), platN = plats.reduce((n,id)=> n + platCount(L[id]), 0);
+  const hoursArr = plats.map(id=>L[id].platHours).filter(v=>v!=null), diffArr = plats.map(id=>L[id].platDiff).filter(v=>v!=null), funArr = plats.map(id=>L[id].platFun).filter(v=>v!=null);
+  const hours = hoursArr.reduce((a,b)=>a+b,0);
+  const by = (key, fn) => { const m={}; ids.forEach(id=>{ const ks = fn(id); (Array.isArray(ks)?ks:[ks]).filter(Boolean).forEach(k=>{ (m[k] ||= {n:0, r:[], ids:[]}); m[k].n++; m[k].ids.push(id); if (L[id].rating!=null) m[k].r.push(L[id].rating); }); }); return m; };
+  const yearOf = d => (d||"").slice(0,4);
+  const byYear = by("year", id=> yearOf(bestDate(L[id])) || "Undated");
+  const years = Object.keys(byYear).filter(y=>y!=="Undated").sort();
+  const byGenre = by("genre", id=> tagsOf(getGame(id)));
+  const byDev = by("dev", id=> getGame(id)?.dev);
+  const byRel = by("rel", id=> { const y=getGame(id)?.year; return y ? String(Math.floor(y/10)*10)+"s" : null; });
+  const top = (m, k=8) => Object.entries(m).sort((a,b)=> b[1].n-a[1].n || (mean(b[1].r||[0])-mean(a[1].r||[0]))).slice(0,k);
+  // months: last 12
+  const now = new Date(), months = []; for (let i=11;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); months.push(d.toISOString().slice(0,7)); }
+  const perMonth = months.map(m=> ids.filter(id=> bestDate(L[id]).slice(0,7)===m).length);
+  // streak: consecutive months (ending now or last month) with at least one log
+  const monthSet = new Set(ids.map(id=> bestDate(L[id]).slice(0,7)).filter(Boolean));
+  let streak=0; { const d=new Date(now.getFullYear(), now.getMonth(), 1); if (!monthSet.has(d.toISOString().slice(0,7))) d.setMonth(d.getMonth()-1); while (monthSet.has(d.toISOString().slice(0,7))){ streak++; d.setMonth(d.getMonth()-1); } }
+  const dates = ids.map(id=>bestDate(L[id])).filter(Boolean).sort(); const first = dates[0], last = dates[dates.length-1];
+  const subAvg = SUBS.map(sc=>{ const v = ids.map(id=>L[id].subs?.[sc.key]).filter(x=>x!=null); return v.length ? { sc, avg: mean(v), n: v.length } : null; }).filter(Boolean).sort((a,b)=>b.avg-a.avg);
+  const distC = {}; ratings.forEach(v=> distC[v]=(distC[v]||0)+1); const steps=[]; for (let v=1;v<=10;v+=0.5) steps.push(v); const dmax = Math.max(1, ...steps.map(v=>distC[v]||0));
+  const hardest = plats.filter(id=>L[id].platDiff!=null).sort((a,b)=>L[b].platDiff-L[a].platDiff)[0];
+  const longest = plats.filter(id=>L[id].platHours!=null).sort((a,b)=>L[b].platHours-L[a].platHours)[0];
+  const quickest = plats.filter(id=>L[id].platHours!=null).sort((a,b)=>L[a].platHours-L[b].platHours)[0];
+  const platByYear = {}; plats.forEach(id=>{ platEntries(id, L[id]).forEach(e=>{ const y=yearOf(e.date); if (y) platByYear[y]=(platByYear[y]||0)+1; }); });
+  const fmtH = h => h>=1000 ? (h/1000).toFixed(1)+"k" : String(Math.round(h));
+  const tile = (b, small, sub) => `<div class="stile"><b>${b}</b><small>${small}</small>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
+  const bars = (entries, valFn, labelFn, colorFn) => `<div class="sbars">${entries.map(([k,v])=>{ const val=valFn(v), mx=Math.max(...entries.map(e=>valFn(e[1])))||1; return `<div class="sbar"><span class="lab" title="${esc(k)}">${esc(k)}</span><span class="trk"><span class="fill" style="width:${Math.max(3, val/mx*100)}%;${colorFn?colorFn(v):""}"></span></span><span class="val">${labelFn(v)}</span></div>`; }).join("")}</div>`;
+  const cols = (labels, vals, colorFn) => { const mx=Math.max(1,...vals); return `<div class="scols">${vals.map((v,i)=>`<div class="scol">${v?`<em>${v}</em>`:""}<i class="${v?"":"dim"}" style="height:${Math.max(3, v/mx*100)}%;${colorFn?colorFn(i):""}"></i><small>${labels[i]}</small></div>`).join("")}</div>`; };
+  const chip = id => { const g=getGame(id); return g ? `<button data-open="${g.id}"><span class="mini" style="${coverStyle(g)}"></span>${esc(g.title)}${L[id].rating!=null?` <span style="${ratingText(L[id].rating)}">${L[id].rating}</span>`:""}</button>` : ""; };
+  const gameLine = id => { const g=getGame(id); return g ? `<button class="linklike" data-open="${g.id}">${esc(g.title)}</button>` : ""; };
+  return `
+    <div class="stiles">
+      ${tile(N, "games logged", first ? `since ${fmtDate(first)}` : "")}
+      ${tile(avg!=null ? avg.toFixed(2) : "\u2014", "average rating", median!=null ? `median ${median}` : "")}
+      ${tile(reviews, "reviews written", words ? `${words.toLocaleString()} words` : "")}
+      ${tile(platN, "platinums", hours ? `${fmtH(hours)} hrs reported` : "")}
+      ${tile(tens.length, "perfect 10s", lows!=null ? `lowest ${lows}` : "")}
+      ${tile(streak, streak===1 ? "month streak" : "month streak", last ? `last log ${fmtDate(last)}` : "")}
+    </div>
+    <section class="ssec"><h2>Games per year</h2><div class="g">By the date ${isMe?"you":"they"} played them</div>
+      ${years.length ? cols(years, years.map(y=>byYear[y].n)) : `<div class="empty small">No dated logs yet.</div>`}
+      ${byYear.Undated ? `<div class="hint" style="margin-top:6px">${byYear.Undated.n} without a date</div>` : ""}</section>
+    <section class="ssec"><h2>Last 12 months</h2><div class="g">Logs per month \u00b7 busiest: ${(()=>{ const i=perMonth.indexOf(Math.max(...perMonth)); return perMonth[i] ? new Date(months[i]+"-02").toLocaleString(undefined,{month:"long",year:"numeric"}) : "\u2014"; })()}</div>
+      ${cols(months.map(m=> new Date(m+"-02").toLocaleString(undefined,{month:"short"})), perMonth)}</section>
+    ${ratings.length ? `<section class="ssec"><h2>Rating spread</h2><div class="g">${ratings.length} rated \u00b7 ${Math.round(ratings.filter(v=>v>=8).length/ratings.length*100)}% at 8 or higher</div>
+      ${cols(steps.map(v=> v%1===0 ? String(v) : ""), steps.map(v=>distC[v]||0), i=> `background:${ratingGradient(snapHalf(steps[i]))}`)}</section>` : ""}
+    ${subAvg.length ? `<section class="ssec"><h2>By category</h2><div class="g">${you} rate${isMe?"":"s"} ${esc(subAvg[0].sc.label.split(/[,(&]/)[0].trim().toLowerCase())} highest</div>
+      ${bars(subAvg.map(x=>[x.sc.label.split(/[,(&]/)[0].trim(), x]), v=>v.avg, v=>`<b>${v.avg.toFixed(1)}</b> \u00b7 ${v.n}`, v=>`background:${ratingGradient(snapHalf(v.avg))}`)}</section>` : ""}
+    ${Object.keys(byGenre).length ? `<section class="ssec"><h2>Genres</h2><div class="g">Most logged, with ${isMe?"your":"their"} average rating</div>
+      ${bars(top(byGenre), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
+    ${Object.keys(byDev).length ? `<section class="ssec"><h2>Developers</h2><div class="g">Studios ${isMe?"you":"they"} keep coming back to</div>
+      ${bars(top(byDev,6), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
+    ${Object.keys(byRel).length ? `<section class="ssec"><h2>Release eras</h2><div class="g">When the games ${isMe?"you":"they"} play came out</div>
+      ${bars(Object.entries(byRel).sort((a,b)=>a[0].localeCompare(b[0])), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
+    ${plats.length ? `<section class="ssec"><h2>Platinums</h2><div class="g">${platN} platinum${platN===1?"":"s"}${diffArr.length?` \u00b7 avg difficulty ${mean(diffArr).toFixed(1)}/10`:""}${funArr.length?` \u00b7 avg enjoyability ${mean(funArr).toFixed(1)}/10`:""}${hoursArr.length?` \u00b7 avg ${Math.round(mean(hoursArr))} hrs`:""}</div>
+      ${Object.keys(platByYear).length ? cols(Object.keys(platByYear).sort(), Object.keys(platByYear).sort().map(y=>platByYear[y])) : ""}
+      <div class="stiles" style="margin-top:14px">
+        ${hardest ? tile(`${L[hardest].platDiff}/10`, "hardest", gameLine(hardest)) : ""}
+        ${longest ? tile(`${fmtH(L[longest].platHours)} hrs`, "longest", gameLine(longest)) : ""}
+        ${quickest && quickest!==longest ? tile(`${fmtH(L[quickest].platHours)} hrs`, "quickest", gameLine(quickest)) : ""}
+        ${hours ? tile(`${Math.round(hours/24)}`, "days of platinum time", `${fmtH(hours)} hours total`) : ""}
+      </div></section>` : ""}
+    ${tens.length ? `<section class="ssec"><h2>${isMe?"Your":"Their"} 10s</h2><div class="g">${tens.length} game${tens.length===1?"":"s"} ${isMe?"you":"they"} called perfect</div><div class="slist">${tens.sort((a,b)=> bestDate(L[b]).localeCompare(bestDate(L[a]))).map(chip).join("")}</div></section>` : ""}`;
+}
 function renderLogs(app, P, isMe){
   const logs = P.logs, top5 = P.top5;
   const ids = Object.keys(logs).sort((a,b)=> bestDate(logs[b]).localeCompare(bestDate(logs[a])));
@@ -2031,7 +2132,7 @@ function renderLogs(app, P, isMe){
   const max = Math.max(1,...counts);
 
   const wishIds = Object.keys(P.wishlist||{}).sort((a,b)=> (P.wishlist[b]||"").localeCompare(P.wishlist[a]||""));
-  const TABS = [["overview","Overview",null],["games","All games",rated||null],["reviews","Reviews",reviewIds.length],["platinums","Platinums",platTotal],["wishlist","Wishlist",wishIds.length||null],["lists","Lists",(P.lists||[]).length||null],["awards","Game awards",awardYears||null]];
+  const TABS = [["overview","Overview",null],["games","All games",rated||null],["reviews","Reviews",reviewIds.length],["platinums","Platinums",platTotal],...((isMe || isPro(P)) ? [["stats","Stats",null]] : []),["wishlist","Wishlist",wishIds.length||null],["lists","Lists",(P.lists||[]).length||null],["awards","Game awards",awardYears||null]];
   if (LIVE){
     if (isMe) refreshFollows();                     // keeps the Followers/Following counts current while the app stays open
     const loaded = !isMe && profFollows.for===P.id;
@@ -2124,6 +2225,7 @@ function renderLogs(app, P, isMe){
   else if (profileTab==="following") body = followListTab(P, isMe, "following");
   else if (profileTab==="followers") body = followListTab(P, isMe, "followers");
   else if (profileTab==="reports") body = reportsTab();
+  else if (profileTab==="stats") body = isPro(P) ? profileStats(P, isMe) : `<div class="slock"><div style="font-size:34px">\uD83D\uDCCA</div><h3>Your stats <span class="protag">Pro</span></h3><p>Games per year, rating spread, genres and developers, platinum hours, streaks, your 10s \u2014 everything your logs add up to.</p><button class="cta" id="statsPro">See Joystickd Pro</button></div>`;
   else body = profileAwards(P.ballot, isMe);
 
   app.innerHTML = `
@@ -2144,6 +2246,7 @@ function renderLogs(app, P, isMe){
     <nav class="ptabs${themeFor(P.id, P)?" themed":""}">${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
     ${body}`;
   app.querySelectorAll("[data-ptab]").forEach(b=> b.onclick = ()=>{ profileTab=b.dataset.ptab; shown={}; listView=null; render(); });
+  $("#statsPro") && ($("#statsPro").onclick = ()=> openPro("stats"));
   app.querySelectorAll("[data-osave]").forEach(b=> b.onclick = ()=>{ const id=+b.dataset.osave, g=getGame(id); if (g && logs[id]) saveReviewImage(g, logs[id], { id: P.id, username: P.username, ballot: P.ballot || {} }); });
   app.querySelectorAll("[data-more]").forEach(b=> b.onclick = ()=>{ const t=b.dataset.more; shown[t]=pageOf(t)+PAGE; render(); });
   $("#avatarEdit") && ($("#avatarEdit").onclick = ()=> $("#avatarFile").click());
