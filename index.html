@@ -867,6 +867,10 @@
     <h2 id="cmpTitle">Compare</h2>
     <div class="g" id="cmpSub">Pick up to 3 people you follow.</div>
     <div class="ulist" id="cmpList" style="margin-top:10px"></div>
+    <div id="cmpOpts">
+      <button class="plat-toggle" id="cmpSubs" role="switch" style="margin-top:14px"><span class="pt-text">Include sub-ratings<small>Visuals, soundtrack, gameplay… side by side</small></span><span class="switch"><i></i></span></button>
+      <button class="plat-toggle" id="cmpPlat" role="switch" style="margin-top:10px"><span class="pt-text">Big platinum trophy<small>Next to the rating, for anyone who platinumed it</small></span><span class="switch"><i></i></span></button>
+    </div>
     <div class="actions"><button class="cta ghost" id="cmpCancel">Cancel</button><button class="cta" id="cmpGo" disabled>Make the card</button></div>
   </div>
 </div>
@@ -3859,6 +3863,7 @@ async function saveReviewImage(g, saved, who){
 
 // ---- comparison cards (Pro) ---------------------------------------------------
 let cmpCtx = null;   // { kind:"game"|"profile", g, picked:Set }
+let cmpSubsOn = true, cmpPlatOn = true;   // game comparison options (remembered for the session)
 function openCompare(kind, g){
   if (!requirePro("compare")) return;
   const fids = followingIds();
@@ -3866,6 +3871,8 @@ function openCompare(kind, g){
   if (kind==="game") people = people.filter(p=> (friendLogs[g.id]||[]).some(r=> r.user_id===p.id));
   if (!people.length){ toast(kind==="game" ? "Nobody you follow has logged this game yet" : "Follow a few people first"); return; }
   cmpCtx = { kind, g, picked:new Set() };
+  $("#cmpOpts").hidden = kind!=="game";
+  [["#cmpSubs", cmpSubsOn], ["#cmpPlat", cmpPlatOn]].forEach(([id,on])=>{ $(id).classList.toggle("on", on); $(id).setAttribute("aria-checked", on); });
   $("#cmpTitle").textContent = kind==="game" ? `Compare: ${g.title}` : "Compare profiles";
   $("#cmpSub").textContent = kind==="game" ? "Up to 3 people you follow who logged it \u2014 ratings side by side." : "Up to 3 people you follow \u2014 stats side by side.";
   const paint = ()=>{ $("#cmpList").innerHTML = people.sort((a,b)=>a.name.localeCompare(b.name)).map(p=> `<button class="cmprow ${cmpCtx.picked.has(p.id)?"on":""}" data-cmp="${p.id}">${avatarEl(p.id, p.name)}<span${nameStyle(p.id)}>${esc(p.name)}${proTag(p.id)}</span><span class="tick">${cmpCtx.picked.has(p.id)?"\u2713":""}</span></button>`).join("");
@@ -3900,11 +3907,14 @@ function bigScore(x, v, cx, baseY, size){ x.textAlign="center"; x.font=`800 ${si
   const cols=ratingColors(snapHalf(+v)); const w=x.measureText(String(v)).width; const g=x.createLinearGradient(cx-w/2, baseY-size, cx+w/2, baseY); cols.forEach((c,i)=>g.addColorStop(cols.length===1?0:i/(cols.length-1), c));
   x.fillStyle=g; x.fillText(String(v), cx, baseY); x.textAlign="left"; }
 // --- game: ratings side by side
-async function saveCompareGameImage(g, ids){
+async function saveCompareGameImage(g, ids, opts){
+  opts = Object.assign({ subs:true, plat:true }, opts||{});
   try { await document.fonts.ready; } catch(e){}
   const people = [{ id: me.id, name: me.username, l: logForExport(logs[g.id]) }, ...ids.map(id=>{ const r=(friendLogs[g.id]||[]).find(x=>x.user_id===id); return { id, name: follows.names[id]||revNames[id]||"\u2026", l: logForExport(rowToLog(r)) }; })];
   const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n;
-  const rated = SUBS.filter(sc=> people.some(p=> p.l.subs?.[sc.key]!=null));
+  const rated = opts.subs ? SUBS.filter(sc=> people.some(p=> p.l.subs?.[sc.key]!=null)) : [];
+  // rating-colored trophy PNG for each platinum (the same art as the site's rating pills)
+  const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true).catch(()=>null) : null)) : people.map(()=>null);
   const measure = document.createElement("canvas").getContext("2d"); measure.font = "400 14px Manrope, sans-serif";
   const excerpts = people.map(p=> p.l.review ? wrapText(measure, p.l.review, colW-36).slice(0, 5) : []);
   const exLines = Math.max(...excerpts.map(e=>e.length));
@@ -3921,8 +3931,16 @@ async function saveCompareGameImage(g, ids){
   const top = headH;
   for (let i=0;i<n;i++){ const p=people[i], px=40+i*(colW+16), cx=px+colW/2; glassPanel(x, px, top, colW, panelH);
     await drawPerson(x, p.id, p.name, cx, top+66, 84);
-    let y = top + personH + 50; bigScore(x, p.l.rating, cx, y, 56); x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; if (p.l.rating!=null) x.fillText("/ 10", cx, y+18); x.textAlign="left"; y += scoreH - 50;
-    if (platH){ x.textAlign="center"; x.font="700 13px Outfit, sans-serif"; x.fillStyle = p.l.platinum ? "#f0b429" : "#55607a"; x.fillText(p.l.platinum ? `\uD83C\uDFC6 Platinum${platNumText(p.l)?" "+platNumText(p.l):""}${p.l.showPlatStats&&p.l.platDiff!=null?` \u00b7 ${p.l.platDiff}/10`:""}` : "no platinum", cx, y+18); x.textAlign="left"; y += platH; }
+    let y = top + personH + 50, scx = cx;
+    if (opts.plat && p.l.platinum){                     // big trophy to the left of the score, the pair centered in the column
+      const size = 56, th = 60, im = trophies[i], tw = (im && im.width) ? th*im.width/im.height : th*0.9;
+      x.font = `800 ${size}px Outfit, sans-serif`; const sw = p.l.rating!=null ? x.measureText(String(p.l.rating)).width : x.measureText("Played").width*0.5;
+      const total = tw + 12 + sw, left = cx - total/2, tcy = y - size*0.36;
+      x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=10; x.shadowOffsetY=3; drawTrophy(x, im, left+tw, tcy, th); x.restore();
+      scx = left + tw + 12 + sw/2;
+    }
+    bigScore(x, p.l.rating, scx, y, 56); x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; if (p.l.rating!=null) x.fillText("/ 10", scx, y+18); x.textAlign="left"; y += scoreH - 50;
+    if (platH){ x.textAlign="center"; x.font="700 13px Outfit, sans-serif"; x.fillStyle = p.l.platinum ? "#f0b429" : "#55607a"; x.fillText(p.l.platinum ? `${opts.plat?"":"\uD83C\uDFC6 "}Platinum${platNumText(p.l)?" "+platNumText(p.l):""}${p.l.showPlatStats&&p.l.platDiff!=null?` \u00b7 ${p.l.platDiff}/10`:""}` : "no platinum", cx, y+18); x.textAlign="left"; y += platH; }
     if (rated.length){ y += 22; rated.forEach(sc=>{ const v=p.l.subs?.[sc.key]; x.font="600 12px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; const lab = sc.label.split(/[,(&]/)[0].trim(); x.fillText(lab, px+16, y);
         x.textAlign="right"; x.font="800 14px Outfit, sans-serif"; x.fillStyle = v!=null ? ratingFillCtx(x, +v, px+colW-30, y-12, px+colW-16, y) : "#55607a";
         if (v!=null && +v<=1.5){ x.save(); x.shadowColor="rgba(255,255,255,.6)"; x.shadowBlur=4; x.fillText(String(v), px+colW-16, y); x.restore(); } else x.fillText(v!=null ? String(v) : "\u2014", px+colW-16, y);
@@ -4356,7 +4374,9 @@ function wireSettingsUI(){
   $("#cmpCancel").onclick = ()=> $("#cmpWrap").classList.remove("open");
   $("#cmpWrap").addEventListener("click", e=>{ if(e.target.id==="cmpWrap") $("#cmpWrap").classList.remove("open"); });
   $("#cmpGo").onclick = async ()=>{ if (!cmpCtx || !cmpCtx.picked.size) return; $("#cmpWrap").classList.remove("open"); const ids=[...cmpCtx.picked];
-    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids); else await saveCompareProfileImage(ids); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
+    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids, { subs: cmpSubsOn, plat: cmpPlatOn }); else await saveCompareProfileImage(ids); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
+  $("#cmpSubs").onclick = ()=>{ cmpSubsOn=!cmpSubsOn; $("#cmpSubs").classList.toggle("on", cmpSubsOn); $("#cmpSubs").setAttribute("aria-checked", cmpSubsOn); };
+  $("#cmpPlat").onclick = ()=>{ cmpPlatOn=!cmpPlatOn; $("#cmpPlat").classList.toggle("on", cmpPlatOn); $("#cmpPlat").setAttribute("aria-checked", cmpPlatOn); };
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
