@@ -470,6 +470,9 @@
   .slist{display:flex;flex-wrap:wrap;gap:8px}
   .slist button{text-align:left;display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;color:var(--text);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
   .slist .mini{width:22px;height:30px;border-radius:4px;background-size:cover;background-position:center;background-color:var(--panel)}
+  .cmprow{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);color:var(--text);font:inherit;font-weight:600;cursor:pointer;text-align:left;margin-bottom:6px}
+  .cmprow.on{border-color:var(--gold)}.cmprow .tick{margin-left:auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px;color:#1a1200}
+  .cmprow.on .tick{background:var(--gold);border-color:var(--gold)}.cmprow small{display:block;font-weight:500;color:var(--muted);font-size:12px}
   .slock{text-align:center;padding:36px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
   .slock h3{font-size:20px;margin:8px 0 6px}.slock p{color:var(--muted);font-size:14px;max-width:420px;margin:0 auto 16px}
   /* Pro: profile look (accent / pattern / tint) and avatar frames */
@@ -858,6 +861,15 @@
   </div>
 </div>
 
+<div class="sheet-wrap" id="cmpWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cmpTitle">
+    <h2 id="cmpTitle">Compare</h2>
+    <div class="g" id="cmpSub">Pick up to 3 people you follow.</div>
+    <div class="ulist" id="cmpList" style="margin-top:10px"></div>
+    <div class="actions"><button class="cta ghost" id="cmpCancel">Cancel</button><button class="cta" id="cmpGo" disabled>Make the card</button></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="proWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="proTitle">
     <div class="pro-hero"><div class="pro-word">JOYSTICK<b>D</b> <span class="protag" style="font-size:14px;padding:4px 10px;top:-6px;position:relative">Pro</span></div>
@@ -1157,7 +1169,7 @@ const PRO_FEATURES = [
   { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
   { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review and profile images you save.", built:true },
   { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:true },
-  { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:false },
+  { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:true },
 ];
 // Gate: true if the current user is Pro; otherwise opens the Pro sheet and returns false.
 function requirePro(featureKey){ if (!LIVE) { toast("Pro needs the live site"); return false; } if (!me){ openAuth("signin"); return false; } if (isPro(me)) return true; openPro(featureKey); return false; }
@@ -2382,7 +2394,7 @@ function renderLogs(app, P, isMe){
         ${P.bio ? `<p class="bio">${esc(P.bio)}${isMe && LIVE ? ` <button class="linklike bio-edit" id="bioEdit">edit</button>` : ""}</p>`
           : (isMe && LIVE ? `<p class="bio muted"><button class="linklike bio-edit" id="bioEdit">+ Add a short bio</button></p>` : "")}
       </div>
-      ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button><button class="cta ghost" id="snapBtn" style="margin:0;padding:9px 14px;font-size:13px">Snapshot</button></div>` : followButton(P)}
+      ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button><button class="cta ghost" id="snapBtn" style="margin:0;padding:9px 14px;font-size:13px">Snapshot</button><button class="cta ghost" id="cmpProfBtn" style="margin:0;padding:9px 14px;font-size:13px">Compare <span class="protag" style="margin-left:4px">Pro</span></button></div>` : followButton(P)}
       ${(!isMe && me?.isAdmin && P.excluded!=null) ? `<button class="cta ghost ${P.excluded?"danger-btn":""}" id="exclBtn" style="margin:0;padding:9px 14px;font-size:13px" title="Admin: this account's ratings ${P.excluded?"do NOT":""} count toward community averages">${P.excluded ? "Excluded from stats" : "Counts in stats"}</button>` : ""}
     </div>
     <nav class="ptabs${themeFor(P.id, P)?" themed":""}"${(()=>{ const t=themeFor(P.id,P); return t ? ` style="--acc:${t.accent}"` : ""; })()}>${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
@@ -2394,6 +2406,7 @@ function renderLogs(app, P, isMe){
   $("#avatarEdit") && ($("#avatarEdit").onclick = ()=> $("#avatarFile").click());
   document.querySelectorAll("#app [data-badge]").forEach(b=> b.onclick = ()=> openBadge(P, b.dataset.badge));
   $("#bioEdit") && ($("#bioEdit").onclick = openBio);
+  $("#cmpProfBtn") && ($("#cmpProfBtn").onclick = ()=> openCompare("profile"));
   $("#snapBtn") && ($("#snapBtn").onclick = ()=>{ snapTarget=P; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
     $("#snapBadges").hidden = !profileBadges(P).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); });
   $("#avatarFile") && ($("#avatarFile").onchange = e=>{ const f=e.target.files[0]; if (f) uploadAvatar(f); });
@@ -3382,7 +3395,7 @@ async function renderGame(app){
         ${l ? `
           <button class="cta ghost" id="logBtn">Edit your log</button>${(l.review||"").trim() ? `<button class="cta ghost" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Save as image</button>` : ""}
           ${logCard(l, g, ballots.me, true)}`
-        : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">Share</button>${userAverage(g.id) ? `<button class="cta ghost" id="commImgBtn" title="Save a picture of the community's ratings for this game">Save community image</button>` : ""}
+        : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">Share</button>${(LIVE && me && logs[g.id] && (friendLogs[g.id]||[]).length) ? `<button class="cta ghost" id="cmpGameBtn" title="Side-by-side with people you follow">Compare <span class="protag" style="margin-left:4px">Pro</span></button>` : ""}${userAverage(g.id) ? `<button class="cta ghost" id="commImgBtn" title="Save a picture of the community's ratings for this game">Save community image</button>` : ""}
         ${(()=>{ if (!LIVE || !me) return "";
           const fids = followingIds(); if (!fids.length) return "";
           const all = (friendLogs[g.id]||[]).filter(r=> !isBlocked(r.user_id))
@@ -3458,6 +3471,7 @@ async function renderGame(app){
   $("#wishBtn") && ($("#wishBtn").onclick = ()=> toggleWishlist(g));
   $("#shareGameBtn") && ($("#shareGameBtn").onclick = ()=> shareUrl(location.origin + location.pathname + "?g=" + g.id, `${g.title} on Joystickd`, "Game link copied"));
   $("#commImgBtn") && ($("#commImgBtn").onclick = ()=> saveCommunityImage(g));
+  $("#cmpGameBtn") && ($("#cmpGameBtn").onclick = ()=> openCompare("game", g));
 }
 
 // ---- log sheet -----------------------------------------------------------
@@ -3826,6 +3840,123 @@ async function saveReviewImage(g, saved, who){
     const b2 = await new Promise(res=> c2.toBlob(res, "image/png")); if (b2) items.push({ blob: b2, filename: `${base}-part-${pi+1}.png` });
   }
   await deliverImages(items);
+}
+
+// ---- comparison cards (Pro) ---------------------------------------------------
+let cmpCtx = null;   // { kind:"game"|"profile", g, picked:Set }
+function openCompare(kind, g){
+  if (!requirePro("compare")) return;
+  const fids = followingIds();
+  let people = fids.map(id=> ({ id, name: follows.names[id] || revNames[id] || "\u2026" }));
+  if (kind==="game") people = people.filter(p=> (friendLogs[g.id]||[]).some(r=> r.user_id===p.id));
+  if (!people.length){ toast(kind==="game" ? "Nobody you follow has logged this game yet" : "Follow a few people first"); return; }
+  cmpCtx = { kind, g, picked:new Set() };
+  $("#cmpTitle").textContent = kind==="game" ? `Compare: ${g.title}` : "Compare profiles";
+  $("#cmpSub").textContent = kind==="game" ? "Up to 3 people you follow who logged it \u2014 ratings side by side." : "Up to 3 people you follow \u2014 stats side by side.";
+  const paint = ()=>{ $("#cmpList").innerHTML = people.sort((a,b)=>a.name.localeCompare(b.name)).map(p=> `<button class="cmprow ${cmpCtx.picked.has(p.id)?"on":""}" data-cmp="${p.id}">${avatarEl(p.id, p.name)}<span${nameStyle(p.id)}>${esc(p.name)}${proTag(p.id)}</span><span class="tick">${cmpCtx.picked.has(p.id)?"\u2713":""}</span></button>`).join("");
+    $("#cmpList").querySelectorAll("[data-cmp]").forEach(b=> b.onclick = ()=>{ const id=b.dataset.cmp; if (cmpCtx.picked.has(id)) cmpCtx.picked.delete(id); else { if (cmpCtx.picked.size>=3){ toast("Up to 3 people"); return; } cmpCtx.picked.add(id); } paint(); });
+    $("#cmpGo").disabled = !cmpCtx.picked.size; };
+  paint(); $("#cmpWrap").classList.add("open");
+}
+// Cinematic backdrop: letterbox bars + blurred art + vignette
+function paintCinematic(x, W, H, art, tint){
+  x.fillStyle = "#06080f"; x.fillRect(0,0,W,H);
+  if (art){ const tiny=document.createElement("canvas"); tiny.width=16; tiny.height=Math.max(1,Math.round(16*H/W)); const tx=tiny.getContext("2d");
+    const sc=Math.max(tiny.width/art.width, tiny.height/art.height), dw=art.width*sc, dh=art.height*sc; tx.drawImage(art,(tiny.width-dw)/2,(tiny.height-dh)/2,dw,dh);
+    x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high"; x.globalAlpha=0.75; x.drawImage(tiny,0,0,W,H); x.globalAlpha=1; }
+  else { const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#1a2340"); g.addColorStop(1,"#2a1430"); x.fillStyle=g; x.fillRect(0,0,W,H); }
+  if (tint){ x.fillStyle = tint; x.fillRect(0,0,W,H); }
+  const v = x.createRadialGradient(W/2, H/2, Math.min(W,H)*0.25, W/2, H/2, Math.max(W,H)*0.8); v.addColorStop(0,"rgba(6,8,15,0)"); v.addColorStop(1,"rgba(6,8,15,.85)"); x.fillStyle=v; x.fillRect(0,0,W,H);
+  x.fillStyle="#000"; x.fillRect(0,0,W,46); x.fillRect(0,H-46,W,46);
+  x.textAlign="right"; x.font="800 16px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 30); x.fillStyle="#f0b429"; x.fillText("D", W-38, 30); x.textAlign="left";
+  x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("joystickd.com", 40, H-18);
+}
+function glassPanel(x, px, py, pw, ph){ x.fillStyle="rgba(14,21,38,.72)"; x.strokeStyle="rgba(255,255,255,.12)"; x.lineWidth=1; x.beginPath(); x.roundRect(px,py,pw,ph,16); x.fill(); x.stroke(); }
+async function drawPerson(x, uid, name, cx, cy, ad){      // avatar (with frame) + styled name, centered
+  const av = avatars[uid] ? await loadImg(avatars[uid], true) : null;
+  drawFrameRing(x, cx, cy, ad/2, uid, ad/64);
+  if (av){ x.save(); x.beginPath(); x.arc(cx, cy, ad/2, 0, 7); x.clip(); x.drawImage(av, cx-ad/2, cy-ad/2, ad, ad); x.restore(); }
+  else { x.fillStyle="#233150"; x.beginPath(); x.arc(cx, cy, ad/2, 0, 7); x.fill(); x.fillStyle="#f0b429"; x.font=`800 ${Math.round(ad*0.42)}px Outfit, sans-serif`; x.textAlign="center"; x.fillText((name[0]||"?").toUpperCase(), cx, cy+ad*0.15); }
+  x.textAlign="center"; x.font="800 17px Outfit, sans-serif"; const t = themeFor(uid); const nw = x.measureText(name).width;
+  x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, cx-nw/2, cy+ad/2+10, cx+nw/2, cy+ad/2+28)) || "#e6ebf4"; x.fillText(name, cx, cy+ad/2+28); x.textAlign="left";
+}
+function bigScore(x, v, cx, baseY, size){ x.textAlign="center"; x.font=`800 ${size}px Outfit, sans-serif`;
+  if (v==null){ x.fillStyle="#8b98b5"; x.font=`800 ${Math.round(size*0.5)}px Outfit, sans-serif`; x.fillText("Played", cx, baseY); x.textAlign="left"; return; }
+  const cols=ratingColors(snapHalf(+v)); const w=x.measureText(String(v)).width; const g=x.createLinearGradient(cx-w/2, baseY-size, cx+w/2, baseY); cols.forEach((c,i)=>g.addColorStop(cols.length===1?0:i/(cols.length-1), c));
+  x.fillStyle=g; x.fillText(String(v), cx, baseY); x.textAlign="left"; }
+// --- game: ratings side by side
+async function saveCompareGameImage(g, ids){
+  try { await document.fonts.ready; } catch(e){}
+  const people = [{ id: me.id, name: me.username, l: logForExport(logs[g.id]) }, ...ids.map(id=>{ const r=(friendLogs[g.id]||[]).find(x=>x.user_id===id); return { id, name: follows.names[id]||revNames[id]||"\u2026", l: logForExport(rowToLog(r)) }; })];
+  const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n;
+  const rated = SUBS.filter(sc=> people.some(p=> p.l.subs?.[sc.key]!=null));
+  const measure = document.createElement("canvas").getContext("2d"); measure.font = "400 14px Manrope, sans-serif";
+  const excerpts = people.map(p=> p.l.review ? wrapText(measure, p.l.review, colW-36).slice(0, 5) : []);
+  const exLines = Math.max(...excerpts.map(e=>e.length));
+  const headH = 150, personH = 150, scoreH = 90, platH = people.some(p=>p.l.platinum) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0, exH = exLines ? 24 + exLines*20 : 0;
+  const panelH = personH + scoreH + platH + subsH + exH + 24, H = headH + panelH + 90;
+  const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
+  const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  paintCinematic(x, W, H, cover, "rgba(6,8,15,.35)");
+  // title block
+  if (cover){ x.save(); x.beginPath(); x.roundRect(40,64,60,80,8); x.clip(); x.drawImage(cover,40,64,60,80); x.restore(); }
+  x.fillStyle="#e6ebf4"; x.font="800 34px Outfit, sans-serif"; x.fillText(wrapText(x, g.title, W-300)[0]||"", cover?118:40, 100);
+  x.font="600 15px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText(`${[g.year, g.dev].filter(Boolean).join(" \u00b7 ")}   \u2022   ${n} players, side by side`, cover?118:40, 128);
+  // columns
+  const top = headH;
+  for (let i=0;i<n;i++){ const p=people[i], px=40+i*(colW+16), cx=px+colW/2; glassPanel(x, px, top, colW, panelH);
+    await drawPerson(x, p.id, p.name, cx, top+66, 84);
+    let y = top + personH + 50; bigScore(x, p.l.rating, cx, y, 56); x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; if (p.l.rating!=null) x.fillText("/ 10", cx, y+18); x.textAlign="left"; y += scoreH - 50;
+    if (platH){ x.textAlign="center"; x.font="700 13px Outfit, sans-serif"; x.fillStyle = p.l.platinum ? "#f0b429" : "#55607a"; x.fillText(p.l.platinum ? `\uD83C\uDFC6 Platinum${platNumText(p.l)?" "+platNumText(p.l):""}${p.l.showPlatStats&&p.l.platDiff!=null?` \u00b7 ${p.l.platDiff}/10`:""}` : "no platinum", cx, y+18); x.textAlign="left"; y += platH; }
+    if (rated.length){ y += 22; rated.forEach(sc=>{ const v=p.l.subs?.[sc.key]; x.font="600 12px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; const lab = sc.label.split(/[,(&]/)[0].trim(); x.fillText(lab, px+16, y);
+        x.textAlign="right"; x.font="800 14px Outfit, sans-serif"; x.fillStyle = v!=null ? ratingFillCtx(x, +v, px+colW-30, y-12, px+colW-16, y) : "#55607a";
+        if (v!=null && +v<=1.5){ x.save(); x.shadowColor="rgba(255,255,255,.6)"; x.shadowBlur=4; x.fillText(String(v), px+colW-16, y); x.restore(); } else x.fillText(v!=null ? String(v) : "\u2014", px+colW-16, y);
+        x.textAlign="left"; y += 26; }); y += 8; }
+    if (exLines){ y += 14; x.font="400 14px Manrope, sans-serif"; x.fillStyle="#d7deea"; excerpts[i].forEach((ln,j)=>{ const last = j===excerpts[i].length-1 && excerpts[i].length===5 && p.l.review.length > excerpts[i].join(" ").length; x.fillText(last ? ln.replace(/\s*$/,"")+"\u2026" : ln, px+18, y+j*20); }); }
+  }
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
+}
+// --- profiles: stats side by side
+async function saveCompareProfileImage(ids){
+  try { await document.fonts.ready; } catch(e){}
+  toast("Loading profiles\u2026");
+  const others = (await Promise.all(ids.map(id=> loadOtherProfile(follows.names[id]||revNames[id]||"")))).filter(Boolean);
+  const people = [{ id: me.id, username: me.username, logs }, ...others];
+  const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n;
+  const statsOf = P => { const L=P.logs, ids=Object.keys(L).map(Number); const r=ids.map(id=>L[id].rating).filter(v=>v!=null); const plats=ids.filter(id=>L[id].platinum);
+    return { games: ids.length, avg: r.length ? mean(r) : null, tens: ids.filter(id=>L[id].rating===10).length, reviews: ids.filter(id=>(L[id].review||"").trim()).length, plats: plats.reduce((a,id)=>a+platCount(L[id]),0), hours: plats.reduce((a,id)=>a+(L[id].platHours||0),0), diff: (()=>{ const d=plats.map(id=>L[id].platDiff).filter(v=>v!=null); return d.length ? mean(d) : null; })() }; };
+  const st = people.map(statsOf);
+  // games in common (all players logged + rated)
+  const common = Object.keys(people[0].logs).map(Number).filter(id=> people.every(P=> P.logs[id] && P.logs[id].rating!=null));
+  const spread = id => Math.max(...people.map(P=>P.logs[id].rating)) - Math.min(...people.map(P=>P.logs[id].rating));
+  const agree = [...common].sort((a,b)=> spread(a)-spread(b) || mean(people.map(P=>P.logs[b].rating))-mean(people.map(P=>P.logs[a].rating)))[0];
+  const fight = [...common].sort((a,b)=> spread(b)-spread(a))[0];
+  const rows = [["Games logged", s=>String(s.games)], ["Average rating", s=> s.avg!=null ? s.avg.toFixed(2) : "\u2014"], ["Perfect 10s", s=>String(s.tens)], ["Reviews", s=>String(s.reviews)], ["Platinums", s=>String(s.plats)], ["Platinum hours", s=> s.hours ? String(Math.round(s.hours)) : "\u2014"], ["Avg difficulty", s=> s.diff!=null ? s.diff.toFixed(1)+"/10" : "\u2014"]];
+  const headH = 120, personH = 150, rowsH = rows.length*34 + 10, panelH = personH + rowsH + 20, commonH = common.length ? 150 : 0, H = headH + panelH + commonH + 80;
+  const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  const art = avatars[me.id] ? await loadImg(avatars[me.id], true) : null;
+  paintCinematic(x, W, H, art, "rgba(6,8,15,.5)");
+  x.fillStyle="#e6ebf4"; x.font="800 34px Outfit, sans-serif"; x.fillText("Head to head", 40, 96);
+  x.font="600 15px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText(`${people.map(p=>p.username).join("  \u2022  ")}`, 40, 122);
+  const top = headH + 10;
+  for (let i=0;i<n;i++){ const P=people[i], px=40+i*(colW+16), cx=px+colW/2; glassPanel(x, px, top, colW, panelH);
+    await drawPerson(x, P.id, P.username, cx, top+66, 84);
+    let y = top + personH + 14;
+    rows.forEach(([lab, fn])=>{ const vals = st.map(fn); const best = Math.max(...vals.map(v=>parseFloat(v)||-1)); const v = fn(st[i]);
+      x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(lab, px+16, y);
+      x.textAlign="right"; x.font="800 16px Outfit, sans-serif"; x.fillStyle = (parseFloat(v)===best && best>0 && vals.filter(q=>parseFloat(q)===best).length===1) ? "#f0b429" : "#e6ebf4"; x.fillText(v, px+colW-16, y); x.textAlign="left"; y += 34; });
+  }
+  if (common.length){ const y0 = top + panelH + 24; glassPanel(x, 40, y0, W-80, commonH-20);
+    x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(`${common.length} GAME${common.length===1?"":"S"} IN COMMON`, 60, y0+30);
+    const line = (label, id, y) => { const g=getGame(id); x.font="600 13px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText(label, 60, y);
+      x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText(g?.title || "\u2026", 60, y+24);
+      x.textAlign="right"; let rx = W-60; people.slice().reverse().forEach(P=>{ const v=P.logs[id].rating; x.font="800 18px Outfit, sans-serif"; x.fillStyle=ratingFillCtx(x, v, rx-40, y, rx, y+24); x.fillText(String(v), rx, y+22); x.font="600 11px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(P.username, rx, y+38); rx -= Math.max(70, x.measureText(P.username).width+24); }); x.textAlign="left"; };
+    if (agree!=null) line("Most agreed on", agree, y0+56);
+    if (fight!=null && fight!==agree) line("Biggest disagreement", fight, y0+100);
+  }
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${people.map(p=>p.username.toLowerCase()).join("-vs-").slice(0,60)}.png`);
 }
 
 // ---- community image (game page) ----------------------------------------------
@@ -4197,6 +4328,10 @@ function wireSettingsUI(){
   $("#lookWrap").addEventListener("click", e=>{ if(e.target.id==="lookWrap") $("#lookWrap").classList.remove("open"); });
   $("#lookSave").onclick = ()=> saveLook(cleanTheme(lookDraft));
   $("#setCard").onclick = ()=>{ closeSettings(); openCardStyle(); };
+  $("#cmpCancel").onclick = ()=> $("#cmpWrap").classList.remove("open");
+  $("#cmpWrap").addEventListener("click", e=>{ if(e.target.id==="cmpWrap") $("#cmpWrap").classList.remove("open"); });
+  $("#cmpGo").onclick = async ()=>{ if (!cmpCtx || !cmpCtx.picked.size) return; $("#cmpWrap").classList.remove("open"); const ids=[...cmpCtx.picked];
+    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids); else await saveCompareProfileImage(ids); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
