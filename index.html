@@ -475,10 +475,13 @@
   @media(max-width:640px){.profile-head.themed{margin-left:-12px;margin-right:-12px}}
   .profile-head.themed h1{color:var(--acc)}
   .ptabs.themed .ptab.on{border-bottom-color:var(--acc)}.ptabs.themed .ptab b{color:var(--acc)}
-  .avatar.fr{box-shadow:0 0 0 2px var(--bg),0 0 0 4.5px var(--fa),0 0 0 6px var(--fb),0 0 14px var(--fg)}
-  .avatar.fr.sm{box-shadow:0 0 0 1.5px var(--bg),0 0 0 3px var(--fa),0 0 0 4px var(--fb),0 0 8px var(--fg)}
-  .ulink .avatar.fr.sm,.rev-title .avatar.fr.sm{box-shadow:0 0 0 1px var(--bg),0 0 0 2px var(--fa),0 0 0 2.8px var(--fb)}
-  .avatar.fr.big{box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--fa),0 0 0 8px var(--fb),0 0 18px var(--fg)}
+  .avfr{--fw:2.5px;display:inline-grid;place-items:center;position:relative;flex:none;vertical-align:middle;border-radius:50%;padding:var(--fw);background:var(--fgr);box-shadow:0 0 12px var(--glow),inset 0 0 0 1px rgba(0,0,0,.28)}
+  .avfr::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,0) 38%,rgba(0,0,0,0) 62%,rgba(0,0,0,.35));
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - var(--fw) - 1px),#000 calc(100% - var(--fw)));mask:radial-gradient(farthest-side,transparent calc(100% - var(--fw) - 1px),#000 calc(100% - var(--fw)))}
+  .avfr .avatar{display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+  .avfr.big{--fw:4px}
+  .ulink .avfr,.rev-title .avfr{--fw:1.5px;box-shadow:none}
+  .avfr.sm .avatar.sm{width:34px;height:34px}.ulink .avfr .avatar.sm{width:18px;height:18px}
   .look-prev{border-radius:16px;padding:14px;margin-bottom:12px;border:1px solid var(--line)}
   .look-prev .profile-head{margin:0;padding:12px;border-radius:14px}
   .look-sec{margin-top:14px}.look-sec h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
@@ -497,6 +500,8 @@
   /* Pro: small text tag next to a username (deliberately not an avatar emblem) */
   .protag{display:inline-block;vertical-align:middle;margin-left:6px;padding:2px 7px;border-radius:6px;font-family:Outfit;font-weight:800;font-size:10px;letter-spacing:.08em;line-height:1.3;color:#1a1200;background:linear-gradient(135deg,#ffd166,#f0b429);box-shadow:0 1px 0 rgba(0,0,0,.25);text-transform:uppercase}
   h1 .protag{font-size:12px;padding:3px 8px;margin-left:10px;vertical-align:middle;position:relative;top:-3px}
+  .avatar-wrap.haspro{padding-bottom:22px}
+  .prounder{position:absolute;left:50%;bottom:0;transform:translateX(-50%);font-family:Outfit;font-weight:800;font-size:10px;letter-spacing:.1em;line-height:1.3;padding:3px 8px;border-radius:6px;color:#1a1200;background:linear-gradient(135deg,#ffd166,#f0b429);box-shadow:0 1px 0 rgba(0,0,0,.25);white-space:nowrap}
   .pro-hero{text-align:center;padding:6px 0 10px}
   .pro-hero .pro-word{font-family:Outfit;font-weight:800;font-size:30px;letter-spacing:-.01em;color:var(--text)}
   .pro-hero .pro-word b{color:var(--gold)}
@@ -1165,20 +1170,23 @@ async function startProPurchase(plan){
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
 const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks" };
 const TINTS = { off:"Off", soft:"Soft", bold:"Bold" };
+// Ring = a conic gradient around the avatar (metallic sheen comes from the light/dark stops), drawn flush
+// against the photo. `stops` run clockwise from the top-left; `glow` is an optional soft outer light.
 const FRAMES = {
-  none:    { name:"None",     a:null },
-  gold:    { name:"Gold",     a:"#ffd166", b:"#b8820f" },
-  platinum:{ name:"Platinum", a:"#eef2f8", b:"#8c9bb5" },
-  neon:    { name:"Neon",     a:"#00f0ff", b:"#ff2bd6" },
-  ember:   { name:"Ember",    a:"#ff8a1f", b:"#c0202a" },
-  emerald: { name:"Emerald",  a:"#2fd37a", b:"#0f6f44" },
-  royal:   { name:"Royal",    a:"#b06cf0", b:"#4a2380" },
-  ice:     { name:"Ice",      a:"#9be8ff", b:"#3b6fd6" },
-  rose:    { name:"Rose",     a:"#ff5ab0", b:"#b8306f" },
-  onyx:    { name:"Onyx",     a:"#3a4a73", b:"#0b1020" },
-  sunset:  { name:"Sunset",   a:"#ffb347", b:"#ff5ab0" },
-  mint:    { name:"Mint",     a:"#a3e635", b:"#00c2d1" },
+  none:    { name:"None",     stops:null },
+  gold:    { name:"Gold",     stops:["#fff0b3","#d9a21b","#8a5a10","#f6d36b","#b8820f","#ffe9a3"], glow:"rgba(240,180,41,.35)" },
+  platinum:{ name:"Platinum", stops:["#ffffff","#b9c4d6","#6f7d96","#e6ecf5","#8c9bb5","#ffffff"], glow:"rgba(200,212,230,.25)" },
+  bronze:  { name:"Bronze",   stops:["#f0c39a","#b06a2a","#5c3312","#d9924e","#8a4a1c","#f0c39a"] },
+  onyx:    { name:"Onyx",     stops:["#4b5670","#1c2233","#0a0d16","#3a4458","#141927","#4b5670"] },
+  neon:    { name:"Neon",     stops:["#00f0ff","#2bd6ff","#ff2bd6","#ff5ab0","#00f0ff"], glow:"rgba(0,240,255,.45)" },
+  ember:   { name:"Ember",    stops:["#ffd27a","#ff8a1f","#c0202a","#ff6a3d","#ffd27a"], glow:"rgba(255,138,31,.35)" },
+  emerald: { name:"Emerald",  stops:["#b8ffd9","#2fd37a","#0f6f44","#5ff0a0","#b8ffd9"], glow:"rgba(47,211,122,.3)" },
+  royal:   { name:"Royal",    stops:["#e2c8ff","#b06cf0","#4a2380","#8a4dd6","#e2c8ff"], glow:"rgba(176,108,240,.35)" },
+  ice:     { name:"Ice",      stops:["#ffffff","#9be8ff","#3b6fd6","#c8f4ff","#ffffff"], glow:"rgba(155,232,255,.35)" },
+  rose:    { name:"Rose",     stops:["#ffd6ea","#ff5ab0","#b8306f","#ff8ac8","#ffd6ea"], glow:"rgba(255,90,176,.3)" },
+  aurora:  { name:"Aurora",   stops:["#2fd37a","#00c2d1","#4a8cff","#b06cf0","#ff5ab0","#2fd37a"], glow:"rgba(74,140,255,.35)" },
 };
+const frameGradient = f => `conic-gradient(from 215deg, ${f.stops.join(",")})`;
 const DEFAULT_THEME = { accent:"#f0b429", pattern:"none", tint:"soft", nameColor:true, frame:"none" };
 const hexRgb = h => { const m=/^#?([0-9a-f]{6})$/i.exec(h||""); if (!m) return [240,180,41]; const n=parseInt(m[1],16); return [n>>16&255, n>>8&255, n&255]; };
 const rgba = (h,a) => { const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
@@ -1200,11 +1208,18 @@ function patternCss(t){ const c = a => rgba(t.accent, a);
 function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
   return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
 const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? ` style="color:${t.accent}"` : ""; };
-const frameAttrs = uid => { const t = themeFor(uid); const f = t && FRAMES[t.frame]; return f && f.a ? { cls:" fr", style:` style="--fa:${f.a};--fb:${f.b};--fg:${rgba(f.a,.55)}"` } : { cls:"", style:"" }; };
+const frameKeyFor = uid => { const t = themeFor(uid); return t && FRAMES[t.frame]?.stops ? t.frame : null; };
 // Canvas: ring around an avatar on exported images
-function drawFrameRing(x, cx, cy, r, uid, scale=1){ const t = themeFor(uid); const f = t && FRAMES[t.frame]; if (!f || !f.a) return;
-  x.save(); x.lineWidth = 3*scale; x.strokeStyle = f.b; x.beginPath(); x.arc(cx, cy, r + 5.5*scale, 0, 7); x.stroke();
-  x.lineWidth = 3.5*scale; x.strokeStyle = f.a; x.shadowColor = f.a; x.shadowBlur = 10*scale; x.beginPath(); x.arc(cx, cy, r + 2.5*scale, 0, 7); x.stroke(); x.restore(); }
+function drawFrameRing(x, cx, cy, r, uid, scale=1){ const k = frameKeyFor(uid); const f = k && FRAMES[k]; if (!f) return;
+  const w = 4.5*scale;
+  x.save();
+  let grad; if (x.createConicGradient){ grad = x.createConicGradient(215*Math.PI/180, cx, cy); f.stops.forEach((c,i)=> grad.addColorStop(i/(f.stops.length-1), c)); }
+  else { grad = x.createLinearGradient(cx-r, cy-r, cx+r, cy+r); f.stops.forEach((c,i)=> grad.addColorStop(i/(f.stops.length-1), c)); }
+  if (f.glow){ x.shadowColor = f.glow; x.shadowBlur = 14*scale; }
+  x.lineWidth = w; x.strokeStyle = grad; x.beginPath(); x.arc(cx, cy, r + w/2, 0, 7); x.stroke();
+  x.shadowBlur = 0; x.lineWidth = 1*scale; x.strokeStyle = "rgba(255,255,255,.18)"; x.beginPath(); x.arc(cx, cy, r + w - 0.5*scale, 0, 7); x.stroke();   // thin highlight on the outer edge
+  x.strokeStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(cx, cy, r + 0.5*scale, 0, 7); x.stroke();                                            // thin shade where ring meets photo
+  x.restore(); }
 // ---- the Profile look sheet
 let lookDraft = null;
 function openLook(){ if (!requirePro("theme")) return; lookDraft = cleanTheme(me.theme); paintLook(); $("#lookWrap").classList.add("open"); }
@@ -1212,13 +1227,13 @@ function paintLook(){
   const t = lookDraft, P = { id: me.id, username: me.username, proUntil: me.proUntil, theme: t };
   const fr = FRAMES[t.frame];
   $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
-    <div class="avatar-wrap">${avatarEl(me.id, me.username, "big", fr && fr.a ? { cls:" fr", style:` style="--fa:${fr.a};--fb:${fr.b};--fg:${rgba(fr.a,.55)}"` } : null)}</div>
-    <div><h1 style="color:${t.accent};font-size:24px">${esc(me.username)}${proTag(me.id)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
+    <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", fr && fr.stops ? t.frame : null)}<span class="prounder">PRO</span></div>
+    <div><h1 style="color:${t.accent};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
   $("#lookSwatches").innerHTML = ACCENTS.map(c=> `<button class="swatch ${t.accent===c?"on":""}" data-acc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
     + `<label class="swatch custom ${ACCENTS.includes(t.accent)?"":"on"}">Custom <input type="color" id="lookCustom" value="${t.accent}"></label>`;
   $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
   $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
-  $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.a ? { cls:" fr", style:` style="--fa:${f.a};--fb:${f.b};--fg:${rgba(f.a,.55)}"` } : null)}<span>${f.name}</span></button>`).join("");
+  $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.stops ? k : null)}<span>${f.name}</span></button>`).join("");
   $("#lookNameColor").checked = t.nameColor;
   $("#lookSwatches").querySelectorAll("[data-acc]").forEach(b=> b.onclick = ()=>{ lookDraft.accent=b.dataset.acc; paintLook(); });
   $("#lookCustom").oninput = e=>{ lookDraft.accent = e.target.value.toLowerCase(); paintLook(); $("#lookCustom").focus(); };
@@ -1373,8 +1388,11 @@ const avatars = {};                   // user id -> avatar_url (or null)
 // Small avatar: image if the user has one, otherwise the initial circle.
 function avatarEl(uid, name, cls="sm", frame){
   const url = uid ? avatars[uid] : null;
-  const f = frame === undefined ? frameAttrs(uid) : (frame || { cls:"", style:"" });
-  return url ? `<img class="avatar ${cls} img${f.cls}" src="${esc(url)}" alt=""${f.style}>` : `<span class="avatar ${cls}${f.cls}"${f.style}>${esc(((name||"?")[0]||"?").toUpperCase())}</span>`;
+  const inner = url ? `<img class="avatar ${cls} img" src="${esc(url)}" alt="">` : `<span class="avatar ${cls}">${esc(((name||"?")[0]||"?").toUpperCase())}</span>`;
+  const k = frame === undefined ? frameKeyFor(uid) : (frame && FRAMES[frame]?.stops ? frame : null);
+  if (!k) return inner;
+  const f = FRAMES[k];
+  return `<span class="avfr ${cls}" style="--fgr:${frameGradient(f)};--glow:${f.glow||"transparent"}">${inner}</span>`;
 }
 
 // ---- reports & moderation -----------------------------------------------------
@@ -2232,9 +2250,9 @@ function renderLogs(app, P, isMe){
 
   app.innerHTML = `
     ${(()=>{ const t = themeFor(P.id, P); return `<div class="profile-head${t?" themed":""}" ${headStyle(t)}>`; })()}
-      <div class="avatar-wrap">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
+      <div class="avatar-wrap${isPro(P)?" haspro":""}">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isPro(P) ? `<span class="prounder" title="Joystickd Pro">PRO</span>` : ""}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
       <div>
-        <h1>${esc(P.username)}${proTag(P.id)}</h1>
+        <h1>${esc(P.username)}</h1>
         <div class="statrow">
           <div class="stat"><b>${rated}</b><small>game${rated===1?"":"s"} logged</small></div>
           ${P.hidePlats ? "" : `<div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>`}
