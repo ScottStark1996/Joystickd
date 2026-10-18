@@ -833,11 +833,13 @@
     <h2 id="lookTitle">Profile look</h2>
     <div class="g">Pick an accent, a header style and an avatar frame. Pro only — everyone sees it.</div>
     <div class="look-prev" id="lookPrev"></div>
+    <div class="look-sec"><h3>Page background</h3><div class="g" style="margin-bottom:8px">Changes the whole page while someone is on your profile.</div><div class="chips" id="lookBg"></div></div>
     <div class="look-sec"><h3>Accent color</h3><div class="swatches" id="lookSwatches"></div></div>
     <div class="look-sec"><h3>Header pattern</h3><div class="chips" id="lookPatterns"></div></div>
     <div class="look-sec"><h3>Header tint</h3><div class="chips" id="lookTints"></div></div>
     <div class="look-sec"><h3>Avatar frame</h3><div class="frames" id="lookFrames"></div></div>
     <div class="look-sec"><h3>Username style</h3><div class="chips" id="lookNameFx"></div></div>
+    <div class="look-sec"><h3>Pro badge</h3><div class="chips" id="lookBadgeFx"></div></div>
     <div class="look-sec"><label class="toggle-row"><span>Color my username everywhere<br><small style="font-weight:500;color:var(--muted)">Feed, reviews, comments — not just my profile</small></span><input type="checkbox" id="lookNameColor"></label></div>
     <div class="actions"><button class="cta ghost" id="lookReset">Reset to default</button><button class="cta ghost" id="lookCancel">Cancel</button><button class="cta" id="lookSave">Save</button></div>
   </div>
@@ -1133,7 +1135,7 @@ function notePro(p){ if (p && p.id){ proUntilOf[p.id] = p.pro_until || null; if 
 const proActive = until => !!until && new Date(until).getTime() > Date.now();
 function isPro(P){ if (!P) return false; if (P.id && P.id===me?.id) return proActive(me.proUntil); return proActive(P.proUntil ?? proUntilOf[P.id]); }
 const isProId = uid => proActive(uid===me?.id ? me?.proUntil : proUntilOf[uid]);
-const proTag = uid => isProId(uid) ? `<span class="protag" title="Joystickd Pro">Pro</span>` : "";
+const proTag = uid => isProId(uid) ? `<span class="protag" title="Joystickd Pro"${badgeStyle(uid)}>Pro</span>` : "";
 // Features (built ones are gated with requirePro(); the rest show as coming soon on the Pro sheet)
 const PRO_FEATURES = [
   { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:true },
@@ -1190,13 +1192,42 @@ const FRAMES = {
   aurora:  { name:"Aurora",   stops:["#2fd37a","#00c2d1","#4a8cff","#b06cf0","#ff5ab0","#2fd37a"], glow:"rgba(74,140,255,.35)" },
 };
 const frameGradient = f => `conic-gradient(from 215deg, ${f.stops.join(",")})`;
+const PAGE_BGS = {
+  navy:    { name:"Navy (default)", bg:"#0e1526", panel:"#161f35", panel2:"#1e2a47", line:"#28365a" },
+  charcoal:{ name:"Charcoal",       bg:"#111316", panel:"#1a1d22", panel2:"#23272e", line:"#30353e" },
+  maroon:  { name:"Dark red",       bg:"#1a0c10", panel:"#26121a", panel2:"#331a24", line:"#4a2533" },
+  plum:    { name:"Dark pink",      bg:"#1c0f1a", panel:"#2a1627", panel2:"#381e35", line:"#4f2b4a" },
+  grape:   { name:"Dark purple",    bg:"#140f22", panel:"#1e1733", panel2:"#2a2046", line:"#3b2f60" },
+  forest:  { name:"Dark green",     bg:"#0c1712", panel:"#13221b", panel2:"#1a2f25", line:"#264236" },
+  teal:    { name:"Dark teal",      bg:"#0a1719", panel:"#112326", panel2:"#182f33", line:"#234247" },
+  ocean:   { name:"Deep blue",      bg:"#0a1020", panel:"#101a32", panel2:"#162444", line:"#223360" },
+  cocoa:   { name:"Dark brown",     bg:"#17110d", panel:"#221a14", panel2:"#2e231b", line:"#423328" },
+  slate:   { name:"Slate",          bg:"#0f1419", panel:"#171e26", panel2:"#1f2934", line:"#2c3a48" },
+};
 const DEFAULT_THEME = { accent:"#f0b429", pattern:"none", tint:"soft", nameColor:true, frame:"none" };
+// Whole-page background while a themed profile is on screen; reset on every render elsewhere.
+function applyPageBg(key){
+  const b = PAGE_BGS[key] || PAGE_BGS.navy, st = document.documentElement.style;
+  st.setProperty("--bg", b.bg); st.setProperty("--panel", b.panel); st.setProperty("--panel2", b.panel2); st.setProperty("--line", b.line);
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", b.bg);
+}
 const hexRgb = h => { const m=/^#?([0-9a-f]{6})$/i.exec(h||""); if (!m) return [240,180,41]; const n=parseInt(m[1],16); return [n>>16&255, n>>8&255, n&255]; };
 const rgba = (h,a) => { const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
 function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   accent: /^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent,
   pattern: PATTERNS[t.pattern] ? t.pattern : "none", tint: TINTS[t.tint] ? t.tint : "soft",
-  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent" }; }
+  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent",
+  badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
+  bg: PAGE_BGS[t.bg] ? t.bg : "navy" }; }
+// Pro badge styling: default gold, the accent color, or one of the frame textures.
+const lum = h => { const [r,g,b]=hexRgb(h); return (0.299*r+0.587*g+0.114*b)/255; };
+function badgeCss(t){
+  if (!t || t.badgeFx==="gold") return "";
+  if (t.badgeFx==="accent"){ const ink = lum(t.accent) > 0.6 ? "#1a1200" : "#fff"; return `background:${t.accent};color:${ink};-webkit-text-fill-color:${ink}`; }
+  const f = FRAMES[t.badgeFx]; const avg = f.stops.reduce((a,c)=>a+lum(c),0)/f.stops.length; const ink = avg > 0.7 ? "#1a1200" : "#fff";
+  return `background:linear-gradient(135deg, ${f.stops.join(",")});color:${ink};-webkit-text-fill-color:${ink};text-shadow:0 1px 0 rgba(0,0,0,.25)`;
+}
+const badgeStyle = (uid, P) => { const t = themeFor(uid, P); const c = badgeCss(t); return c ? ` style="${c}"` : ""; };
 // Username styling: a flat accent, or one of the frame textures as gradient text.
 const nameFxCss = t => t.nameFx !== "accent" && FRAMES[t.nameFx]?.stops
   ? `background:linear-gradient(100deg, ${FRAMES[t.nameFx].stops.join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent`
@@ -1238,7 +1269,7 @@ function paintLook(){
   const t = lookDraft, P = { id: me.id, username: me.username, proUntil: me.proUntil, theme: t };
   const fr = FRAMES[t.frame];
   $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
-    <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", fr && fr.stops ? t.frame : null)}<span class="prounder">PRO</span></div>
+    <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", fr && fr.stops ? t.frame : null)}<span class="prounder" style="${badgeCss(t)}">PRO</span></div>
     <div><h1 style="${nameFxCss(t)};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
   $("#lookSwatches").innerHTML = ACCENTS.map(c=> `<button class="swatch ${t.accent===c?"on":""}" data-acc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
     + `<label class="swatch custom ${ACCENTS.includes(t.accent)?"":"on"}">Custom <input type="color" id="lookCustom" value="${t.accent}"></label>`;
@@ -1247,6 +1278,10 @@ function paintLook(){
   $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.stops ? k : null)}<span>${f.name}</span></button>`).join("");
   $("#lookNameFx").innerHTML = [["accent","Accent color"], ...Object.entries(FRAMES).filter(([k,f])=>f.stops && k!=="onyx").map(([k,f])=>[k,f.name])].map(([k,label])=> `<button class="chip ${t.nameFx===k?"on":""}" data-namefx="${k}"><span style="${nameFxCss({...t, nameFx:k})};font-weight:800">${esc(me.username)}</span><span style="margin-left:6px;font-weight:500;font-size:11px">${label}</span></button>`).join("");
   $("#lookNameFx").querySelectorAll("[data-namefx]").forEach(b=> b.onclick = ()=>{ lookDraft.nameFx=b.dataset.namefx; paintLook(); });
+  $("#lookBg").innerHTML = Object.entries(PAGE_BGS).map(([k,b])=> `<button class="chip ${t.bg===k?"on":""}" data-bg="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:${b.bg};border:2px solid ${b.line};flex:none"></span>${b.name}</button>`).join("");
+  $("#lookBg").querySelectorAll("[data-bg]").forEach(b=> b.onclick = ()=>{ lookDraft.bg=b.dataset.bg; applyPageBg(lookDraft.bg); paintLook(); });
+  $("#lookBadgeFx").innerHTML = [["gold","Gold"],["accent","Accent color"], ...Object.entries(FRAMES).filter(([k,f])=>f.stops && k!=="gold").map(([k,f])=>[k,f.name])].map(([k,label])=> `<button class="chip ${t.badgeFx===k?"on":""}" data-badgefx="${k}"><span class="protag" style="margin:0;${badgeCss({...t, badgeFx:k})}">Pro</span><span style="margin-left:8px;font-weight:500;font-size:12px">${label}</span></button>`).join("");
+  $("#lookBadgeFx").querySelectorAll("[data-badgefx]").forEach(b=> b.onclick = ()=>{ lookDraft.badgeFx=b.dataset.badgefx; paintLook(); });
   $("#lookNameColor").checked = t.nameColor;
   $("#lookSwatches").querySelectorAll("[data-acc]").forEach(b=> b.onclick = ()=>{ lookDraft.accent=b.dataset.acc; paintLook(); });
   $("#lookCustom").oninput = e=>{ lookDraft.accent = e.target.value.toLowerCase(); paintLook(); $("#lookCustom").focus(); };
@@ -1730,6 +1765,7 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("sh
 // ---- render --------------------------------------------------------------
 function render(){
   const app = $("#app");
+  applyPageBg(null);
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b.dataset.tab===view.tab));
   const n = Object.keys(logs).length; $("#logCount").textContent = n ? n : "";
   if (view.gameId) return renderGame(app);
@@ -2152,6 +2188,7 @@ function profileStats(P, isMe){
 }
 function renderLogs(app, P, isMe){
   const logs = P.logs, top5 = P.top5;
+  { const t = themeFor(P.id, P); if (t && t.bg !== "navy") applyPageBg(t.bg); }
   const ids = Object.keys(logs).sort((a,b)=> bestDate(logs[b]).localeCompare(bestDate(logs[a])));
   const rated = ids.length;
   const ratedIds = ids.filter(id=>logs[id].rating!=null);
@@ -2262,8 +2299,8 @@ function renderLogs(app, P, isMe){
   else body = profileAwards(P.ballot, isMe);
 
   app.innerHTML = `
-    ${(()=>{ const t = themeFor(P.id, P); return `<div class="profile-head${t?" themed":""}" ${headStyle(t)}>`; })()}
-      <div class="avatar-wrap${isPro(P)?" haspro":""}">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isPro(P) ? `<span class="prounder" title="Joystickd Pro">PRO</span>` : ""}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
+    ${(()=>{ const t = themeFor(P.id, P), card = t && (t.tint!=="off" || t.pattern!=="none"); return `<div class="profile-head${card?" themed":""}" ${headStyle(t)}>`; })()}
+      <div class="avatar-wrap${isPro(P)?" haspro":""}">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isPro(P) ? `<span class="prounder" title="Joystickd Pro"${badgeStyle(P.id, P)}>PRO</span>` : ""}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
       <div>
         <h1${nameFxStyle(themeFor(P.id, P))}>${esc(P.username)}</h1>
         <div class="statrow">
@@ -2276,7 +2313,7 @@ function renderLogs(app, P, isMe){
       ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button><button class="cta ghost" id="snapBtn" style="margin:0;padding:9px 14px;font-size:13px">Snapshot</button></div>` : followButton(P)}
       ${(!isMe && me?.isAdmin && P.excluded!=null) ? `<button class="cta ghost ${P.excluded?"danger-btn":""}" id="exclBtn" style="margin:0;padding:9px 14px;font-size:13px" title="Admin: this account's ratings ${P.excluded?"do NOT":""} count toward community averages">${P.excluded ? "Excluded from stats" : "Counts in stats"}</button>` : ""}
     </div>
-    <nav class="ptabs${themeFor(P.id, P)?" themed":""}">${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
+    <nav class="ptabs${themeFor(P.id, P)?" themed":""}"${(()=>{ const t=themeFor(P.id,P); return t ? ` style="--acc:${t.accent}"` : ""; })()}>${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
     ${body}`;
   app.querySelectorAll("[data-ptab]").forEach(b=> b.onclick = ()=>{ profileTab=b.dataset.ptab; shown={}; listView=null; render(); });
   $("#statsPro") && ($("#statsPro").onclick = ()=> openPro("stats"));
@@ -4087,7 +4124,7 @@ function wireSettingsUI(){
   $("#setPro").onclick = ()=>{ closeSettings(); openPro(); };
   $("#setLook").onclick = ()=>{ closeSettings(); openLook(); };
   $("#setShelf").onclick = ()=>{ closeSettings(); addShelf(); };
-  $("#lookCancel").onclick = ()=> $("#lookWrap").classList.remove("open");
+  $("#lookCancel").onclick = ()=>{ $("#lookWrap").classList.remove("open"); render(); };
   $("#lookWrap").addEventListener("click", e=>{ if(e.target.id==="lookWrap") $("#lookWrap").classList.remove("open"); });
   $("#lookSave").onclick = ()=> saveLook(cleanTheme(lookDraft));
   $("#lookReset").onclick = ()=> saveLook(null);
