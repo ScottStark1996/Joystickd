@@ -303,6 +303,7 @@
   .set-list{display:flex;flex-direction:column;gap:4px;margin-top:18px}
   .set-row{text-align:left;padding:12px 14px;border-radius:10px;font-weight:600;font-size:15px;background:var(--panel2)}
   .set-row:hover{background:var(--line)}
+  .set-sub{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:10px 14px 2px}
   .txt{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;padding:12px 14px;font-size:15px}
   .txt:focus{outline:2px solid var(--gold);outline-offset:1px}
   .autherr{margin-top:14px;color:#f28b8b;font-size:13px;font-weight:600}
@@ -894,19 +895,35 @@
       <button class="set-row" id="setPassword">Change password</button>
       <button class="set-row" id="setPush" hidden>Turn on notifications</button>
       <button class="set-row" id="setPro">Joystickd Pro: <b id="setProState">get Pro</b></button>
-      <button class="set-row" id="setLook">Profile look &amp; avatar frame… <span class="protag">Pro</span></button>
-      <button class="set-row" id="setShelf">Add a shelf to my profile… <span class="protag">Pro</span></button>
-      <button class="set-row" id="setCard">Image style for saved reviews… <span class="protag">Pro</span></button>
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
-      <button class="set-row" id="setBadges" hidden>Profile badges…</button>
-      <button class="set-row" id="setPlats">Platinum count on profile: <b id="setPlatsState">shown</b></button>
       <button class="set-row" data-guidelines>Community guidelines</button>
       <button class="set-row" data-privacy>Privacy</button>
       <button class="set-row danger-btn" id="setSignout">Sign out</button>
       <button class="set-row danger-btn" id="setDelete">Delete my account…</button>
     </div>
     <div class="actions"><button class="cta ghost" id="setClose">Close</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="editProfWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="editProfTitle">
+    <h2 id="editProfTitle">Edit profile</h2>
+    <div class="set-me" id="editProfMe"></div>
+    <div class="set-list">
+      <button class="set-row" id="epAvatar">Change profile picture…</button>
+      <button class="set-row" id="epBio">Edit bio…</button>
+      <button class="set-row" id="setBadges" hidden>Profile badges…</button>
+      <button class="set-row" id="setPlats">Platinum count on profile: <b id="setPlatsState">shown</b></button>
+      <div class="set-sub">Pro</div>
+      <button class="set-row" id="setLook">Profile look &amp; avatar frame… <span class="protag">Pro</span></button>
+      <button class="set-row" id="setShelf">Add a shelf… <span class="protag">Pro</span></button>
+      <button class="set-row" id="setCard">Image style for saved reviews… <span class="protag">Pro</span></button>
+      <div class="set-sub">Share</div>
+      <button class="set-row" id="snapBtn">Profile snapshot image…</button>
+      <button class="set-row" id="cmpProfBtn">Compare with people you follow… <span class="protag">Pro</span></button>
+    </div>
+    <div class="actions"><button class="cta ghost" id="editProfClose">Close</button></div>
   </div>
 </div>
 
@@ -2394,7 +2411,7 @@ function renderLogs(app, P, isMe){
         ${P.bio ? `<p class="bio">${esc(P.bio)}${isMe && LIVE ? ` <button class="linklike bio-edit" id="bioEdit">edit</button>` : ""}</p>`
           : (isMe && LIVE ? `<p class="bio muted"><button class="linklike bio-edit" id="bioEdit">+ Add a short bio</button></p>` : "")}
       </div>
-      ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button><button class="cta ghost" id="snapBtn" style="margin:0;padding:9px 14px;font-size:13px">Snapshot</button><button class="cta ghost" id="cmpProfBtn" style="margin:0;padding:9px 14px;font-size:13px">Compare <span class="protag" style="margin-left:4px">Pro</span></button></div>` : followButton(P)}
+      ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta" id="editProfBtn" style="margin:0;padding:9px 14px;font-size:13px">Edit profile</button><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button></div>` : followButton(P)}
       ${(!isMe && me?.isAdmin && P.excluded!=null) ? `<button class="cta ghost ${P.excluded?"danger-btn":""}" id="exclBtn" style="margin:0;padding:9px 14px;font-size:13px" title="Admin: this account's ratings ${P.excluded?"do NOT":""} count toward community averages">${P.excluded ? "Excluded from stats" : "Counts in stats"}</button>` : ""}
     </div>
     <nav class="ptabs${themeFor(P.id, P)?" themed":""}"${(()=>{ const t=themeFor(P.id,P); return t ? ` style="--acc:${t.accent}"` : ""; })()}>${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
@@ -2406,9 +2423,7 @@ function renderLogs(app, P, isMe){
   $("#avatarEdit") && ($("#avatarEdit").onclick = ()=> $("#avatarFile").click());
   document.querySelectorAll("#app [data-badge]").forEach(b=> b.onclick = ()=> openBadge(P, b.dataset.badge));
   $("#bioEdit") && ($("#bioEdit").onclick = openBio);
-  $("#cmpProfBtn") && ($("#cmpProfBtn").onclick = ()=> openCompare("profile"));
-  $("#snapBtn") && ($("#snapBtn").onclick = ()=>{ snapTarget=P; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
-    $("#snapBadges").hidden = !profileBadges(P).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); });
+  $("#editProfBtn") && ($("#editProfBtn").onclick = openEditProf);
   $("#avatarFile") && ($("#avatarFile").onchange = e=>{ const f=e.target.files[0]; if (f) uploadAvatar(f); });
   $("#avatarClear") && ($("#avatarClear").onclick = ()=>{ if (confirm(`Remove ${P.username}'s profile picture?`)) clearAvatar(P.id); });
   $("#shareBtn") && ($("#shareBtn").onclick = ()=> shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(P.username), `${P.username} on Joystickd`, "Profile link copied"));
@@ -4233,13 +4248,23 @@ function paintAuthBtn(){ $("#authBtn").hidden = !!me; $("#gearBtn").hidden = !me
 function openSettings(){
   $("#setMe").innerHTML = `${avatarEl(me.id, me.username, "big")}<div><b>${esc(me.username)}</b><small>${me.isAdmin ? "Admin" : "Signed in"}</small></div>`;
   $("#setPush").hidden = !pushPlugin();
-  $("#setBadges").hidden = !hasBadges();
   $("#setProState").textContent = isPro(me) ? `active${me.proUntil ? " until " + fmtDate(String(me.proUntil).slice(0,10)) : ""}` : "get Pro";
   $("#setGrantPro").hidden = !me.isAdmin;
-  $("#setPlatsState").textContent = me.hidePlats ? "hidden" : "shown";
   $("#setWrap").classList.add("open");
 }
 function closeSettings(){ $("#setWrap").classList.remove("open"); }
+// ---- Edit profile (one sheet for everything that changes how your profile looks) ------
+function openEditProf(){
+  if (!me) return;
+  $("#editProfMe").innerHTML = `${avatarEl(me.id, me.username, "big")}<div><b>${esc(me.username)}</b><small>${isPro(me) ? "Joystickd Pro" : "Free"}</small></div>`;
+  $("#setBadges").hidden = !hasBadges();
+  $("#setPlatsState").textContent = me.hidePlats ? "hidden" : "shown";
+  $("#epBio").textContent = me.bio ? "Edit bio…" : "Add a short bio…";
+  const n = (me.shelves||[]).length;
+  $("#setShelf").innerHTML = n >= 2 ? `Shelves: 2 of 2 (edit them on your profile) <span class="protag">Pro</span>` : `Add a shelf${n ? " (1 of 2)" : ""}… <span class="protag">Pro</span>`;
+  $("#editProfWrap").classList.add("open");
+}
+function closeEditProf(){ $("#editProfWrap").classList.remove("open"); }
 // ---- profile badges --------------------------------------------------------
 // A profile can own: "founder" (first 500 accounts) and "emblem" (a custom emblem, profiles.emblem_url —
 // e.g. the site creator or a partnered content creator). The owner picks which badge sits on each avatar
@@ -4322,12 +4347,12 @@ function wireSettingsUI(){
   $("#setPush").onclick = async ()=>{ closeSettings(); if (await enablePush()) toast("Notifications on"); else toast("Enable notifications in iOS Settings \u2192 Joystickd"); };
   $("#setBlocked").onclick = ()=>{ closeSettings(); openBlocked(); };
   $("#setPro").onclick = ()=>{ closeSettings(); openPro(); };
-  $("#setLook").onclick = ()=>{ closeSettings(); openLook(); };
-  $("#setShelf").onclick = ()=>{ closeSettings(); addShelf(); };
+  $("#setLook").onclick = ()=>{ closeEditProf(); openLook(); };
+  $("#setShelf").onclick = ()=>{ closeEditProf(); if ((me?.shelves||[]).length >= 2) { toast("You already have 2 shelves — edit them on your profile"); return; } addShelf(); };
   $("#lookCancel").onclick = ()=>{ $("#lookWrap").classList.remove("open"); render(); };
   $("#lookWrap").addEventListener("click", e=>{ if(e.target.id==="lookWrap") $("#lookWrap").classList.remove("open"); });
   $("#lookSave").onclick = ()=> saveLook(cleanTheme(lookDraft));
-  $("#setCard").onclick = ()=>{ closeSettings(); openCardStyle(); };
+  $("#setCard").onclick = ()=>{ closeEditProf(); openCardStyle(); };
   $("#cmpCancel").onclick = ()=> $("#cmpWrap").classList.remove("open");
   $("#cmpWrap").addEventListener("click", e=>{ if(e.target.id==="cmpWrap") $("#cmpWrap").classList.remove("open"); });
   $("#cmpGo").onclick = async ()=>{ if (!cmpCtx || !cmpCtx.picked.size) return; $("#cmpWrap").classList.remove("open"); const ids=[...cmpCtx.picked];
@@ -4350,7 +4375,14 @@ function wireSettingsUI(){
     if (who.trim().toLowerCase() === me.username.toLowerCase()) await refreshPro(); else render(); };
   $("#badgeClose").onclick = ()=> $("#badgeWrap").classList.remove("open");
   $("#badgeWrap").addEventListener("click", e=>{ if(e.target.id==="badgeWrap") $("#badgeWrap").classList.remove("open"); });
-  $("#setBadges").onclick = ()=>{ closeSettings(); if (me) openBadgeSettings(); };
+  $("#setBadges").onclick = ()=>{ closeEditProf(); if (me) openBadgeSettings(); };
+  $("#editProfClose").onclick = closeEditProf;
+  $("#editProfWrap").addEventListener("click", e=>{ if(e.target.id==="editProfWrap") closeEditProf(); });
+  $("#epAvatar").onclick = ()=>{ closeEditProf(); const f=$("#avatarFile"); if (f) f.click(); else toast("Open your profile to change your picture"); };
+  $("#epBio").onclick = ()=>{ closeEditProf(); openBio(); };
+  $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); snapTarget=me; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
+    $("#snapBadges").hidden = !profileBadges(me).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); };
+  $("#cmpProfBtn").onclick = ()=>{ closeEditProf(); openCompare("profile"); };
   // Hide the big platinum stat under the username (for players who don't chase platinums)
   $("#setPlats").onclick = async ()=>{ if (!me) return; const next = !me.hidePlats;
     const { error } = await sb.from("profiles").update({ hide_plats: next }).eq("id", me.id); if (error) return dbFail(error);
