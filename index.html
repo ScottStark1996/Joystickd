@@ -465,7 +465,8 @@
   .scol i{display:block;width:100%;border-radius:4px 4px 2px 2px;background:var(--gold);min-height:3px}
   .scol i.dim{background:rgba(255,255,255,.07)}
   .scol em{position:absolute;top:-16px;font-style:normal;font-size:10px;font-weight:700;color:var(--muted)}
-  .scol small{margin-top:6px;font-size:10px;color:var(--muted);white-space:nowrap}
+  .scol small{margin-top:6px;font-size:10px;color:var(--muted);white-space:nowrap;min-height:14px;line-height:14px}
+  .scols.dense .scol small{font-size:9px}
   .slist{display:flex;flex-wrap:wrap;gap:8px}
   .slist button{text-align:left;display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;color:var(--text);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
   .slist .mini{width:22px;height:30px;border-radius:4px;background-size:cover;background-position:center;background-color:var(--panel)}
@@ -845,6 +846,18 @@
   </div>
 </div>
 
+<div class="sheet-wrap" id="cardWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
+    <h2 id="cardTitle">Image style</h2>
+    <div class="g">How the review cards and profile snapshots you save look. Pro only.</div>
+    <div class="look-prev" id="cardPrev" style="padding:0;overflow:hidden"></div>
+    <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
+    <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
+    <div class="look-sec"><h3>Highlight color</h3><div class="chips" id="cardAccent"></div></div>
+    <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="proWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="proTitle">
     <div class="pro-hero"><div class="pro-word">JOYSTICK<b>D</b> <span class="protag" style="font-size:14px;padding:4px 10px;top:-6px;position:relative">Pro</span></div>
@@ -871,6 +884,7 @@
       <button class="set-row" id="setPro">Joystickd Pro: <b id="setProState">get Pro</b></button>
       <button class="set-row" id="setLook">Profile look &amp; avatar frame… <span class="protag">Pro</span></button>
       <button class="set-row" id="setShelf">Add a shelf to my profile… <span class="protag">Pro</span></button>
+      <button class="set-row" id="setCard">Image style for saved reviews… <span class="protag">Pro</span></button>
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
       <button class="set-row" id="setBadges" hidden>Profile badges…</button>
@@ -1141,7 +1155,7 @@ const PRO_FEATURES = [
   { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:true },
   { key:"frames",  ic:"\uD83D\uDD36", name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
   { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
-  { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review, wall and profile images you save.", built:false },
+  { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review and profile images you save.", built:true },
   { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:true },
   { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:false },
 ];
@@ -1218,7 +1232,33 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   pattern: PATTERNS[t.pattern] ? t.pattern : "none", tint: TINTS[t.tint] ? t.tint : "soft",
   nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent",
   badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
-  bg: PAGE_BGS[t.bg] ? t.bg : "navy" }; }
+  bg: PAGE_BGS[t.bg] ? t.bg : "navy",
+  card: { bg: PAGE_BGS[t.card?.bg] ? t.card.bg : "navy", accent: t.card?.accent==="theme" ? "theme" : "gold", style: ["solid","cover","glow"].includes(t.card?.style) ? t.card.style : "solid" } }; }
+// Colors for the images a Pro user saves (review cards, continuation cards, profile snapshot).
+const CARD_STYLES = { solid:"Solid", cover:"Blurred cover", glow:"Accent glow" };
+function cardThemeFor(uid, P){
+  const t = themeFor(uid, P); const b = PAGE_BGS[t?.card?.bg] || PAGE_BGS.navy;
+  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t && t.card.accent==="theme" ? t.accent : "#f0b429", style: t ? t.card.style : "solid", isDefault: !t || (t.card.bg==="navy" && t.card.accent==="gold" && t.card.style==="solid") };
+}
+// Paints the card background + panel for a canvas export. coverImg is used by the "cover" style.
+function paintCardBg(x, W, H, ct, coverImg){
+  x.fillStyle = ct.bg; x.fillRect(0,0,W,H);
+  x.save(); x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.clip();
+  x.fillStyle = ct.panel; x.fillRect(0,0,W,H);
+  if (ct.style==="cover" && coverImg){
+    // cheap blur: downscale to a tiny canvas, then draw it stretched (works everywhere, no canvas filters needed)
+    const tiny = document.createElement("canvas"); tiny.width = 12; tiny.height = Math.max(1, Math.round(12*H/W)); const tx = tiny.getContext("2d");
+    const sc = Math.max(tiny.width/coverImg.width, tiny.height/coverImg.height); const dw = coverImg.width*sc, dh = coverImg.height*sc;
+    tx.drawImage(coverImg, (tiny.width-dw)/2, (tiny.height-dh)/2, dw, dh);
+    x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.globalAlpha = 0.55; x.drawImage(tiny, 0, 0, W, H); x.globalAlpha = 1;
+    x.fillStyle = rgba(ct.bg, .55); x.fillRect(0,0,W,H);
+  } else if (ct.style==="glow"){
+    const g = x.createRadialGradient(W*0.15, 40, 10, W*0.15, 40, W*0.9); g.addColorStop(0, rgba(ct.accent, .28)); g.addColorStop(0.5, rgba(ct.accent, .06)); g.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = g; x.fillRect(0,0,W,H);
+  }
+  x.restore();
+  x.strokeStyle = ct.line; x.lineWidth = 1; x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.stroke();
+}
 // Pro badge styling: default gold, the accent color, or one of the frame textures.
 const lum = h => { const [r,g,b]=hexRgb(h); return (0.299*r+0.587*g+0.114*b)/255; };
 function badgeCss(t){
@@ -1290,10 +1330,30 @@ function paintLook(){
   $("#lookFrames").querySelectorAll("[data-frame]").forEach(b=> b.onclick = ()=>{ lookDraft.frame=b.dataset.frame; paintLook(); });
   $("#lookNameColor").onchange = e=>{ lookDraft.nameColor = e.target.checked; };
 }
+// ---- Image style sheet (Pro)
+let cardDraft = null;
+function openCardStyle(){ if (!requirePro("cards")) return; cardDraft = cleanTheme(me.theme); paintCardStyle(); $("#cardWrap").classList.add("open"); }
+function paintCardStyle(){
+  const t = cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent==="theme" ? t.accent : "#f0b429";
+  const bgCss = t.card.style==="glow" ? `radial-gradient(circle at 15% 10%, ${rgba(acc,.3)}, ${rgba(acc,.05)} 45%, transparent 70%), ${b.panel}`
+              : t.card.style==="cover" ? `linear-gradient(${rgba(b.bg,.55)},${rgba(b.bg,.55)}), linear-gradient(135deg,#3b4a7a,#7a3b5a 60%,#2a6a5a)` : b.panel;
+  $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Outfit;font-size:16px">${esc(getGame(Object.keys(logs)[0]||1)?.title || "Game title")}</b><span style="font-family:Outfit;font-weight:800">JOYSTICK<span style="color:${acc}">D</span></span></div>
+      <div style="color:var(--muted);margin-top:2px">2026 \u00b7 Developer</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px"><span style="color:${acc};font-weight:700">\uD83C\uDFC6 Platinum #12 \u00b7 difficulty 6/10</span><span style="font-family:Outfit;font-weight:800;font-size:28px;${ratingText(9.5)}">9.5</span></div>
+      <div style="margin-top:10px;display:flex;gap:6px"><span style="background:${rgba(acc,.3)};color:${acc};padding:3px 8px;border-radius:999px;font-weight:700">my 2026 Game of the Year</span><span style="background:${b.panel2};border:1px solid ${b.line};padding:3px 8px;border-radius:999px;font-weight:700">my 2026 best RPG</span></div>
+      <div style="margin-top:10px;color:#d7deea;line-height:1.5">A vast, broken world that rewards curiosity and punishes impatience\u2026</div></div></div>`;
+  $("#cardBg").innerHTML = Object.entries(PAGE_BGS).map(([k,v])=> `<button class="chip ${t.card.bg===k?"on":""}" data-cbg="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:${v.panel};border:2px solid ${v.line};flex:none"></span>${v.name}</button>`).join("");
+  $("#cardStyle").innerHTML = Object.entries(CARD_STYLES).map(([k,v])=> `<button class="chip ${t.card.style===k?"on":""}" data-cstyle="${k}">${v}</button>`).join("");
+  $("#cardAccent").innerHTML = [["gold","Joystickd gold"],["theme","My accent color"]].map(([k,v])=> `<button class="chip ${t.card.accent===k?"on":""}" data-caccent="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;background:${k==="gold"?"#f0b429":t.accent};flex:none"></span>${v}</button>`).join("");
+  $("#cardBg").querySelectorAll("[data-cbg]").forEach(b=> b.onclick = ()=>{ cardDraft.card.bg=b.dataset.cbg; paintCardStyle(); });
+  $("#cardStyle").querySelectorAll("[data-cstyle]").forEach(b=> b.onclick = ()=>{ cardDraft.card.style=b.dataset.cstyle; paintCardStyle(); });
+  $("#cardAccent").querySelectorAll("[data-caccent]").forEach(b=> b.onclick = ()=>{ cardDraft.card.accent=b.dataset.caccent; paintCardStyle(); });
+}
 async function saveLook(theme){
   const { error } = await sb.from("profiles").update({ theme }).eq("id", me.id);
   if (error){ if (/PRO_REQUIRED/.test(error.message||"")) { $("#lookWrap").classList.remove("open"); openPro("theme"); return; } return dbFail(error); }
-  me.theme = theme; notePro({ id: me.id, pro_until: me.proUntil, theme }); $("#lookWrap").classList.remove("open"); toast(theme ? "Profile look saved" : "Back to the default look"); render();
+  me.theme = theme; notePro({ id: me.id, pro_until: me.proUntil, theme }); $("#lookWrap").classList.remove("open"); toast(theme ? "Saved" : "Back to the default look"); render();
 }
 async function refreshPro(){ if (!LIVE || !me) return; const { data } = await sb.from("profiles").select("pro_until").eq("id", me.id).maybeSingle(); if (data){ me.proUntil = data.pro_until||null; notePro({ id: me.id, pro_until: me.proUntil }); } render(); }
 const requireAuth = ()=>{ if (LIVE && !me){ openAuth(); return false; } return true; };
@@ -2149,7 +2209,9 @@ function profileStats(P, isMe){
   const fmtH = h => h>=1000 ? (h/1000).toFixed(1)+"k" : String(Math.round(h));
   const tile = (b, small, sub) => `<div class="stile"><b>${b}</b><small>${small}</small>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
   const bars = (entries, valFn, labelFn, colorFn) => `<div class="sbars">${entries.map(([k,v])=>{ const val=valFn(v), mx=Math.max(...entries.map(e=>valFn(e[1])))||1; return `<div class="sbar"><span class="lab" title="${esc(k)}">${esc(k)}</span><span class="trk"><span class="fill" style="width:${Math.max(3, val/mx*100)}%;${colorFn?colorFn(v):""}"></span></span><span class="val">${labelFn(v)}</span></div>`; }).join("")}</div>`;
-  const cols = (labels, vals, colorFn) => { const mx=Math.max(1,...vals); return `<div class="scols">${vals.map((v,i)=>`<div class="scol">${v?`<em>${v}</em>`:""}<i class="${v?"":"dim"}" style="height:${Math.max(3, v/mx*100)}%;${colorFn?colorFn(i):""}"></i><small>${labels[i]}</small></div>`).join("")}</div>`; };
+  const cols = (labels, vals, colorFn) => { const mx=Math.max(1,...vals), n=vals.length, nl=labels.filter(Boolean).length, dense=nl>12, every=dense ? Math.ceil(n/8) : 1;
+    return `<div class="scols${dense?" dense":""}">${vals.map((v,i)=>{ const showLab = labels[i]!=="" && (i%every===0 || (i===n-1 && (n-1)%every >= every/2));
+      return `<div class="scol">${v && (!dense || v===mx || i%every===0) ? `<em>${v}</em>` : ""}<i class="${v?"":"dim"}" style="height:${Math.max(3, v/mx*100)}%;${colorFn?colorFn(i):""}"></i><small>${showLab ? labels[i] : "&nbsp;"}</small></div>`; }).join("")}</div>`; };
   const chip = id => { const g=getGame(id); return g ? `<button data-open="${g.id}"><span class="mini" style="${coverStyle(g)}"></span>${esc(g.title)}${L[id].rating!=null?` <span style="${ratingText(L[id].rating)}">${L[id].rating}</span>`:""}</button>` : ""; };
   const gameLine = id => { const g=getGame(id); return g ? `<button class="linklike" data-open="${g.id}">${esc(g.title)}</button>` : ""; };
   return `
@@ -2172,12 +2234,22 @@ function profileStats(P, isMe){
       ${bars(subAvg.map(x=>[x.sc.label.split(/[,(&]/)[0].trim(), x]), v=>v.avg, v=>`<b>${v.avg.toFixed(1)}</b> \u00b7 ${v.n}`, v=>`background:${ratingGradient(snapHalf(v.avg))}`)}</section>` : ""}
     ${Object.keys(byGenre).length ? `<section class="ssec"><h2>Genres</h2><div class="g">Most logged, with ${isMe?"your":"their"} average rating</div>
       ${bars(top(byGenre), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
+    ${(()=>{ const rated2 = Object.entries(byDev).filter(([k,v])=> v.r.length>=2); const pool = rated2.length>=3 ? rated2 : Object.entries(byDev).filter(([k,v])=>v.r.length);
+      const best = pool.sort((a,b)=> mean(b[1].r)-mean(a[1].r) || b[1].r.length-a[1].r.length).slice(0,6);
+      return best.length ? `<section class="ssec"><h2>Highest rated developers</h2><div class="g">${rated2.length>=3 ? "Studios with 2+ rated games" : "By average rating"}</div>
+      ${bars(best, v=>mean(v.r), v=>`<b>${mean(v.r).toFixed(1)}</b> \u00b7 ${v.r.length} game${v.r.length===1?"":"s"}`, v=>`background:${ratingGradient(snapHalf(mean(v.r)))}`)}</section>` : ""; })()}
     ${Object.keys(byDev).length ? `<section class="ssec"><h2>Developers</h2><div class="g">Studios ${isMe?"you":"they"} keep coming back to</div>
       ${bars(top(byDev,6), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
     ${Object.keys(byRel).length ? `<section class="ssec"><h2>Release eras</h2><div class="g">When the games ${isMe?"you":"they"} play came out</div>
       ${bars(Object.entries(byRel).sort((a,b)=>a[0].localeCompare(b[0])), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
     ${plats.length ? `<section class="ssec"><h2>Platinums</h2><div class="g">${platN} platinum${platN===1?"":"s"}${diffArr.length?` \u00b7 avg difficulty ${mean(diffArr).toFixed(1)}/10`:""}${funArr.length?` \u00b7 avg enjoyability ${mean(funArr).toFixed(1)}/10`:""}${hoursArr.length?` \u00b7 avg ${Math.round(mean(hoursArr))} hrs`:""}</div>
       ${Object.keys(platByYear).length ? cols(Object.keys(platByYear).sort(), Object.keys(platByYear).sort().map(y=>platByYear[y])) : ""}
+      ${diffArr.length ? `<h2 style="font-size:15px;margin-top:18px">Difficulty</h2><div class="g">How hard ${isMe?"your":"their"} platinums were, 1\u201310</div>
+        ${(()=>{ const dsteps=[]; for (let v=1; v<=10; v+=0.5) dsteps.push(v); const dc={}; diffArr.forEach(v=> dc[v]=(dc[v]||0)+1);
+          return cols(dsteps.map(v=> v%1===0 ? String(v) : ""), dsteps.map(v=>dc[v]||0), i=> `background:${ratingGradient(snapHalf(dsteps[i]))}`); })()}` : ""}
+      ${hoursArr.length ? `<h2 style="font-size:15px;margin-top:18px">Time to platinum</h2><div class="g">Hours per platinum</div>
+        ${(()=>{ const buckets=[["<10",0,10],["10\u201325",10,25],["25\u201350",25,50],["50\u2013100",50,100],["100\u2013200",100,200],["200+",200,1e9]];
+          return cols(buckets.map(b=>b[0]), buckets.map(([_,lo,hi])=> hoursArr.filter(h=> h>=lo && h<hi).length)); })()}` : ""}
       <div class="stiles" style="margin-top:14px">
         ${hardest ? tile(`${L[hardest].platDiff}/10`, "hardest", gameLine(hardest)) : ""}
         ${longest ? tile(`${fmtH(L[longest].platHours)} hrs`, "longest", gameLine(longest)) : ""}
@@ -3664,10 +3736,9 @@ async function saveReviewImage(g, saved, who){
   if (revLines.length) H += 18 + revLines.length*25;
   H += 70;
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  const gold="#f0b429", text="#e6ebf4", mut="#8b98b5", soft="#c4cddd";
-  x.fillStyle="#0e1526"; x.fillRect(0,0,W,H);
-  x.fillStyle="#161f35"; x.strokeStyle="#28365a"; x.lineWidth=1;
-  x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.fill(); x.stroke();
+  const ct = cardThemeFor(author.id);
+  const gold=ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#c4cddd";
+  paintCardBg(x, W, H, ct, cover);
   let y=56;
   x.textAlign="right"; x.font="800 16px Outfit, sans-serif";
   x.fillStyle=text; x.fillText("JOYSTICK", W-56, 48); x.fillStyle=gold; x.fillText("D", W-44, 48);
@@ -3722,8 +3793,8 @@ async function saveReviewImage(g, saved, who){
     const top = y - 14;
     pills.forEach(pl=>{
       x.beginPath(); x.roundRect(pl.x, top + pl.y, pl.w, PILL_H, 13);
-      x.fillStyle = pl.goty ? "#5a4514" : "#1e2a47"; x.fill();
-      if (!pl.goty){ x.strokeStyle = "#28365a"; x.lineWidth = 1; x.stroke(); }
+      x.fillStyle = pl.goty ? rgba(gold, .3) : ct.panel2; x.fill();
+      if (!pl.goty){ x.strokeStyle = ct.line; x.lineWidth = 1; x.stroke(); }
       x.font="600 12px Outfit, sans-serif"; x.fillStyle = pl.goty ? gold : "#c9d3e0"; x.textBaseline="middle";
       x.fillText(pl.label, pl.x + PILL_PAD, top + pl.y + PILL_H/2 + 1); x.textBaseline="alphabetic"; });
     y += pills[pills.length-1].y + PILL_H + 14; }
@@ -3743,8 +3814,7 @@ async function saveReviewImage(g, saved, who){
     const lines = parts[pi], c2 = document.createElement("canvas"), x2 = c2.getContext("2d");
     const H2 = 56 + 40 + 26 + 18 + lines.length*25 + 70;
     const S2 = exportScale(W, H2); c2.width = W*S2; c2.height = H2*S2; x2.scale(S2, S2);
-    x2.fillStyle="#0e1526"; x2.fillRect(0,0,W,H2);
-    x2.fillStyle="#161f35"; x2.strokeStyle="#28365a"; x2.lineWidth=1; x2.beginPath(); x2.roundRect(20,20,W-40,H2-40,18); x2.fill(); x2.stroke();
+    paintCardBg(x2, W, H2, ct, cover);
     x2.textAlign="right"; x2.font="800 16px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText("JOYSTICK", W-56, 48); x2.fillStyle=gold; x2.fillText("D", W-44, 48); x2.textAlign="left";
     x2.font="800 22px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText(wrapText(x2, g.title, W-88-150)[0] || "", 44, 70);
     x2.font="700 14px Manrope, sans-serif"; x2.fillStyle=soft; x2.fillText(author.username, 44, 96);
@@ -3851,10 +3921,9 @@ async function saveProfileImage(P, opts={}){
   if (withChart) H += chartH + 62;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  const gold="#f0b429", text="#e6ebf4", mut="#8b98b5";
-  x.fillStyle="#0e1526"; x.fillRect(0,0,W,H);
-  x.fillStyle="#161f35"; x.strokeStyle="#28365a"; x.lineWidth=1;
-  x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.fill(); x.stroke();
+  const ct = cardThemeFor(P.id, P);
+  const gold=ct.accent, text="#e6ebf4", mut="#8b98b5";
+  paintCardBg(x, W, H, ct, null);
   // wordmark
   x.textAlign="right"; x.font="800 16px Outfit, sans-serif";
   x.fillStyle=text; x.fillText("JOYSTICK", W-56, 56); x.fillStyle=gold; x.fillText("D", W-44, 56);
@@ -4127,6 +4196,11 @@ function wireSettingsUI(){
   $("#lookCancel").onclick = ()=>{ $("#lookWrap").classList.remove("open"); render(); };
   $("#lookWrap").addEventListener("click", e=>{ if(e.target.id==="lookWrap") $("#lookWrap").classList.remove("open"); });
   $("#lookSave").onclick = ()=> saveLook(cleanTheme(lookDraft));
+  $("#setCard").onclick = ()=>{ closeSettings(); openCardStyle(); };
+  $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
+  $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
+  $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
+  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"gold", style:"solid" }; saveLook(t); };
   $("#lookReset").onclick = ()=> saveLook(null);
   $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
