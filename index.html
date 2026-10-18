@@ -838,14 +838,14 @@
 <div class="sheet-wrap" id="proWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="proTitle">
     <div class="pro-hero"><div class="pro-word">JOYSTICK<b>D</b> <span class="protag" style="font-size:14px;padding:4px 10px;top:-6px;position:relative">Pro</span></div>
-      <div class="g" id="proTitle" style="margin-top:6px">Make your profile yours.</div></div>
+      <div class="g" id="proTitle" style="margin-top:6px">Enhance your Joystickd experience.</div></div>
     <div class="pro-feats" id="proFeats"></div>
     <div class="pro-plans" id="proPlans">
       <button class="pro-plan" data-plan="monthly"><b>$5.99</b><small>per month</small></button>
       <button class="pro-plan best" data-plan="yearly"><b>$29.99</b><small>per year</small><span class="save">save 58%</span></button>
     </div>
     <div class="pro-status" id="proStatus"></div>
-    <p class="hint" style="margin-top:12px;text-align:center">Everything you can do today stays free, forever. Pro is extra.</p>
+    <p class="hint" style="margin-top:12px;text-align:center"><b style="color:var(--text)">Support Joystickd — help keep the community alive!</b><br>Everything you can do today stays free, forever. Pro is extra.</p>
     <div class="actions"><button class="cta ghost" id="proRestore" hidden>Restore purchase</button><button class="cta ghost" id="proClose">Close</button></div>
   </div>
 </div>
@@ -3748,14 +3748,15 @@ async function saveCommunityImage(g){
   }
   // platinum
   if (pa){
-    x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUM", 44, y); y += 30;
+    x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUM", 44, y);
+    if (troph){ const th=18, tw=troph.width*th/troph.height, lw=x.measureText("PLATINUM").width; x.drawImage(troph, 44+lw+8, y-14, tw, th); }
+    y += 30;
     const cells = [[pa.diff!=null ? `${pa.diff}/10` : "\u2014", "avg difficulty"], [pa.hours!=null ? `${pa.hours} hrs` : "\u2014", "avg time"], [pa.fun!=null ? `${pa.fun}/10` : "\u2014", "avg enjoyability"], [String(pa.count), `report${pa.count===1?"":"s"}`]];
     const cw=(W-88-3*10)/4;
     cells.forEach(([big, small], i)=>{ const bx=44+i*(cw+10);
       x.fillStyle="#1e2a47"; x.beginPath(); x.roundRect(bx, y-4, cw, 56, 12); x.fill();
       x.font="800 20px Outfit, sans-serif"; x.fillStyle = i===3 ? gold : text; x.fillText(big, bx+12, y+22);
       x.font="600 11px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(small, bx+12, y+40); });
-    if (troph){ const th=26, tw=troph.width*th/troph.height; x.drawImage(troph, 44+86, y-30-6, tw, th); }
     y += 60 + 6;
   }
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
