@@ -136,7 +136,7 @@
   @media(max-width:640px){.mysubs{grid-template-columns:1fr}}
 
   /* profile */
-  .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+  .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:14px}
   .avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(160deg,var(--gold),#8a5a10);display:grid;place-items:center;font-family:Outfit;font-weight:800;font-size:28px;color:#1a1200;flex-shrink:0}
   .profile-head h1{font-size:30px;font-weight:800}
   .stats{color:var(--muted);font-size:14px;margin-top:4px}
@@ -323,6 +323,7 @@
   .urow{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
   .uname{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;flex:1;text-align:left}
   .avatar.sm{width:34px;height:34px;font-size:15px}
+  .avatar,.protag{-webkit-text-fill-color:#1a1200}   /* keep solid inside gradient-text usernames */
   .uacts{display:flex;gap:6px;align-items:center}
   .cta.sm{padding:8px 12px;font-size:13px;margin:0}
   .cnt{color:var(--gold);font-size:13px;margin-left:6px}
@@ -471,14 +472,14 @@
   .slock{text-align:center;padding:36px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
   .slock h3{font-size:20px;margin:8px 0 6px}.slock p{color:var(--muted);font-size:14px;max-width:420px;margin:0 auto 16px}
   /* Pro: profile look (accent / pattern / tint) and avatar frames */
-  .profile-head.themed{padding:18px 16px;margin:-6px -16px 26px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
+  .profile-head.themed{padding:18px 16px;margin:-6px -16px 16px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
   @media(max-width:640px){.profile-head.themed{margin-left:-12px;margin-right:-12px}}
   .profile-head.themed h1{color:var(--acc)}
   .ptabs.themed .ptab.on{border-bottom-color:var(--acc)}.ptabs.themed .ptab b{color:var(--acc)}
   .avfr{--fw:2.5px;display:inline-grid;place-items:center;position:relative;flex:none;vertical-align:middle;border-radius:50%;padding:var(--fw);background:var(--fgr);box-shadow:0 0 12px var(--glow),inset 0 0 0 1px rgba(0,0,0,.28)}
   .avfr::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,0) 38%,rgba(0,0,0,0) 62%,rgba(0,0,0,.35));
     -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - var(--fw) - 1px),#000 calc(100% - var(--fw)));mask:radial-gradient(farthest-side,transparent calc(100% - var(--fw) - 1px),#000 calc(100% - var(--fw)))}
-  .avfr .avatar{display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+  .avfr .avatar{box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}.avfr img.avatar{display:block}
   .avfr.big{--fw:4px}
   .ulink .avfr,.rev-title .avfr{--fw:1.5px;box-shadow:none}
   .avfr.sm .avatar.sm{width:34px;height:34px}.ulink .avfr .avatar.sm{width:18px;height:18px}
@@ -530,6 +531,7 @@
   .avatar-wrap{position:relative;flex-shrink:0}
   .avatar-edit{position:absolute;right:-4px;bottom:-4px;width:26px;height:26px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);color:var(--text);font-size:12px;display:grid;place-items:center}
   .avatar-edit:hover{background:var(--gold);color:#1a1200}
+  .avatar-wrap.haspro .avatar-edit,.avatar-wrap.haspro .avatar-edit.danger-btn{bottom:18px}
   /* Founding-member badge (first 500 accounts): pinned to the avatar's top-right corner, outside the text flow */
   .founder{position:absolute;top:-6px;right:-8px;width:30px;height:30px;padding:0;border:0;background:none;cursor:pointer;filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));z-index:1}
   .founder img{width:100%;height:100%;display:block}
@@ -835,6 +837,7 @@
     <div class="look-sec"><h3>Header pattern</h3><div class="chips" id="lookPatterns"></div></div>
     <div class="look-sec"><h3>Header tint</h3><div class="chips" id="lookTints"></div></div>
     <div class="look-sec"><h3>Avatar frame</h3><div class="frames" id="lookFrames"></div></div>
+    <div class="look-sec"><h3>Username style</h3><div class="chips" id="lookNameFx"></div></div>
     <div class="look-sec"><label class="toggle-row"><span>Color my username everywhere<br><small style="font-weight:500;color:var(--muted)">Feed, reviews, comments — not just my profile</small></span><input type="checkbox" id="lookNameColor"></label></div>
     <div class="actions"><button class="cta ghost" id="lookReset">Reset to default</button><button class="cta ghost" id="lookCancel">Cancel</button><button class="cta" id="lookSave">Save</button></div>
   </div>
@@ -1193,7 +1196,15 @@ const rgba = (h,a) => { const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a
 function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   accent: /^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent,
   pattern: PATTERNS[t.pattern] ? t.pattern : "none", tint: TINTS[t.tint] ? t.tint : "soft",
-  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none" }; }
+  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent" }; }
+// Username styling: a flat accent, or one of the frame textures as gradient text.
+const nameFxCss = t => t.nameFx !== "accent" && FRAMES[t.nameFx]?.stops
+  ? `background:linear-gradient(100deg, ${FRAMES[t.nameFx].stops.join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent`
+  : `color:${t.accent}`;
+const nameFxStyle = t => t ? ` style="${nameFxCss(t)}"` : "";
+// Canvas fill for a username drawn with the same style (x0..x1 = text extent)
+function nameFillCtx(x, t, x0, y0, x1, y1){ if (!t) return null; if (t.nameFx==="accent" || !FRAMES[t.nameFx]?.stops) return t.accent;
+  const g = x.createLinearGradient(x0, y0, x1, y1); FRAMES[t.nameFx].stops.forEach((c,i)=> g.addColorStop(i/(FRAMES[t.nameFx].stops.length-1), c)); return g; }
 // The theme that should be shown for a user: only while they're Pro.
 function themeFor(uid, P){ if (!isProId(uid) && !(P && isPro(P))) return null; const t = P && "theme" in P ? P.theme : themeOf[uid]; return t ? cleanTheme(t) : null; }
 function patternCss(t){ const c = a => rgba(t.accent, a);
@@ -1207,7 +1218,7 @@ function patternCss(t){ const c = a => rgba(t.accent, a);
 // Inline style for a themed profile header (null = default look)
 function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
   return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
-const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? ` style="color:${t.accent}"` : ""; };
+const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? nameFxStyle(t) : ""; };
 const frameKeyFor = uid => { const t = themeFor(uid); return t && FRAMES[t.frame]?.stops ? t.frame : null; };
 // Canvas: ring around an avatar on exported images
 function drawFrameRing(x, cx, cy, r, uid, scale=1){ const k = frameKeyFor(uid); const f = k && FRAMES[k]; if (!f) return;
@@ -1228,12 +1239,14 @@ function paintLook(){
   const fr = FRAMES[t.frame];
   $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
     <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", fr && fr.stops ? t.frame : null)}<span class="prounder">PRO</span></div>
-    <div><h1 style="color:${t.accent};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
+    <div><h1 style="${nameFxCss(t)};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
   $("#lookSwatches").innerHTML = ACCENTS.map(c=> `<button class="swatch ${t.accent===c?"on":""}" data-acc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
     + `<label class="swatch custom ${ACCENTS.includes(t.accent)?"":"on"}">Custom <input type="color" id="lookCustom" value="${t.accent}"></label>`;
   $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
   $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
   $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.stops ? k : null)}<span>${f.name}</span></button>`).join("");
+  $("#lookNameFx").innerHTML = [["accent","Accent color"], ...Object.entries(FRAMES).filter(([k,f])=>f.stops && k!=="onyx").map(([k,f])=>[k,f.name])].map(([k,label])=> `<button class="chip ${t.nameFx===k?"on":""}" data-namefx="${k}"><span style="${nameFxCss({...t, nameFx:k})};font-weight:800">${esc(me.username)}</span><span style="margin-left:6px;font-weight:500;font-size:11px">${label}</span></button>`).join("");
+  $("#lookNameFx").querySelectorAll("[data-namefx]").forEach(b=> b.onclick = ()=>{ lookDraft.nameFx=b.dataset.namefx; paintLook(); });
   $("#lookNameColor").checked = t.nameColor;
   $("#lookSwatches").querySelectorAll("[data-acc]").forEach(b=> b.onclick = ()=>{ lookDraft.accent=b.dataset.acc; paintLook(); });
   $("#lookCustom").oninput = e=>{ lookDraft.accent = e.target.value.toLowerCase(); paintLook(); $("#lookCustom").focus(); };
@@ -2252,7 +2265,7 @@ function renderLogs(app, P, isMe){
     ${(()=>{ const t = themeFor(P.id, P); return `<div class="profile-head${t?" themed":""}" ${headStyle(t)}>`; })()}
       <div class="avatar-wrap${isPro(P)?" haspro":""}">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isPro(P) ? `<span class="prounder" title="Joystickd Pro">PRO</span>` : ""}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
       <div>
-        <h1>${esc(P.username)}</h1>
+        <h1${nameFxStyle(themeFor(P.id, P))}>${esc(P.username)}</h1>
         <div class="statrow">
           <div class="stat"><b>${rated}</b><small>game${rated===1?"":"s"} logged</small></div>
           ${P.hidePlats ? "" : `<div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>`}
@@ -3630,7 +3643,7 @@ async function saveReviewImage(g, saved, who){
   x.fillText([g.year, g.dev].filter(Boolean).join(" · "), tx, y+20+titleLines.length*30);
   // author line ("name's review"), then their avatar below it with profile badges on the corners
   { const ly = y+authY, ad=AV, ax=tx, ay=ly+10;
-    x.font="700 14px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(author.username, ax, ly);
+    x.font="700 14px Manrope, sans-serif"; { const tN = themeFor(author.id); const nw0 = x.measureText(author.username).width; x.fillStyle = (tN && tN.nameColor && nameFillCtx(x, tN, ax, ly-12, ax+nw0, ly)) || soft; } x.fillText(author.username, ax, ly);
     const nw = x.measureText(author.username).width;
     x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("'s review", ax+nw, ly);
     drawFrameRing(x, ax+ad/2, ay+ad/2, ad/2, author.id, 0.8);
@@ -3821,7 +3834,7 @@ async function saveProfileImage(P, opts={}){
     x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=6; x.shadowOffsetY=2; x.drawImage(im, bx, by, bd, bd); x.restore(); });
   // name + stats
   const nx = ax+ad+22;
-  x.font="800 34px Outfit, sans-serif"; x.fillStyle=text; x.fillText(P.username, nx, ay+34);
+  x.font="800 34px Outfit, sans-serif"; { const tN = themeFor(P.id, P); const nw0 = x.measureText(P.username).width; x.fillStyle = (tN && nameFillCtx(x, tN, nx, ay+6, nx+nw0, ay+34)) || text; } x.fillText(P.username, nx, ay+34);
   const sy = ay+66;
   x.font="800 24px Outfit, sans-serif"; x.fillText(String(rated), nx, sy+10);
   const w1 = x.measureText(String(rated)).width;
