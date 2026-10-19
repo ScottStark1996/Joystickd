@@ -780,6 +780,7 @@
     <div class="g">A clean shareable card of your profile.</div>
     <button class="plat-toggle" id="snapChart" role="switch" style="margin-top:14px"><span class="pt-text">Include rating distribution<small>Your bar chart of 1–10 ratings</small></span><span class="switch"><i></i></span></button>
     <button class="plat-toggle" id="snapBadges" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include badges<small>Founding member and other badges on the avatar</small></span><span class="switch"><i></i></span></button>
+    <button class="plat-toggle" id="snapShelves" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include my shelves<small>Your extra titled Top 5s, under the main Top 5</small></span><span class="switch"><i></i></span></button>
     <div class="actions"><button class="cta ghost" id="snapCancel">Cancel</button><button class="cta" id="snapGo">Save image</button></div>
   </div>
 </div>
@@ -2610,7 +2611,7 @@ function paintListEditor(){
   $("#listGames").querySelectorAll("[data-ldown]").forEach(b=> b.onclick = ()=>{ const i=+b.dataset.ldown; [listDraft.games[i+1],listDraft.games[i]]=[listDraft.games[i],listDraft.games[i+1]]; paintListEditor(); });
   $("#listGames").querySelectorAll("[data-lrm]").forEach(b=> b.onclick = ()=>{ listDraft.games.splice(+b.dataset.lrm,1); paintListEditor(); });
 }
-let snapTarget=null, snapChartOn=true, snapBadgesOn=true;
+let snapTarget=null, snapChartOn=true, snapBadgesOn=true, snapShelvesOn=true;
 // ---- platinum wall ------------------------------------------------------------
 let wallOpts = { sort:"num", badge:true, num:true, diff:false, hours:false, fun:false, highlights:false }, wallTarget=null;
 function openWall(P){
@@ -2735,8 +2736,9 @@ function wireSnapUI(){
   $("#snapCancel").onclick = ()=> $("#snapWrap").classList.remove("open");
   $("#snapWrap").addEventListener("click", e=>{ if(e.target.id==="snapWrap") $("#snapWrap").classList.remove("open"); });
   $("#snapChart").onclick = ()=>{ snapChartOn=!snapChartOn; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn); };
+  $("#snapShelves").onclick = ()=>{ snapShelvesOn=!snapShelvesOn; $("#snapShelves").classList.toggle("on", snapShelvesOn); $("#snapShelves").setAttribute("aria-checked", snapShelvesOn); };
   $("#snapBadges").onclick = ()=>{ snapBadgesOn=!snapBadgesOn; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); };
-  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
+  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn, shelves: snapShelvesOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
 }
 function wireListEditor(){
   $("#listCancel").onclick = ()=> $("#listWrap").classList.remove("open");
@@ -4148,6 +4150,9 @@ async function saveProfileImage(P, opts={}){
   const rated = ids.length, plats = ids.reduce((n,id)=> n + platCount(logsP[id]), 0);
   const top = (P.top5||[]).filter(Boolean).slice(0,5);
   const covers = await Promise.all(top.map(id=>{ const g=getGame(id); return g?.cover ? loadImg(coverHi(g.cover), true) : Promise.resolve(null); }));
+  // Pro shelves (extra titled Top 5s), each drawn as another row of covers
+  const shelves = (opts.shelves && isPro(P) ? (P.shelves||[]) : []).map(sh=> { const games=(sh.games||[]).filter(Boolean).map(g=> getGame(g.id)||g).slice(0,5); games.forEach(cacheGame); return { title: sh.title||"Shelf", ids: games.map(g=>g.id), games }; }).filter(sh=> sh.ids.length);
+  const shelfCovers = await Promise.all(shelves.map(sh=> Promise.all(sh.games.map(g=> g?.cover ? loadImg(coverHi(g.cover), true) : Promise.resolve(null)))));
   const avatar = avatars[P.id] ? await loadImg(avatars[P.id], true) : null;
   const troph = await loadImg(`${TROPHY_BASE}10.png`);
   const badgeList = opts.badges ? profileBadges(P) : [];
@@ -4156,7 +4161,9 @@ async function saveProfileImage(P, opts={}){
   const withChart = !!opts.chart && ratings.length>0;
   const W=720, gap=14, cvW=(720-104-4*gap)/5, cvH=Math.round(cvW*4/3), chartH=150;
   const rowW = top.length ? top.length*cvW + (top.length-1)*gap : 0;
+  const rowH = 14 + cvH + 40;                                   // label gap + covers + space below
   let H = top.length ? 176 + 14 + cvH + 66 : 216;
+  H += shelves.length * rowH;
   if (withChart) H += chartH + 62;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -4190,22 +4197,24 @@ async function saveProfileImage(P, opts={}){
   } else { x.font="800 24px Outfit, sans-serif"; x.fillStyle=text; x.fillText(String(plats), nx2, sy+10); }
   if (!P.hidePlats){ x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUMS", nx2, sy+26); }
   // top 5
-  if (top.length){
-    const ty = 176;
-    x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("TOP 5", 52, ty);
+  const coverRow = (label, ids, imgs, ty)=>{
+    x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText(label.toUpperCase(), 52, ty);
     const startX = 52;
-    top.forEach((id,i)=>{ const g=getGame(id), bx=startX+i*(cvW+gap), by=ty+14;
+    ids.forEach((id,i)=>{ const g=getGame(id), bx=startX+i*(cvW+gap), by=ty+14;
       x.save(); x.beginPath(); x.roundRect(bx,by,cvW,cvH,10); x.clip();
-      if (covers[i]) x.drawImage(covers[i], bx, by, cvW, cvH);
+      if (imgs[i]) x.drawImage(imgs[i], bx, by, cvW, cvH);
       else { x.fillStyle="#233150"; x.fillRect(bx,by,cvW,cvH); x.fillStyle="#8b98b5"; x.font="600 12px Manrope, sans-serif";
         wrapText(x, g?.title||"?", cvW-16).slice(0,4).forEach((ln,li)=> x.fillText(ln, bx+8, by+44+li*16)); }
       x.restore();
       x.fillStyle="rgba(10,14,25,.85)"; x.beginPath(); x.roundRect(bx+6,by+6,22,18,6); x.fill();
       x.fillStyle=gold; x.font="800 12px Outfit, sans-serif"; x.textAlign="center"; x.fillText(String(i+1), bx+17, by+19); x.textAlign="left";
     });
-  }
+  };
+  let nextY = 176;
+  if (top.length){ coverRow("Top 5", top, covers, nextY); nextY += 14 + cvH + 40; }
+  shelves.forEach((sh,i)=>{ coverRow(sh.title, sh.ids, shelfCovers[i], nextY); nextY += rowH; });
   if (withChart){
-    const cy = (top.length ? 176 + 14 + cvH + 26 : 176);
+    const cy = (top.length || shelves.length) ? nextY - 14 : 176;
     const avg = (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1);
     x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut;
     x.fillText("RATINGS", 52, cy);
@@ -4476,7 +4485,9 @@ function wireSettingsUI(){
   $("#epAvatar").onclick = ()=>{ closeEditProf(); const f=$("#avatarFile"); if (f) f.click(); else toast("Open your profile to change your picture"); };
   $("#epBio").onclick = ()=>{ closeEditProf(); openBio(); };
   $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); snapTarget=myProfileObj(); $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
-    $("#snapBadges").hidden = !profileBadges(me).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); };
+    $("#snapBadges").hidden = !profileBadges(me).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn);
+    const hasShelves = isPro(me) && (me.shelves||[]).some(sh=> (sh.games||[]).some(Boolean));
+    $("#snapShelves").hidden = !hasShelves; $("#snapShelves").classList.toggle("on", snapShelvesOn); $("#snapShelves").setAttribute("aria-checked", snapShelvesOn); $("#snapWrap").classList.add("open"); };
   $("#cmpProfBtn").onclick = ()=>{ closeEditProf(); openCompare("profile"); };
   // Hide the big platinum stat under the username (for players who don't chase platinums)
   $("#setPlats").onclick = async ()=>{ if (!me) return; const next = !me.hidePlats;
