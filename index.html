@@ -1230,7 +1230,7 @@ async function startProPurchase(plan){
 }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels" };
 const TINTS = { off:"Off", soft:"Soft", bold:"Bold" };
 // Ring = a conic gradient around the avatar (metallic sheen comes from the light/dark stops), drawn flush
 // against the photo. `stops` run clockwise from the top-left; `glow` is an optional soft outer light.
@@ -1294,6 +1294,9 @@ function paintPattern(x, W, H, pattern, accent){
     case "stripes": x.fillStyle = rgba(accent, .11); x.translate(W/2, H/2); x.rotate(-Math.PI/4); { const D = Math.hypot(W,H); for (let px=-D; px<D; px+=20) x.fillRect(px, -D, 7, 2*D); } break;
     case "rings":   x.strokeStyle = rgba(accent, .12); x.lineWidth = 2; { const D = Math.hypot(W,H); for (let r=10; r<D; r+=20){ x.beginPath(); x.arc(W, 0, r, 0, 7); x.stroke(); } } break;
     case "checks":  x.fillStyle = rgba(accent, .09); for (let py=0, j=0; py<H; py+=12, j++) for (let px=0, i=0; px<W; px+=12, i++) if ((i+j)%2===0) x.fillRect(px, py, 12, 12); break;
+    case "scanlines": x.fillStyle = rgba(accent, .13); for (let py=0; py<H; py+=4) x.fillRect(0, py, W, 1); break;
+    case "diamonds":  x.strokeStyle = rgba(accent, .14); x.lineWidth = 1; x.translate(W/2, H/2); x.rotate(Math.PI/4); { const D = Math.hypot(W,H); x.beginPath(); for (let v=-D; v<D; v+=18){ x.moveTo(v,-D); x.lineTo(v,D); x.moveTo(-D,v); x.lineTo(D,v); } x.stroke(); } break;
+    case "pixels":    for (let py=0; py<H; py+=40) for (let px=0; px<W; px+=40) PIXEL_TILE.forEach(([dx,dy,a])=>{ x.fillStyle = rgba(accent, a); x.fillRect(px+dx, py+dy, 6, 6); }); break;
   }
   x.restore();
 }
@@ -1341,6 +1344,7 @@ function nameFillCtx(x, t, x0, y0, x1, y1){ if (!t) return null; if (t.nameFx===
   const st = nameStops(t), g = x.createLinearGradient(x0, y0, x1, y1); st.forEach((c,i)=> g.addColorStop(i/(st.length-1), c)); return g; }
 // The theme that should be shown for a user: only while they're Pro.
 function themeFor(uid, P){ if (!isProId(uid) && !(P && isPro(P))) return null; const t = P && "theme" in P ? P.theme : themeOf[uid]; return t ? cleanTheme(t) : null; }
+const PIXEL_TILE = [[4,6,.2],[24,2,.11],[30,22,.17],[12,28,.12]];   // chunky "pixels": x, y, alpha inside a 40px tile
 function patternCss(t){ const c = a => rgba(t.accent, a);
   switch (t.pattern){
     case "dots":    return [`radial-gradient(${c(.28)} 1.3px, transparent 1.8px)`, "14px 14px"];
@@ -1348,6 +1352,10 @@ function patternCss(t){ const c = a => rgba(t.accent, a);
     case "stripes": return [`repeating-linear-gradient(135deg, ${c(.13)} 0 7px, transparent 7px 20px)`, "auto"];
     case "rings":   return [`repeating-radial-gradient(circle at 100% 0, ${c(.14)} 0 2px, transparent 2px 20px)`, "auto"];
     case "checks":  return [`conic-gradient(${c(.11)} 25%, transparent 0 50%, ${c(.11)} 0 75%, transparent 0)`, "24px 24px"];
+    case "scanlines": return [`repeating-linear-gradient(0deg, ${c(.13)} 0 1px, transparent 1px 4px)`, "auto"];
+    case "diamonds":  return [`repeating-linear-gradient(45deg, ${c(.14)} 0 1px, transparent 1px 18px), repeating-linear-gradient(-45deg, ${c(.14)} 0 1px, transparent 1px 18px)`, "auto"];
+    case "pixels":    { const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g fill="${t.accent}">${PIXEL_TILE.map(([px,py,a])=> `<rect x="${px}" y="${py}" width="6" height="6" opacity="${a}"/>`).join("")}</g></svg>`;
+                        return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, "40px 40px"]; }
     default: return ["none", "auto"]; } }
 // Inline style for a themed profile header (null = default look)
 function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
