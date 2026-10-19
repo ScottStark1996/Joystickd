@@ -1656,6 +1656,14 @@ async function loadCommentCounts(gid){
   commentCounts[gid] = counts;
 }
 const commentCounts = {};            // gid -> {uid: n}
+// Counts for a batch of feed items (one query), so the home page can say "3 comments" without opening each thread.
+async function loadFeedCommentCounts(items){
+  if (!LIVE) return; const gids = [...new Set(items.map(f=>f.gameId).filter(Boolean))]; if (!gids.length) return;
+  const { data } = await sb.from("review_comments").select("game_id,review_user").in("game_id", gids);
+  const seen = new Set(); items.forEach(f=>{ (commentCounts[f.gameId] ||= {})[f.userId] = 0; seen.add(f.gameId); });
+  (data||[]).forEach(c=>{ if (seen.has(c.game_id) && commentCounts[c.game_id][c.review_user]!=null) commentCounts[c.game_id][c.review_user]++; });
+  if (onHome()) render();
+}
 const commentCount = (gid, uid) => commentsCache[ckey(gid,uid)]?.length ?? commentCounts[gid]?.[uid] ?? null;
 async function postComment(gid, uid, body){
   if (!requireAuth()) return;
@@ -1689,14 +1697,15 @@ function commentsBlock(gid, uid){
     </div>` : ""}
   </div>`;
 }
-function wireComments(app){
+function wireComments(app, repaint){
+  const paint = repaint || render;
   app.querySelectorAll("[data-ctoggle]").forEach(b=> b.onclick = async ()=>{
     const [gid,uid] = b.dataset.ctoggle.split(":"); const k = ckey(+gid,uid);
-    if (openComments.has(k)) openComments.delete(k); else { openComments.add(k); if (!commentsCache[k]){ render(); await loadComments(+gid, uid); } }
-    render();
+    if (openComments.has(k)) openComments.delete(k); else { openComments.add(k); if (!commentsCache[k]){ paint(); await loadComments(+gid, uid); } }
+    paint();
   });
-  app.querySelectorAll("[data-cpost]").forEach(b=> b.onclick = ()=>{ const [gid,uid]=b.dataset.cpost.split(":"); const ta=app.querySelector(`[data-cinput="${b.dataset.cpost}"]`); postComment(+gid, uid, ta.value); });
-  app.querySelectorAll("[data-cdel]").forEach(b=> b.onclick = ()=>{ const [gid,uid,id]=b.dataset.cdel.split(":"); if (confirm("Delete this comment?")) deleteComment(+gid, uid, +id); });
+  app.querySelectorAll("[data-cpost]").forEach(b=> b.onclick = async ()=>{ const [gid,uid]=b.dataset.cpost.split(":"); const ta=app.querySelector(`[data-cinput="${b.dataset.cpost}"]`); await postComment(+gid, uid, ta.value); if (repaint) repaint(); });
+  app.querySelectorAll("[data-cdel]").forEach(b=> b.onclick = async ()=>{ const [gid,uid,id]=b.dataset.cdel.split(":"); if (confirm("Delete this comment?")){ await deleteComment(+gid, uid, +id); if (repaint) repaint(); } });
   app.querySelectorAll("[data-csignin]").forEach(b=> b.onclick = openAuth);
   app.querySelectorAll("[data-creport]").forEach(b=> b.onclick = ()=>{ const [gid,uid,cid]=b.dataset.creport.split(":"); const c=(commentsCache[ckey(+gid,uid)]||[]).find(x=>x.id===+cid); openReport({type:"comment", gid:+gid, targetUser:c?.user_id, commentId:+cid, label:`Comment by ${whoName(c?.user_id)}`}); });
   app.querySelectorAll(".cmt-who[data-user]").forEach(b=> b.onclick = ()=>{ view.tab="logs"; view.gameId=null; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
@@ -1947,6 +1956,7 @@ function feedCard(f, idx, kind){
             </div>
             ${l.review ? `<button class="review clamp rev-text" ${open}>${esc(l.review)}</button>` : ""}
             <div class="crev-foot">${LIVE && me && !mine && l.review ? `<button class="likebtn ${liked?"on":""}" data-hlike="${g.id}:${f.userId}" aria-label="Like this review">${liked?"♥":"♡"} ${lk.length||""}</button><button class="cmt-toggle" data-freport="${g.id}:${f.userId}" title="Report review">⚑ Report</button>` : ""}<button class="cmt-toggle" ${open}>Open log →</button></div>
+            ${(l.review||"").trim() ? commentsBlock(g.id, f.userId) : ""}
           </div>
         </article>`;
 }
@@ -2002,6 +2012,7 @@ async function loadHome(){
           return { user:r.username, userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot }; });
       } catch(e){ home.latest = []; }
       // Likes for the feed's written reviews, so the hearts have data on first paint
+      loadFeedCommentCounts([...home.friendLogs, ...(home.latest||[])]);
       const revRows = home.friendLogs.filter(f=> (f.log.review||"").trim());
       if (revRows.length){
         const { data: lks } = await sb.from("review_likes").select("user_id,review_user,game_id")
@@ -2123,6 +2134,7 @@ function renderHome(app){
   app.querySelectorAll("[data-user]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="logs"; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
   app.querySelectorAll("[data-hlike]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.hlike.indexOf(":"); toggleLike(+b.dataset.hlike.slice(0,i), b.dataset.hlike.slice(i+1)); });
   app.querySelectorAll("[data-fopen]").forEach(b=> b.onclick = ()=>{ const [k,i]=b.dataset.fopen.split(":"); const f=(k==="l" ? home.latest : home.friendLogs)[+i]; if (f) openFeedReview(f); });
+  wireComments(app);
   app.querySelectorAll("[data-freport]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.freport.indexOf(":"); const gid=+b.dataset.freport.slice(0,i), uid=b.dataset.freport.slice(i+1), g=getGame(gid);
     openReport({ type:"review", gid, targetUser:uid, label:`Review of ${g?.title||"a game"} by ${follows.names[uid]||"a user"}` }); });
   app.querySelectorAll("[data-morerev]").forEach(b=>{
@@ -2210,7 +2222,7 @@ async function renderProfile(app){
     app.innerHTML = `<div class="empty"><h2>Your profile</h2>Sign in to log games, pick a top 5 and vote on awards.<br><br><button class="cta" id="promptAuth">Sign in or create an account</button></div>`;
     $("#promptAuth").onclick = openAuth; return;
   }
-  renderLogs(app, { id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, shelves: me?.shelves||[], logs, top5, ballot: ballots.me, wishlist, lists: myLists }, true);
+  renderLogs(app, myProfileObj(), true);
 }
 const bestDate = l => [l.date,l.firstTrophy,l.platDate,l.plat2On].filter(Boolean).sort().pop() || "";
 // A log can carry two platinums (e.g. PS4 + PS5 versions). hasPlat2 / platCount / platEntries make that uniform.
@@ -2306,6 +2318,8 @@ function profileStats(P, isMe){
       </div></section>` : ""}
     ${tens.length ? `<section class="ssec"><h2>${isMe?"Your":"Their"} 10s</h2><div class="g">${tens.length} game${tens.length===1?"":"s"} ${isMe?"you":"they"} called perfect</div><div class="slist">${tens.sort((a,b)=> bestDate(L[b]).localeCompare(bestDate(L[a]))).map(chip).join("")}</div></section>` : ""}`;
 }
+// My own profile as the same shape renderLogs / saveProfileImage expect for anyone else.
+const myProfileObj = () => ({ id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, shelves: me?.shelves||[], logs, top5, ballot: ballots.me, wishlist, lists: myLists });
 function renderLogs(app, P, isMe){
   const logs = P.logs, top5 = P.top5;
   { const t = themeFor(P.id, P); if (t && t.bg !== "navy") applyPageBg(t.bg); }
@@ -2722,7 +2736,7 @@ function wireSnapUI(){
   $("#snapWrap").addEventListener("click", e=>{ if(e.target.id==="snapWrap") $("#snapWrap").classList.remove("open"); });
   $("#snapChart").onclick = ()=>{ snapChartOn=!snapChartOn; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn); };
   $("#snapBadges").onclick = ()=>{ snapBadgesOn=!snapBadgesOn; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); };
-  $("#snapGo").onclick = ()=>{ $("#snapWrap").classList.remove("open"); if (snapTarget) saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn }); };
+  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
 }
 function wireListEditor(){
   $("#listCancel").onclick = ()=> $("#listWrap").classList.remove("open");
@@ -3032,9 +3046,15 @@ function openT5(gid, P, isMe){
   const canLike = LIVE && me && P.id && P.id!==me.id && !isBlocked(P.id) && (l.review||"").trim();
   const t5HeartHtml = ()=>{ const lk=likesFor(gid, P.id), liked=!!lk.find(k=>k.user_id===me.id);
     return `<button class="likebtn ${liked?"on":""}" id="t5Like" aria-label="Like this review">${liked?"\u2665":"\u2661"} ${lk.length||""}</button><button class="cmt-toggle" id="t5Report" title="Report review">\u2691 Report</button>`; };
+  const hasReview = !!(l.review||"").trim();
   $("#t5Body").innerHTML = logCard(l, g, P.ballot, isMe)
     + (canLike ? `<div class="crev-foot" id="t5Foot">${t5HeartHtml()}</div>` : "")
-    + (myL ? `<div class="yours">Your rating: ${myL.rating!=null ? `<b style="${ratingText(myL.rating)}">${myL.rating}</b>/10` : "played"}${myL.platinum ? " · platinumed" : ""}</div>` : "");
+    + (myL ? `<div class="yours">Your rating: ${myL.rating!=null ? `<b style="${ratingText(myL.rating)}">${myL.rating}</b>/10` : "played"}${myL.platinum ? " · platinumed" : ""}</div>` : "")
+    + (LIVE && hasReview && P.id ? `<div id="t5Cmts"></div>` : "");
+  if (LIVE && hasReview && P.id){                        // comments live inside the sheet; repaint just that box
+    const paintCmts = ()=>{ const box=$("#t5Cmts"); if (!box) return; box.innerHTML = commentsBlock(gid, P.id); wireComments(box, paintCmts); };
+    paintCmts(); if (!commentsCache[ckey(gid, P.id)]) loadComments(gid, P.id).then(paintCmts);
+  }
   if (canLike){
     const wireT5Like = ()=>{ const btn=$("#t5Like"); if (btn) btn.onclick = async ()=>{ await toggleLike(gid, P.id); if ($("#t5Foot")){ $("#t5Foot").innerHTML = t5HeartHtml(); wireT5Like(); } };
       const rb=$("#t5Report"); if (rb) rb.onclick = ()=>{ closeT5(); openReport({ type:"review", gid, targetUser:P.id, label:`Review of ${g?.title||"a game"} by ${P.username}` }); }; };
@@ -3984,8 +4004,12 @@ async function saveCompareProfileImage(ids){
   try { await document.fonts.ready; } catch(e){}
   toast("Loading profiles\u2026");
   const others = (await Promise.all(ids.map(id=> loadOtherProfile(follows.names[id]||revNames[id]||"")))).filter(Boolean);
-  const people = [{ id: me.id, username: me.username, logs }, ...others];
+  const people = [{ id: me.id, username: me.username, logs, top5 }, ...others];
   const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n;
+  // each person's Top 5 covers + rating distribution
+  const tops = people.map(P=> (P.top5||[]).filter(Boolean).slice(0,5));
+  const coverImgs = await Promise.all(tops.map(t=> Promise.all(t.map(id=>{ const g=getGame(id); return g?.cover ? loadImg(coverHi(g.cover), true) : Promise.resolve(null); }))));
+  const gap = 8, perRow = colW >= 400 ? 5 : 3, topRows = Math.ceil(5/perRow), cvW = (colW - 32 - (perRow-1)*gap)/perRow, cvH = Math.round(cvW*4/3), topH = tops.some(t=>t.length) ? 28 + topRows*cvH + (topRows-1)*gap + 14 : 0, chartH = 118;
   const statsOf = P => { const L=P.logs, ids=Object.keys(L).map(Number); const r=ids.map(id=>L[id].rating).filter(v=>v!=null); const plats=ids.filter(id=>L[id].platinum);
     return { games: ids.length, avg: r.length ? mean(r) : null, tens: ids.filter(id=>L[id].rating===10).length, reviews: ids.filter(id=>(L[id].review||"").trim()).length, plats: plats.reduce((a,id)=>a+platCount(L[id]),0), hours: plats.reduce((a,id)=>a+(L[id].platHours||0),0), diff: (()=>{ const d=plats.map(id=>L[id].platDiff).filter(v=>v!=null); return d.length ? mean(d) : null; })() }; };
   const st = people.map(statsOf);
@@ -3995,7 +4019,7 @@ async function saveCompareProfileImage(ids){
   const agree = [...common].sort((a,b)=> spread(a)-spread(b) || mean(people.map(P=>P.logs[b].rating))-mean(people.map(P=>P.logs[a].rating)))[0];
   const fight = [...common].sort((a,b)=> spread(b)-spread(a))[0];
   const rows = [["Games logged", s=>String(s.games)], ["Average rating", s=> s.avg!=null ? s.avg.toFixed(2) : "\u2014"], ["Perfect 10s", s=>String(s.tens)], ["Reviews", s=>String(s.reviews)], ["Platinums", s=>String(s.plats)], ["Platinum hours", s=> s.hours ? String(Math.round(s.hours)) : "\u2014"], ["Avg difficulty", s=> s.diff!=null ? s.diff.toFixed(1)+"/10" : "\u2014"]];
-  const headH = 120, personH = 150, rowsH = rows.length*34 + 10, panelH = personH + rowsH + 20, commonH = common.length ? 150 : 0, H = headH + panelH + commonH + 80;
+  const headH = 120, personH = 150, rowsH = rows.length*34 + 10, panelH = personH + rowsH + topH + chartH + 20, commonH = common.length ? 176 : 0, H = headH + panelH + commonH + 80;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   const art = avatars[me.id] ? await loadImg(avatars[me.id], true) : null;
   paintCinematic(x, W, H, art, "rgba(6,8,15,.5)");
@@ -4008,6 +4032,28 @@ async function saveCompareProfileImage(ids){
     rows.forEach(([lab, fn])=>{ const vals = st.map(fn); const best = Math.max(...vals.map(v=>parseFloat(v)||-1)); const v = fn(st[i]);
       x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(lab, px+16, y);
       x.textAlign="right"; x.font="800 16px Outfit, sans-serif"; x.fillStyle = (parseFloat(v)===best && best>0 && vals.filter(q=>parseFloat(q)===best).length===1) ? "#f0b429" : "#e6ebf4"; x.fillText(v, px+colW-16, y); x.textAlign="left"; y += 34; });
+    // Top 5
+    if (topH){ y += 4; x.font="700 12px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("TOP 5", px+16, y);
+      tops[i].forEach((id,k)=>{ const g=getGame(id), bx=px+16+(k%perRow)*(cvW+gap), by=y+10+Math.floor(k/perRow)*(cvH+gap);
+        x.save(); x.beginPath(); x.roundRect(bx,by,cvW,cvH,Math.min(8,cvW/5)); x.clip();
+        if (coverImgs[i][k]) x.drawImage(coverImgs[i][k], bx, by, cvW, cvH);
+        else { x.fillStyle="#233150"; x.fillRect(bx,by,cvW,cvH); x.fillStyle="#8b98b5"; x.font="600 10px Manrope, sans-serif"; wrapText(x, g?.title||"?", cvW-8).slice(0,3).forEach((ln,li)=> x.fillText(ln, bx+4, by+34+li*12)); }
+        x.restore();
+        const tag = cvW >= 50; if (tag){ x.fillStyle="rgba(10,14,25,.85)"; x.beginPath(); x.roundRect(bx+5,by+5,18,15,5); x.fill(); x.fillStyle="#f0b429"; x.font="800 10px Outfit, sans-serif"; x.textAlign="center"; x.fillText(String(k+1), bx+14, by+16); x.textAlign="left"; } });
+      if (!tops[i].length){ x.font="600 12px Manrope, sans-serif"; x.fillStyle="#55607a"; x.fillText("no Top 5 yet", px+16, y+30); }
+      y += 28 + topRows*cvH + (topRows-1)*gap + 10; }
+    // rating distribution
+    { const L=P.logs, ratings=Object.keys(L).map(id=>L[id].rating).filter(v=>v!=null); y += 6;
+      x.font="700 12px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("RATINGS", px+16, y);
+      if (ratings.length){ x.textAlign="right"; x.font="600 11px Manrope, sans-serif"; x.fillText(`avg ${mean(ratings).toFixed(1)}`, px+colW-16, y); x.textAlign="left"; }
+      const steps=[]; for(let v=1;v<=10;v+=0.5) steps.push(v);
+      const counts = steps.map(v=> ratings.filter(r=>r===v).length), max=Math.max(1,...counts);
+      const areaX=px+16, areaW=colW-32, bg=2, bw=(areaW-(steps.length-1)*bg)/steps.length, barH=chartH-44, base=y+12+barH;
+      steps.forEach((v,k)=>{ const bx=areaX+k*(bw+bg), bh=Math.max(2, counts[k]/max*barH); const cols=ratingColors(snapHalf(v));
+        const grd=x.createLinearGradient(0, base-bh, 0, base); cols.forEach((cc,j)=>grd.addColorStop(cols.length===1?0:j/(cols.length-1), cc));
+        x.fillStyle = counts[k] ? grd : "rgba(255,255,255,.06)"; x.beginPath(); x.roundRect(bx, base-bh, bw, bh, 2); x.fill();
+        if (v%1===0 && (colW>=300 || v===1 || v===5 || v===10)){ x.font="600 10px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; x.fillText(String(v), bx+bw/2, base+14); x.textAlign="left"; } });
+    }
   }
   if (common.length){ const y0 = top + panelH + 24; glassPanel(x, 40, y0, W-80, commonH-20);
     x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(`${common.length} GAME${common.length===1?"":"S"} IN COMMON`, 60, y0+30);
@@ -4429,7 +4475,7 @@ function wireSettingsUI(){
   $("#editProfWrap").addEventListener("click", e=>{ if(e.target.id==="editProfWrap") closeEditProf(); });
   $("#epAvatar").onclick = ()=>{ closeEditProf(); const f=$("#avatarFile"); if (f) f.click(); else toast("Open your profile to change your picture"); };
   $("#epBio").onclick = ()=>{ closeEditProf(); openBio(); };
-  $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); snapTarget=me; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
+  $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); snapTarget=myProfileObj(); $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
     $("#snapBadges").hidden = !profileBadges(me).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); };
   $("#cmpProfBtn").onclick = ()=>{ closeEditProf(); openCompare("profile"); };
   // Hide the big platinum stat under the username (for players who don't chase platinums)
