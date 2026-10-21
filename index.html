@@ -877,6 +877,7 @@
     <div id="cmpOpts">
       <button class="plat-toggle" id="cmpSubs" role="switch" style="margin-top:14px"><span class="pt-text">Include sub-ratings<small>Visuals, soundtrack, gameplay… side by side</small></span><span class="switch"><i></i></span></button>
       <button class="plat-toggle" id="cmpPlat" role="switch" style="margin-top:10px"><span class="pt-text">Big platinum trophy<small>Next to the rating, for anyone who platinumed it</small></span><span class="switch"><i></i></span></button>
+      <button class="plat-toggle" id="cmpReviews" role="switch" style="margin-top:10px"><span class="pt-text">Include written reviews<small>Off with sub-ratings off = a poster: cover art, combined score, everyone's rating</small></span><span class="switch"><i></i></span></button>
     </div>
     <div class="actions"><button class="cta ghost" id="cmpCancel">Cancel</button><button class="cta" id="cmpGo" disabled>Make the card</button></div>
   </div>
@@ -3932,7 +3933,7 @@ async function saveReviewImage(g, saved, who){
 
 // ---- comparison cards (Pro) ---------------------------------------------------
 let cmpCtx = null;   // { kind:"game"|"profile", g, picked:Set }
-let cmpSubsOn = true, cmpPlatOn = true;   // game comparison options (remembered for the session)
+let cmpSubsOn = true, cmpPlatOn = true, cmpReviewsOn = true;   // game comparison options (remembered for the session)
 function openCompare(kind, g){
   if (!requirePro("compare")) return;
   const fids = followingIds();
@@ -3941,7 +3942,7 @@ function openCompare(kind, g){
   if (!people.length){ toast(kind==="game" ? "Nobody you follow has logged this game yet" : "Follow a few people first"); return; }
   cmpCtx = { kind, g, picked:new Set() };
   $("#cmpOpts").hidden = kind!=="game";
-  [["#cmpSubs", cmpSubsOn], ["#cmpPlat", cmpPlatOn]].forEach(([id,on])=>{ $(id).classList.toggle("on", on); $(id).setAttribute("aria-checked", on); });
+  [["#cmpSubs", cmpSubsOn], ["#cmpPlat", cmpPlatOn], ["#cmpReviews", cmpReviewsOn]].forEach(([id,on])=>{ $(id).classList.toggle("on", on); $(id).setAttribute("aria-checked", on); });
   $("#cmpTitle").textContent = kind==="game" ? `Compare: ${g.title}` : "Compare profiles";
   $("#cmpSub").textContent = kind==="game" ? "Up to 3 people you follow who logged it \u2014 ratings side by side." : "Up to 3 people you follow \u2014 stats side by side.";
   const paint = ()=>{ $("#cmpList").innerHTML = people.sort((a,b)=>a.name.localeCompare(b.name)).map(p=> `<button class="cmprow ${cmpCtx.picked.has(p.id)?"on":""}" data-cmp="${p.id}">${avatarEl(p.id, p.name)}<span${nameStyle(p.id)}>${esc(p.name)}${proTag(p.id)}</span><span class="tick">${cmpCtx.picked.has(p.id)?"\u2713":""}</span></button>`).join("");
@@ -3963,13 +3964,14 @@ function paintCinematic(x, W, H, art, tint){
   x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("joystickd.com", 40, H-18);
 }
 function glassPanel(x, px, py, pw, ph){ x.fillStyle="rgba(14,21,38,.72)"; x.strokeStyle="rgba(255,255,255,.12)"; x.lineWidth=1; x.beginPath(); x.roundRect(px,py,pw,ph,16); x.fill(); x.stroke(); }
-async function drawPerson(x, uid, name, cx, cy, ad){      // avatar (with frame) + styled name, centered
+async function drawPerson(x, uid, name, cx, cy, ad, nameSize=17){      // avatar (with frame) + styled name, centered
   const av = avatars[uid] ? await loadImg(avatars[uid], true) : null;
   drawFrameRing(x, cx, cy, ad/2, uid, ad/64);
   if (av){ x.save(); x.beginPath(); x.arc(cx, cy, ad/2, 0, 7); x.clip(); x.drawImage(av, cx-ad/2, cy-ad/2, ad, ad); x.restore(); }
   else { x.fillStyle="#233150"; x.beginPath(); x.arc(cx, cy, ad/2, 0, 7); x.fill(); x.fillStyle="#f0b429"; x.font=`800 ${Math.round(ad*0.42)}px Outfit, sans-serif`; x.textAlign="center"; x.fillText((name[0]||"?").toUpperCase(), cx, cy+ad*0.15); }
-  x.textAlign="center"; x.font="800 17px Outfit, sans-serif"; const t = themeFor(uid); const nw = x.measureText(name).width;
-  x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, cx-nw/2, cy+ad/2+10, cx+nw/2, cy+ad/2+28)) || "#e6ebf4"; x.fillText(name, cx, cy+ad/2+28); x.textAlign="left";
+  const ny = cy+ad/2+11+nameSize;
+  x.textAlign="center"; x.font=`800 ${nameSize}px Outfit, sans-serif`; const t = themeFor(uid); const nw = x.measureText(name).width;
+  x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, cx-nw/2, ny-nameSize, cx+nw/2, ny)) || "#e6ebf4"; x.fillText(name, cx, ny); x.textAlign="left";
 }
 function bigScore(x, v, cx, baseY, size){ x.textAlign="center"; x.font=`800 ${size}px Outfit, sans-serif`;
   if (v==null){ x.fillStyle="#8b98b5"; x.font=`800 ${Math.round(size*0.5)}px Outfit, sans-serif`; x.fillText("Played", cx, baseY); x.textAlign="left"; return; }
@@ -3991,16 +3993,17 @@ function subLabelFit(x, sc, maxW, tier){ const opts = SUB_LABELS[sc.key] || [sc.
   for (let i = Math.max(0, Math.min(2, tier|0)); i < opts.length; i++){ if (x.measureText(opts[i]).width <= maxW) return opts[i]; } return opts[opts.length-1]; }
 // --- game: ratings side by side
 async function saveCompareGameImage(g, ids, opts){
-  opts = Object.assign({ subs:true, plat:true }, opts||{});
+  opts = Object.assign({ subs:true, plat:true, reviews:true }, opts||{});
   try { await document.fonts.ready; } catch(e){}
   const people = [{ id: me.id, name: me.username, l: logForExport(logs[g.id]) }, ...ids.map(id=>{ const r=(friendLogs[g.id]||[]).find(x=>x.user_id===id); return { id, name: follows.names[id]||revNames[id]||"\u2026", l: logForExport(rowToLog(r)) }; })];
+  if (!opts.subs && !opts.reviews) return saveCompareGamePoster(g, people, opts);     // ratings only → poster layout
   const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n;
   const rated = opts.subs ? SUBS.filter(sc=> people.some(p=> p.l.subs?.[sc.key]!=null)) : [];
   // rating-colored trophy PNG for each platinum (the same art as the site's rating pills)
   const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true).catch(()=>null) : null)) : people.map(()=>null);
   const measure = document.createElement("canvas").getContext("2d"); measure.font = "400 14px Manrope, sans-serif";
   const maxLines = n===2 ? 14 : n===3 ? 11 : 9;              // excerpt length: enough to make sense, more room with fewer people
-  const excerpts = people.map(p=> p.l.review ? wrapText(measure, p.l.review, colW-36).slice(0, maxLines) : []);
+  const excerpts = people.map(p=> (opts.reviews && p.l.review) ? wrapText(measure, p.l.review, colW-36).slice(0, maxLines) : []);
   const exLines = Math.max(...excerpts.map(e=>e.length));
   const headH = 150, personH = 150, scoreH = 90, platH = people.some(p=>p.l.platinum) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0, exH = exLines ? 24 + exLines*20 : 0;
   const panelH = personH + scoreH + platH + subsH + exH + 20, H = headH + panelH + 90;
@@ -4030,6 +4033,46 @@ async function saveCompareGameImage(g, ids, opts){
         if (v!=null && +v<=1.5){ x.save(); x.shadowColor="rgba(255,255,255,.6)"; x.shadowBlur=4; x.fillText(String(v), px+colW-16, y); x.restore(); } else x.fillText(v!=null ? String(v) : "\u2014", px+colW-16, y);
         x.textAlign="left"; y += 26; }); y += 8; }
     if (exLines){ y += 14; x.font="400 14px Manrope, sans-serif"; x.fillStyle="#d7deea"; excerpts[i].forEach((ln,j)=>{ const last = j===excerpts[i].length-1 && excerpts[i].length===maxLines && p.l.review.length > excerpts[i].join(" ").length; x.fillText(last ? ln.replace(/\s*$/,"")+"\u2026" : ln, px+18, y+j*20); }); }
+  }
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
+}
+// --- game, ratings only: a poster — cover art + combined score up top, everyone's rating in a row below
+async function saveCompareGamePoster(g, people, opts){
+  const n = people.length, W = 1080, H = 1260;
+  const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
+  const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true) : null)) : people.map(()=>null);
+  const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  paintCinematic(x, W, H, cover, "rgba(6,8,15,.3)");
+  // cover, large, with a soft shadow
+  const cw = 330, ch = 440, cx0 = 70, cy0 = 110;
+  if (cover){ x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=40; x.shadowOffsetY=16; x.fillStyle="#000"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.fill(); x.restore();
+    x.save(); x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.clip(); x.drawImage(cover,cx0,cy0,cw,ch); x.restore(); }
+  else { x.fillStyle="#233150"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.fill(); }
+  // title + meta
+  const tx = cx0+cw+50, tw = W-tx-60;
+  x.fillStyle="#e6ebf4"; x.font="800 58px Outfit, sans-serif"; const tl = wrapText(x, g.title, tw).slice(0,3); tl.forEach((ln,i)=> x.fillText(ln, tx, cy0+62+i*64));
+  x.font="600 20px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText([g.year, g.dev].filter(Boolean).join(" \u00b7 "), tx, cy0+62+tl.length*64+4);
+  // combined score
+  const rs = people.map(p=>p.l.rating).filter(v=>v!=null), avg = rs.length ? mean(rs) : null, avgTxt = avg==null ? "\u2014" : (Math.round(avg*10)/10).toFixed(1).replace(/\.0$/,"");
+  const sy = cy0+ch-40;
+  if (avg!=null){ x.font="800 170px Outfit, sans-serif"; const w=x.measureText(avgTxt).width; const cols=ratingColors(snapHalf(Math.round(avg*2)/2)); const gr=x.createLinearGradient(tx, sy-150, tx+w, sy); cols.forEach((cc,i)=>gr.addColorStop(cols.length===1?0:i/(cols.length-1), cc));
+    x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=18; x.shadowOffsetY=6; x.fillStyle=gr; x.fillText(avgTxt, tx-6, sy); x.restore(); }
+  else { x.fillStyle="#8b98b5"; x.font="800 90px Outfit, sans-serif"; x.fillText("Played", tx, sy); }
+  x.font="800 18px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("COMBINED SCORE", tx, sy+36);
+  x.font="600 15px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(`average of ${rs.length} rating${rs.length===1?"":"s"} \u00b7 ${n} players`, tx, sy+60);
+  // divider
+  const dy = 640; const dg = x.createLinearGradient(60,0,W-60,0); dg.addColorStop(0,"rgba(255,255,255,0)"); dg.addColorStop(0.5,"rgba(255,255,255,.25)"); dg.addColorStop(1,"rgba(255,255,255,0)"); x.fillStyle=dg; x.fillRect(60, dy, W-120, 2);
+  // the players
+  const colW = (W-120)/n, ad = n>=4 ? 150 : 180, ay = dy + 60 + ad/2;
+  for (let i=0;i<n;i++){ const p=people[i], cx=60+colW*(i+0.5);
+    await drawPerson(x, p.id, p.name, cx, ay, ad, n>=4 ? 22 : 26);
+    const scoreY = ay + ad/2 + 150;
+    bigScore(x, p.l.rating, cx, scoreY, n>=4 ? 88 : 110);
+    if (opts.plat && p.l.platinum){ const im=trophies[i], th = n>=4 ? 80 : 96, tw2 = (im && im.width) ? th*im.width/im.height : th*0.9;
+      x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=12; x.shadowOffsetY=4; drawTrophy(x, im, cx+tw2/2, scoreY+40+th/2, th); x.restore();
+      x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}${p.l.showPlatStats&&p.l.platDiff!=null?` \u00b7 ${p.l.platDiff}/10`:""}`, cx, scoreY+40+th+26); x.textAlign="left"; }
+    else if (p.l.platinum){ x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}`, cx, scoreY+40); x.textAlign="left"; }
   }
   const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
@@ -4492,9 +4535,10 @@ function wireSettingsUI(){
   $("#cmpCancel").onclick = ()=> $("#cmpWrap").classList.remove("open");
   $("#cmpWrap").addEventListener("click", e=>{ if(e.target.id==="cmpWrap") $("#cmpWrap").classList.remove("open"); });
   $("#cmpGo").onclick = async ()=>{ if (!cmpCtx || !cmpCtx.picked.size) return; $("#cmpWrap").classList.remove("open"); const ids=[...cmpCtx.picked];
-    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids, { subs: cmpSubsOn, plat: cmpPlatOn }); else await saveCompareProfileImage(ids); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
+    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids, { subs: cmpSubsOn, plat: cmpPlatOn, reviews: cmpReviewsOn }); else await saveCompareProfileImage(ids); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
   $("#cmpSubs").onclick = ()=>{ cmpSubsOn=!cmpSubsOn; $("#cmpSubs").classList.toggle("on", cmpSubsOn); $("#cmpSubs").setAttribute("aria-checked", cmpSubsOn); };
   $("#cmpPlat").onclick = ()=>{ cmpPlatOn=!cmpPlatOn; $("#cmpPlat").classList.toggle("on", cmpPlatOn); $("#cmpPlat").setAttribute("aria-checked", cmpPlatOn); };
+  $("#cmpReviews").onclick = ()=>{ cmpReviewsOn=!cmpReviewsOn; $("#cmpReviews").classList.toggle("on", cmpReviewsOn); $("#cmpReviews").setAttribute("aria-checked", cmpReviewsOn); };
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
