@@ -3958,7 +3958,7 @@ function paintCinematic(x, W, H, art, tint){
   else { const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#1a2340"); g.addColorStop(1,"#2a1430"); x.fillStyle=g; x.fillRect(0,0,W,H); }
   if (tint){ x.fillStyle = tint; x.fillRect(0,0,W,H); }
   const v = x.createRadialGradient(W/2, H/2, Math.min(W,H)*0.25, W/2, H/2, Math.max(W,H)*0.8); v.addColorStop(0,"rgba(6,8,15,0)"); v.addColorStop(1,"rgba(6,8,15,.85)"); x.fillStyle=v; x.fillRect(0,0,W,H);
-  x.fillStyle="#000"; x.fillRect(0,0,W,46); x.fillRect(0,H-46,W,46);
+  x.fillStyle="#0e1526"; x.fillRect(0,0,W,46); x.fillRect(0,H-46,W,46);                       // letterbox bars in Joystickd navy
   x.textAlign="right"; x.font="800 16px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 30); x.fillStyle="#f0b429"; x.fillText("D", W-38, 30); x.textAlign="left";
   x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("joystickd.com", 40, H-18);
 }
@@ -3999,10 +3999,11 @@ async function saveCompareGameImage(g, ids, opts){
   // rating-colored trophy PNG for each platinum (the same art as the site's rating pills)
   const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true).catch(()=>null) : null)) : people.map(()=>null);
   const measure = document.createElement("canvas").getContext("2d"); measure.font = "400 14px Manrope, sans-serif";
-  const excerpts = people.map(p=> p.l.review ? wrapText(measure, p.l.review, colW-36).slice(0, 5) : []);
+  const maxLines = n===2 ? 14 : n===3 ? 11 : 9;              // excerpt length: enough to make sense, more room with fewer people
+  const excerpts = people.map(p=> p.l.review ? wrapText(measure, p.l.review, colW-36).slice(0, maxLines) : []);
   const exLines = Math.max(...excerpts.map(e=>e.length));
   const headH = 150, personH = 150, scoreH = 90, platH = people.some(p=>p.l.platinum) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0, exH = exLines ? 24 + exLines*20 : 0;
-  const panelH = personH + scoreH + platH + subsH + exH + 24, H = headH + panelH + 90;
+  const panelH = personH + scoreH + platH + subsH + exH + 20, H = headH + panelH + 90;
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, "rgba(6,8,15,.35)");
@@ -4028,7 +4029,7 @@ async function saveCompareGameImage(g, ids, opts){
         x.textAlign="right"; x.font="800 14px Outfit, sans-serif"; x.fillStyle = v!=null ? ratingFillCtx(x, +v, px+colW-30, y-12, px+colW-16, y) : "#55607a";
         if (v!=null && +v<=1.5){ x.save(); x.shadowColor="rgba(255,255,255,.6)"; x.shadowBlur=4; x.fillText(String(v), px+colW-16, y); x.restore(); } else x.fillText(v!=null ? String(v) : "\u2014", px+colW-16, y);
         x.textAlign="left"; y += 26; }); y += 8; }
-    if (exLines){ y += 14; x.font="400 14px Manrope, sans-serif"; x.fillStyle="#d7deea"; excerpts[i].forEach((ln,j)=>{ const last = j===excerpts[i].length-1 && excerpts[i].length===5 && p.l.review.length > excerpts[i].join(" ").length; x.fillText(last ? ln.replace(/\s*$/,"")+"\u2026" : ln, px+18, y+j*20); }); }
+    if (exLines){ y += 14; x.font="400 14px Manrope, sans-serif"; x.fillStyle="#d7deea"; excerpts[i].forEach((ln,j)=>{ const last = j===excerpts[i].length-1 && excerpts[i].length===maxLines && p.l.review.length > excerpts[i].join(" ").length; x.fillText(last ? ln.replace(/\s*$/,"")+"\u2026" : ln, px+18, y+j*20); }); }
   }
   const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
