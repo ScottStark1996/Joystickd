@@ -4220,13 +4220,14 @@ async function saveProfileImage(P, opts={}){
   const nx = ax+ad+22;
   x.font="800 34px Outfit, sans-serif"; { const tN = themeFor(P.id, P); const nw0 = x.measureText(P.username).width; x.fillStyle = (tN && nameFillCtx(x, tN, nx, ay+6, nx+nw0, ay+34)) || text; } x.fillText(P.username, nx, ay+34);
   const sy = ay+66;
-  x.font="800 24px Outfit, sans-serif"; x.fillText(String(rated), nx, sy+10);
+  const numCol = text;                                   // stat numbers stay white so the styled username is the one thing in color
+  x.font="800 24px Outfit, sans-serif"; x.fillStyle=numCol; x.fillText(String(rated), nx, sy+10);
   const w1 = x.measureText(String(rated)).width;
   x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("GAMES LOGGED", nx, sy+26);
   const nx2 = nx + Math.max(w1, x.measureText("GAMES LOGGED").width) + 34;
   if (P.hidePlats){ /* platinum count hidden by the player */ } else if (troph){ const th=22, tw=troph.width*th/troph.height; x.drawImage(troph, nx2, sy-8, tw, th);
-    x.font="800 24px Outfit, sans-serif"; x.fillStyle=text; x.fillText(String(plats), nx2+tw+7, sy+10);
-  } else { x.font="800 24px Outfit, sans-serif"; x.fillStyle=text; x.fillText(String(plats), nx2, sy+10); }
+    x.font="800 24px Outfit, sans-serif"; x.fillStyle=numCol; x.fillText(String(plats), nx2+tw+7, sy+10);
+  } else { x.font="800 24px Outfit, sans-serif"; x.fillStyle=numCol; x.fillText(String(plats), nx2, sy+10); }
   if (!P.hidePlats){ x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUMS", nx2, sy+26); }
   // top 5
   const coverRow = (label, ids, imgs, ty)=>{
