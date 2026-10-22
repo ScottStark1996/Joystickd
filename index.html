@@ -775,6 +775,18 @@
   </div>
 </div>
 
+<div class="sheet-wrap" id="revStyleWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="revStyleTitle">
+    <h2 id="revStyleTitle">Save as image</h2>
+    <div class="g">Pick a layout.</div>
+    <div class="set-list" style="margin-top:12px">
+      <button class="set-row" id="revStyleCard">Review card<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Score, platinum, sub-ratings and the written review</small></button>
+      <button class="set-row" id="revStylePoster">Poster<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Big cover art, the score and trophy, your name — no review text</small></button>
+    </div>
+    <div class="actions"><button class="cta ghost" id="revStyleCancel">Cancel</button></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="snapWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="snapTitle">
     <h2 id="snapTitle">Profile snapshot</h2>
@@ -2345,7 +2357,7 @@ function profileStats(P, isMe){
         ${(()=>{ const buckets=[["<10",0,10],["10\u201325",10,25],["25\u201350",25,50],["50\u2013100",50,100],["100\u2013200",100,200],["200+",200,1e9]];
           return cols(buckets.map(b=>b[0]), buckets.map(([_,lo,hi])=> hoursArr.filter(h=> h>=lo && h<hi).length)); })()}` : ""}
       <div class="stiles" style="margin-top:14px">
-        ${hardest ? tile(`${L[hardest].platDiff}/10`, "hardest", gameLine(hardest)) : ""}
+        ${hardest ? tile(`${L[hardest].platDiff}/10`, "hardest (diff)", gameLine(hardest)) : ""}
         ${longest ? tile(`${fmtH(L[longest].platHours)} hrs`, "longest", gameLine(longest)) : ""}
         ${quickest && quickest!==longest ? tile(`${fmtH(L[quickest].platHours)} hrs`, "quickest", gameLine(quickest)) : ""}
         ${hours ? tile(`${Math.round(hours/24)}`, "days of platinum time", `${fmtH(hours)} hours total`) : ""}
@@ -2451,7 +2463,7 @@ function renderLogs(app, P, isMe){
       high:  {label:"Rating: high → low",       fn:(a,b)=> R(logs[b.id].rating)-R(logs[a.id].rating)},
     };
     const list = [...entries].sort(sorters[platSort].fn);
-    const cap = e => { const l=logs[e.id]; const bits=[]; if (e.num) bits.push(`#${e.num}`); if (e.label) bits.push(e.label); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10`); if (platSort==="fun" && l.platFun!=null) bits.push(`fun ${l.platFun}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && e.date) bits.push(fmtDate(e.date)); return bits.length ? bits.join(" · ") : undefined; };
+    const cap = e => { const l=logs[e.id]; const bits=[]; if (e.num) bits.push(`#${e.num}`); if (e.label) bits.push(e.label); if (platSort==="diff" && l.platDiff!=null) bits.push(`${l.platDiff}/10 diff`); if (platSort==="fun" && l.platFun!=null) bits.push(`fun ${l.platFun}/10`); if (platSort==="hours" && l.platHours!=null) bits.push(`${l.platHours} hrs`); if (platSort==="date" && e.date) bits.push(fmtDate(e.date)); return bits.length ? bits.join(" · ") : undefined; };
     body = !platIds.length ? `<div class="empty small">${isMe ? "No platinums yet. Flip on “I platinumed this” when logging a game." : "No platinums yet."}</div>` : `
       <div class="filters" style="justify-content:flex-end;gap:10px">${isMe && LIVE ? `<button class="cta ghost" id="wallBtn" style="margin:0;padding:9px 14px;font-size:13px">Save platinum wall</button>` : ""}<label class="sortwrap">Sort <select id="platSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${platSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label></div>
       <div class="grid">${list.slice(0, pageOf("platinums")).map(e=>card(getGame(e.id), cap(e), isMe, !isMe, isMe?null:logs[e.id])).join("")}</div>${moreBtn("platinums", list.length)}`;
@@ -2485,7 +2497,7 @@ function renderLogs(app, P, isMe){
     ${body}`;
   app.querySelectorAll("[data-ptab]").forEach(b=> b.onclick = ()=>{ profileTab=b.dataset.ptab; shown={}; listView=null; render(); });
   $("#statsPro") && ($("#statsPro").onclick = ()=> openPro("stats"));
-  app.querySelectorAll("[data-osave]").forEach(b=> b.onclick = ()=>{ const id=+b.dataset.osave, g=getGame(id); if (g && logs[id]) saveReviewImage(g, logs[id], { id: P.id, username: P.username, ballot: P.ballot || {} }); });
+  app.querySelectorAll("[data-osave]").forEach(b=> b.onclick = ()=>{ const id=+b.dataset.osave, g=getGame(id); if (g && logs[id]) chooseReviewImage(g, logs[id], { id: P.id, username: P.username, ballot: P.ballot || {} }); });
   app.querySelectorAll("[data-more]").forEach(b=> b.onclick = ()=>{ const t=b.dataset.more; shown[t]=pageOf(t)+PAGE; render(); });
   $("#avatarEdit") && ($("#avatarEdit").onclick = ()=> $("#avatarFile").click());
   document.querySelectorAll("#app [data-badge]").forEach(b=> b.onclick = ()=> openBadge(P, b.dataset.badge));
@@ -2742,7 +2754,7 @@ async function savePlatinumWall(P, o){
       if (o.num){ const full = platNumText(l) || "—", compact = [l.platNum, hasPlat2(l) ? l.plat2Num : null].filter(Boolean).map(v=>"#"+v).join(" · ") || full;
         lines.push({ t:full, alt:compact, font:`800 ${cellW>=120?13:small?10:11}px Outfit, sans-serif`, col:gold }); }
       const bits = [];
-      if (o.diff && l.platDiff!=null) bits.push({ t:`${l.platDiff}/10` });
+      if (o.diff && l.platDiff!=null) bits.push({ t:`${l.platDiff}/10 diff` });
       if (o.hours && l.platHours!=null) bits.push({ t:`${l.platHours}h` });
       if (o.fun && l.platFun!=null) bits.push({ t:`♥${l.platFun}`, rating:l.platFun });
       if (o.diff || o.hours || o.fun) lines.push({ bits, font:`700 ${cellW>=120?12:small?9:10}px Manrope, sans-serif` });
@@ -2766,6 +2778,10 @@ async function savePlatinumWall(P, o){
   await deliverImage(blob, `joystickd-${P.username.toLowerCase()}-platinum-wall.png`);
 }
 function wireSnapUI(){
+  $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
+  $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
+  $("#revStyleCard").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewImage(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#revStylePoster").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewPoster(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the poster"); } };
   $("#snapCancel").onclick = ()=> $("#snapWrap").classList.remove("open");
   $("#snapWrap").addEventListener("click", e=>{ if(e.target.id==="snapWrap") $("#snapWrap").classList.remove("open"); });
   $("#snapChart").onclick = ()=>{ snapChartOn=!snapChartOn; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn); };
@@ -3102,7 +3118,7 @@ function openT5(gid, P, isMe){
     });
   }
   $("#t5Save").hidden = !(l.review||"").trim();
-  $("#t5Save").onclick = ()=> saveReviewImage(g, l, { id: P.id, username: P.username, ballot: P.ballot || {} });
+  $("#t5Save").onclick = ()=> chooseReviewImage(g, l, { id: P.id, username: P.username, ballot: P.ballot || {} });
   $("#t5Open").hidden = view.gameId===gid;
   $("#t5Open").onclick = ()=>{ closeT5(); view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); };
   $("#t5Wrap").classList.add("open");
@@ -3542,7 +3558,7 @@ async function renderGame(app){
   });
   app.querySelectorAll("[data-rsave]").forEach(b=> b.onclick = ()=>{ const uid=b.dataset.rsave, st=gameReviewsState[g.id], r=(st?.rows||[]).find(x=>x.user_id===uid); if (!r) return;
     const name = uid===me?.id ? (me?.username||"you") : (revNames[uid]||"…");
-    saveReviewImage(g, rowToLog(r), { id: uid, username: name, ballot: ballotFor(g.id, uid) }); });
+    chooseReviewImage(g, rowToLog(r), { id: uid, username: name, ballot: ballotFor(g.id, uid) }); });
   app.querySelectorAll("[data-rreport]").forEach(b=> b.onclick = ()=> openReport({type:"review", gid:g.id, targetUser:b.dataset.rreport, label:`Review of ${g.title} by ${whoName(b.dataset.rreport)}`}));
   app.querySelectorAll("[data-rdelete]").forEach(b=> b.onclick = async ()=>{ if (confirm("Delete this review? This can't be undone.")){ await adminDeleteReview(b.dataset.rdelete, g.id); await loadCommunity(g.id); render(); } });
   app.querySelectorAll("[data-gofilter]").forEach(b=> b.onclick = ()=>{ view.tab="games"; view.gameId=null; view.genre=b.dataset.gofilter; render(); });
@@ -3647,7 +3663,7 @@ function openSheet(g){
   $("#firstTrophyDate").value = l.firstTrophy || ""; $("#platDate").value = l.platDate || "";
   $("#deleteLog").hidden = !l.game;
   $("#saveImg").hidden = false;
-  $("#saveImg").onclick = ()=> saveReviewImage(getGame(draft.gameId));
+  $("#saveImg").onclick = ()=> chooseReviewImage(getGame(draft.gameId));
   const hasSubs = Object.keys(draft.subs).length>0;
   $("#subs").hidden = !hasSubs; $("#subsToggle").setAttribute("aria-expanded", hasSubs); $("#subsToggle").classList.toggle("open", hasSubs);
   paintPips();
@@ -3789,6 +3805,59 @@ function logForExport(s){
     showPlatStats: s.showPlatStats !== false };
 }
 // who = { id, username, ballot } — the review's author. Omitted = you (the sheet or your own saved log).
+// Card or poster? Asked every time a review is saved as an image.
+let revStyleCtx = null;
+function chooseReviewImage(g, saved, who){
+  if (!g) return;
+  revStyleCtx = { g, saved, who };
+  $("#revStyleWrap").classList.add("open");
+}
+// Poster: big cover art, the score (with trophy), awards, and the reviewer — no review text.
+async function saveReviewPoster(g, saved, who){
+  try { await document.fonts.ready; } catch(e){}
+  const l = saved ? logForExport(saved) : sheetLog();
+  const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
+  const isMine = !who || (me && who.id===me.id);
+  const W = 1080, cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
+  const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
+  const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
+  const H = 1400 - (tags.length ? 0 : 60);
+  const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  paintCinematic(x, W, H, cover, "rgba(6,8,15,.3)");
+  // cover, centered
+  const cw = 390, ch = 520, cx0 = (W-cw)/2, cy0 = 90;
+  x.save(); x.shadowColor="rgba(0,0,0,.65)"; x.shadowBlur=44; x.shadowOffsetY=18; x.fillStyle="#000"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,20); x.fill(); x.restore();
+  x.save(); x.beginPath(); x.roundRect(cx0,cy0,cw,ch,20); x.clip();
+  if (cover) x.drawImage(cover,cx0,cy0,cw,ch); else { x.fillStyle="#233150"; x.fillRect(cx0,cy0,cw,ch); x.fillStyle="#8b98b5"; x.font="700 26px Outfit, sans-serif"; x.textAlign="center"; wrapText(x, g.title, cw-40).slice(0,4).forEach((ln,i)=> x.fillText(ln, W/2, cy0+ch/2-20+i*32)); x.textAlign="left"; }
+  x.restore();
+  // title + meta, centered
+  x.textAlign="center"; x.fillStyle="#e6ebf4"; x.font="800 54px Outfit, sans-serif";
+  const tl = wrapText(x, g.title, W-160).slice(0,2); let y = cy0+ch+78; tl.forEach(ln=>{ x.fillText(ln, W/2, y); y += 60; });
+  x.font="600 20px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText([g.year, g.dev].filter(Boolean).join(" \u00b7 "), W/2, y-14); y += 30;
+  // score (+ trophy)
+  const size = 190, sy = y + 170;
+  x.font = `800 ${size}px Outfit, sans-serif`; const sw = l.rating!=null ? x.measureText(String(l.rating)).width : x.measureText("Played").width*0.5;
+  let scx = W/2;
+  if (l.platinum){ const th = 170, tw = (trophy && trophy.width) ? th*trophy.width/trophy.height : th*0.9, total = tw + 24 + sw, left = W/2 - total/2;
+    x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=18; x.shadowOffsetY=6; drawTrophy(x, trophy, left+tw, sy - size*0.36, th); x.restore(); scx = left + tw + 24 + sw/2; }
+  x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=18; x.shadowOffsetY=6; bigScore(x, l.rating, scx, sy, size); x.restore();
+  x.textAlign="center"; x.font="700 20px Outfit, sans-serif"; x.fillStyle="#8b98b5"; if (l.rating!=null) x.fillText("/ 10", scx, sy+34);
+  if (l.platinum){ x.font="700 18px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`\uD83C\uDFC6 Platinum${platNumText(l)?" "+platNumText(l):""}${l.showPlatStats&&l.platDiff!=null?` \u00b7 ${l.platDiff}/10 diff`:""}`, W/2, sy+72); }
+  y = sy + 100;
+  // award pills, centered
+  if (tags.length){ x.font="700 15px Outfit, sans-serif"; const labels = tags.map(t=> `${isMine ? "my" : "their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`);
+    const pw = labels.map(lb=> x.measureText(lb).width + 28), total = pw.reduce((a,b)=>a+b,0) + (labels.length-1)*10; let px = W/2 - Math.min(total, W-80)/2;
+    labels.forEach((lb,i)=>{ if (px + pw[i] > W-40) return; const goty = tags[i].key==="goty";
+      x.fillStyle = goty ? "#f0b429" : "rgba(255,255,255,.1)"; x.beginPath(); x.roundRect(px, y, pw[i], 34, 17); x.fill();
+      if (!goty){ x.strokeStyle="rgba(255,255,255,.25)"; x.lineWidth=1; x.stroke(); }
+      x.fillStyle = goty ? "#1a1200" : "#e6ebf4"; x.textAlign="left"; x.fillText(lb, px+14, y+23); px += pw[i] + 10; });
+    y += 34; }
+  // the reviewer
+  const ad = 110, acy = H - 46 - 40 - 40 - ad/2 - 10;
+  await drawPerson(x, author.id, author.username, W/2, acy, ad, 26);
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-poster.png`);
+}
 async function saveReviewImage(g, saved, who){
   try { await document.fonts.ready; } catch(e){}
   const l = saved ? logForExport(saved) : sheetLog(), W=720;
@@ -3953,9 +4022,15 @@ function openCompare(kind, g){
 // Cinematic backdrop: letterbox bars + blurred art + vignette
 function paintCinematic(x, W, H, art, tint){
   x.fillStyle = "#06080f"; x.fillRect(0,0,W,H);
-  if (art){ const tiny=document.createElement("canvas"); tiny.width=16; tiny.height=Math.max(1,Math.round(16*H/W)); const tx=tiny.getContext("2d");
-    const sc=Math.max(tiny.width/art.width, tiny.height/art.height), dw=art.width*sc, dh=art.height*sc; tx.drawImage(art,(tiny.width-dw)/2,(tiny.height-dh)/2,dw,dh);
-    x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high"; x.globalAlpha=0.75; x.drawImage(tiny,0,0,W,H); x.globalAlpha=1; }
+  if (art){
+    // cover-fit the art at 1/6 size, then blur by bouncing it down to 1/24 and back up with smoothing on —
+    // a soft, even blur with no blocky patches, and still fast on phones
+    const a=document.createElement("canvas"); a.width=Math.max(8,Math.round(W/6)); a.height=Math.max(8,Math.round(H/6)); const ax=a.getContext("2d"); ax.imageSmoothingEnabled=true; ax.imageSmoothingQuality="high";
+    const sc=Math.max(a.width/art.width, a.height/art.height), dw=art.width*sc, dh=art.height*sc; ax.drawImage(art,(a.width-dw)/2,(a.height-dh)/2,dw,dh);
+    const b=document.createElement("canvas"); b.width=Math.max(4,Math.round(a.width/4)); b.height=Math.max(4,Math.round(a.height/4)); const bx=b.getContext("2d"); bx.imageSmoothingEnabled=true; bx.imageSmoothingQuality="high"; bx.drawImage(a,0,0,b.width,b.height);
+    ax.clearRect(0,0,a.width,a.height); ax.drawImage(b,0,0,a.width,a.height);
+    bx.clearRect(0,0,b.width,b.height); bx.drawImage(a,0,0,b.width,b.height); ax.clearRect(0,0,a.width,a.height); ax.drawImage(b,0,0,a.width,a.height);
+    x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high"; x.globalAlpha=0.8; x.drawImage(a,0,0,W,H); x.globalAlpha=1; }
   else { const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#1a2340"); g.addColorStop(1,"#2a1430"); x.fillStyle=g; x.fillRect(0,0,W,H); }
   if (tint){ x.fillStyle = tint; x.fillRect(0,0,W,H); }
   const v = x.createRadialGradient(W/2, H/2, Math.min(W,H)*0.25, W/2, H/2, Math.max(W,H)*0.8); v.addColorStop(0,"rgba(6,8,15,0)"); v.addColorStop(1,"rgba(6,8,15,.85)"); x.fillStyle=v; x.fillRect(0,0,W,H);
@@ -4005,7 +4080,7 @@ async function saveCompareGameImage(g, ids, opts){
   const maxLines = n===2 ? 14 : n===3 ? 11 : 9;              // excerpt length: enough to make sense, more room with fewer people
   const excerpts = people.map(p=> (opts.reviews && p.l.review) ? wrapText(measure, p.l.review, colW-36).slice(0, maxLines) : []);
   const exLines = Math.max(...excerpts.map(e=>e.length));
-  const headH = 150, personH = 150, scoreH = 90, platH = people.some(p=>p.l.platinum) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0, exH = exLines ? 24 + exLines*20 : 0;
+  const headH = 150, personH = 150, scoreH = 90, platH = (opts.plat && people.some(p=>p.l.platinum)) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0, exH = exLines ? 24 + exLines*20 : 0;
   const panelH = personH + scoreH + platH + subsH + exH + 20, H = headH + panelH + 90;
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -4027,7 +4102,7 @@ async function saveCompareGameImage(g, ids, opts){
       scx = left + tw + 12 + sw/2;
     }
     bigScore(x, p.l.rating, scx, y, 56); x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; if (p.l.rating!=null) x.fillText("/ 10", scx, y+18); x.textAlign="left"; y += scoreH - 50;
-    if (platH){ x.textAlign="center"; x.font="700 13px Outfit, sans-serif"; x.fillStyle = p.l.platinum ? "#f0b429" : "#55607a"; x.fillText(p.l.platinum ? `${opts.plat?"":"\uD83C\uDFC6 "}Platinum${platNumText(p.l)?" "+platNumText(p.l):""}${p.l.showPlatStats&&p.l.platDiff!=null?` \u00b7 ${p.l.platDiff}/10`:""}` : "no platinum", cx, y+18); x.textAlign="left"; y += platH; }
+    if (platH){ x.textAlign="center"; x.font="700 13px Outfit, sans-serif"; x.fillStyle = p.l.platinum ? "#f0b429" : "#55607a"; x.fillText(p.l.platinum ? `Platinum${platNumText(p.l)?" "+platNumText(p.l):""}` : "no platinum", cx, y+18); x.textAlign="left"; y += platH; }
     if (rated.length){ y += 22; rated.forEach(sc=>{ const v=p.l.subs?.[sc.key]; x.font="600 12px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; const lab = subLabelFit(x, sc, colW - 70, n - 2); x.fillText(lab, px+16, y);
         x.textAlign="right"; x.font="800 14px Outfit, sans-serif"; x.fillStyle = v!=null ? ratingFillCtx(x, +v, px+colW-30, y-12, px+colW-16, y) : "#55607a";
         if (v!=null && +v<=1.5){ x.save(); x.shadowColor="rgba(255,255,255,.6)"; x.shadowBlur=4; x.fillText(String(v), px+colW-16, y); x.restore(); } else x.fillText(v!=null ? String(v) : "\u2014", px+colW-16, y);
@@ -4039,7 +4114,7 @@ async function saveCompareGameImage(g, ids, opts){
 }
 // --- game, ratings only: a poster — cover art + combined score up top, everyone's rating in a row below
 async function saveCompareGamePoster(g, people, opts){
-  const n = people.length, W = 1080, H = 1260;
+  const n = people.length, W = 1080, H = (opts.plat && people.some(p=>p.l.platinum)) ? 1260 : 1130;   // shorter when there's no trophy row
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true) : null)) : people.map(()=>null);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -4071,8 +4146,7 @@ async function saveCompareGamePoster(g, people, opts){
     bigScore(x, p.l.rating, cx, scoreY, n>=4 ? 88 : 110);
     if (opts.plat && p.l.platinum){ const im=trophies[i], th = n>=4 ? 80 : 96, tw2 = (im && im.width) ? th*im.width/im.height : th*0.9;
       x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=12; x.shadowOffsetY=4; drawTrophy(x, im, cx+tw2/2, scoreY+40+th/2, th); x.restore();
-      x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}${p.l.showPlatStats&&p.l.platDiff!=null?` \u00b7 ${p.l.platDiff}/10`:""}`, cx, scoreY+40+th+26); x.textAlign="left"; }
-    else if (p.l.platinum){ x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}`, cx, scoreY+40); x.textAlign="left"; }
+      x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}`, cx, scoreY+40+th+26); x.textAlign="left"; }
   }
   const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
@@ -4931,7 +5005,7 @@ document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{
   render(); });
 document.addEventListener("click", e=>{
   const si=e.target.closest("[data-saveimg]");
-  if (si){ e.preventDefault(); e.stopPropagation(); const id=+si.dataset.saveimg, g=getGame(id); if (g && logs[id]) saveReviewImage(g, logs[id]); return; }
+  if (si){ e.preventDefault(); e.stopPropagation(); const id=+si.dataset.saveimg, g=getGame(id); if (g && logs[id]) chooseReviewImage(g, logs[id]); return; }
   const ed=e.target.closest("[data-editlog]");
   if (ed){ e.preventDefault(); e.stopPropagation(); if (requireAuth()){ const g=getGame(+ed.dataset.editlog); if (g) openSheet(g); } return; }
   const c=e.target.closest("[data-open]"); if(c){ view.gameId=+c.dataset.open; gameTab="overview"; gameRevShown=20; render(); window.scrollTo(0,0);} });
