@@ -3820,8 +3820,8 @@ async function saveReviewPoster(g, saved, who){
   const isMine = !who || (me && who.id===me.id);
   const W = 1080, cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
-  const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
-  const H = tags.length ? 1440 : 1350;
+  const tags = [];                                         // posters stay clean: no award pills
+  const H = 1350;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, cardThemeFor(author.id));
   // cover, centered
@@ -3842,7 +3842,7 @@ async function saveReviewPoster(g, saved, who){
     x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=18; x.shadowOffsetY=6; drawTrophy(x, trophy, left+tw, sy - size*0.36, th); x.restore(); scx = left + tw + 24 + sw/2; }
   x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=18; x.shadowOffsetY=6; bigScore(x, l.rating, scx, sy, size); x.restore();
   x.textAlign="center"; x.font="700 20px Outfit, sans-serif"; x.fillStyle="#8b98b5"; if (l.rating!=null) x.fillText("/ 10", scx, sy+34);
-  if (l.platinum){ x.font="700 18px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`\uD83C\uDFC6 Platinum${platNumText(l)?" "+platNumText(l):""}${l.showPlatStats&&l.platDiff!=null?` \u00b7 ${l.platDiff}/10 diff`:""}`, W/2, sy+72); }
+  if (l.platinum){ x.font="700 18px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`\uD83C\uDFC6 Platinum${platNumText(l)?" "+platNumText(l):""}`, W/2, sy+72); }
   y = sy + 100;
   // award pills, centered
   if (tags.length){ x.font="700 15px Outfit, sans-serif"; const labels = tags.map(t=> `${isMine ? "my" : "their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`);
