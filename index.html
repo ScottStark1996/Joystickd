@@ -871,7 +871,7 @@
 <div class="sheet-wrap" id="cardWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
     <h2 id="cardTitle">Image style</h2>
-    <div class="g">How the review cards and profile snapshots you save look. Pro only.</div>
+    <div class="g">How every image you save looks — review cards, posters, comparison cards and profile snapshots. Pro only.</div>
     <div class="look-prev" id="cardPrev" style="padding:0;overflow:hidden"></div>
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
     <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
@@ -3823,7 +3823,7 @@ async function saveReviewPoster(g, saved, who){
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const H = 1400 - (tags.length ? 0 : 60);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  paintCinematic(x, W, H, cover, "rgba(6,8,15,.3)");
+  paintCinematic(x, W, H, cover, cardThemeFor(author.id));
   // cover, centered
   const cw = 390, ch = 520, cx0 = (W-cw)/2, cy0 = 90;
   x.save(); x.shadowColor="rgba(0,0,0,.65)"; x.shadowBlur=44; x.shadowOffsetY=18; x.fillStyle="#000"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,20); x.fill(); x.restore();
@@ -4020,25 +4020,36 @@ function openCompare(kind, g){
   paint(); $("#cmpWrap").classList.add("open");
 }
 // Cinematic backdrop: letterbox bars + blurred art + vignette
-function paintCinematic(x, W, H, art, tint){
-  x.fillStyle = "#06080f"; x.fillRect(0,0,W,H);
-  if (art){
-    // cover-fit the art at 1/6 size, then blur by bouncing it down to 1/24 and back up with smoothing on —
-    // a soft, even blur with no blocky patches, and still fast on phones
+// Backdrop for the wide "cinematic" cards (comparisons, posters). Follows the saver's Image style:
+// card color, background (solid / blurred cover / accent glow) and pattern — so it's theirs to design.
+function paintCinematic(x, W, H, art, ct){
+  ct = ct || cardThemeFor(me?.id, me);
+  const bgTop = mixHex(ct.bg, ct.panel, 0.5);
+  const g0 = x.createLinearGradient(0,0,0,H); g0.addColorStop(0, bgTop); g0.addColorStop(1, ct.bg); x.fillStyle = g0; x.fillRect(0,0,W,H);
+  if (ct.style==="cover" && art){
     const a=document.createElement("canvas"); a.width=Math.max(8,Math.round(W/6)); a.height=Math.max(8,Math.round(H/6)); const ax=a.getContext("2d"); ax.imageSmoothingEnabled=true; ax.imageSmoothingQuality="high";
     const sc=Math.max(a.width/art.width, a.height/art.height), dw=art.width*sc, dh=art.height*sc; ax.drawImage(art,(a.width-dw)/2,(a.height-dh)/2,dw,dh);
     const b=document.createElement("canvas"); b.width=Math.max(4,Math.round(a.width/4)); b.height=Math.max(4,Math.round(a.height/4)); const bx=b.getContext("2d"); bx.imageSmoothingEnabled=true; bx.imageSmoothingQuality="high"; bx.drawImage(a,0,0,b.width,b.height);
     ax.clearRect(0,0,a.width,a.height); ax.drawImage(b,0,0,a.width,a.height);
     bx.clearRect(0,0,b.width,b.height); bx.drawImage(a,0,0,b.width,b.height); ax.clearRect(0,0,a.width,a.height); ax.drawImage(b,0,0,a.width,a.height);
-    x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high"; x.globalAlpha=0.8; x.drawImage(a,0,0,W,H); x.globalAlpha=1; }
-  else { const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#1a2340"); g.addColorStop(1,"#2a1430"); x.fillStyle=g; x.fillRect(0,0,W,H); }
-  if (tint){ x.fillStyle = tint; x.fillRect(0,0,W,H); }
-  const v = x.createRadialGradient(W/2, H/2, Math.min(W,H)*0.25, W/2, H/2, Math.max(W,H)*0.8); v.addColorStop(0,"rgba(6,8,15,0)"); v.addColorStop(1,"rgba(6,8,15,.85)"); x.fillStyle=v; x.fillRect(0,0,W,H);
-  x.fillStyle="#0e1526"; x.fillRect(0,0,W,46); x.fillRect(0,H-46,W,46);                       // letterbox bars in Joystickd navy
-  x.textAlign="right"; x.font="800 16px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 30); x.fillStyle="#f0b429"; x.fillText("D", W-38, 30); x.textAlign="left";
+    x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high"; x.globalAlpha=0.8; x.drawImage(a,0,0,W,H); x.globalAlpha=1;
+    x.fillStyle = rgba(ct.bg, .45); x.fillRect(0,0,W,H);
+  } else if (ct.style==="glow"){
+    const g = x.createRadialGradient(W*0.2, H*0.1, 10, W*0.2, H*0.1, Math.max(W,H)*0.9); g.addColorStop(0, rgba(ct.accent, .32)); g.addColorStop(0.45, rgba(ct.accent, .08)); g.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = g; x.fillRect(0,0,W,H);
+    const g2 = x.createRadialGradient(W*0.85, H*0.95, 10, W*0.85, H*0.95, Math.max(W,H)*0.7); g2.addColorStop(0, rgba(ct.accent, .18)); g2.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g2; x.fillRect(0,0,W,H);
+  }
+  paintPattern(x, W, H, ct.pattern, ct.accent);
+  const v = x.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.85); v.addColorStop(0,"rgba(0,0,0,0)"); v.addColorStop(1, rgba(ct.bg, .7)); x.fillStyle=v; x.fillRect(0,0,W,H);
+  // header / footer bands: translucent panel color with a hairline in the accent that fades at the edges
+  const band = 46;
+  x.fillStyle = rgba(ct.panel, .82); x.fillRect(0,0,W,band); x.fillRect(0,H-band,W,band);
+  const hl = x.createLinearGradient(0,0,W,0); hl.addColorStop(0, rgba(ct.accent, 0)); hl.addColorStop(0.5, rgba(ct.accent, .75)); hl.addColorStop(1, rgba(ct.accent, 0));
+  x.fillStyle = hl; x.fillRect(0, band-1, W, 1); x.fillRect(0, H-band, W, 1);
+  x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 30); x.fillStyle=ct.accent; x.fillText("D", W-38, 30); x.textAlign="left";
   x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("joystickd.com", 40, H-18);
 }
-function glassPanel(x, px, py, pw, ph){ x.fillStyle="rgba(14,21,38,.72)"; x.strokeStyle="rgba(255,255,255,.12)"; x.lineWidth=1; x.beginPath(); x.roundRect(px,py,pw,ph,16); x.fill(); x.stroke(); }
+function glassPanel(x, px, py, pw, ph, ct){ ct = ct || cardThemeFor(me?.id, me); x.fillStyle=rgba(ct.panel, .78); x.strokeStyle=rgba(ct.line, .9); x.lineWidth=1; x.beginPath(); x.roundRect(px,py,pw,ph,16); x.fill(); x.stroke(); }
 async function drawPerson(x, uid, name, cx, cy, ad, nameSize=17){      // avatar (with frame) + styled name, centered
   const av = avatars[uid] ? await loadImg(avatars[uid], true) : null;
   drawFrameRing(x, cx, cy, ad/2, uid, ad/64);
@@ -4084,7 +4095,7 @@ async function saveCompareGameImage(g, ids, opts){
   const panelH = personH + scoreH + platH + subsH + exH + 20, H = headH + panelH + 90;
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  paintCinematic(x, W, H, cover, "rgba(6,8,15,.35)");
+  paintCinematic(x, W, H, cover);
   // title block
   if (cover){ x.save(); x.beginPath(); x.roundRect(40,64,60,80,8); x.clip(); x.drawImage(cover,40,64,60,80); x.restore(); }
   x.fillStyle="#e6ebf4"; x.font="800 34px Outfit, sans-serif"; x.fillText(wrapText(x, g.title, W-300)[0]||"", cover?118:40, 100);
@@ -4118,7 +4129,7 @@ async function saveCompareGamePoster(g, people, opts){
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true) : null)) : people.map(()=>null);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  paintCinematic(x, W, H, cover, "rgba(6,8,15,.3)");
+  paintCinematic(x, W, H, cover);
   // cover, large, with a soft shadow
   const cw = 330, ch = 440, cx0 = 70, cy0 = 110;
   if (cover){ x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=40; x.shadowOffsetY=16; x.fillStyle="#000"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.fill(); x.restore();
@@ -4174,7 +4185,7 @@ async function saveCompareProfileImage(ids){
   const headH = 120, personH = 150, rowsH = rows.length*34 + 10, panelH = personH + rowsH + topH + chartH + 20, commonH = common.length ? 176 : 0, H = headH + panelH + commonH + 80;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   const art = avatars[me.id] ? await loadImg(avatars[me.id], true) : null;
-  paintCinematic(x, W, H, art, "rgba(6,8,15,.5)");
+  paintCinematic(x, W, H, art);
   x.fillStyle="#e6ebf4"; x.font="800 34px Outfit, sans-serif"; x.fillText("Head to head", 40, 96);
   x.font="600 15px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText(`${people.map(p=>p.username).join("  \u2022  ")}`, 40, 122);
   const top = headH + 10;
