@@ -3821,7 +3821,7 @@ async function saveReviewPoster(g, saved, who){
   const W = 1080, cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
-  const H = 1400 - (tags.length ? 0 : 60);
+  const H = tags.length ? 1440 : 1350;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, cardThemeFor(author.id));
   // cover, centered
@@ -3853,8 +3853,8 @@ async function saveReviewPoster(g, saved, who){
       x.fillStyle = goty ? "#1a1200" : "#e6ebf4"; x.textAlign="left"; x.fillText(lb, px+14, y+23); px += pw[i] + 10; });
     y += 34; }
   // the reviewer
-  const ad = 110, acy = H - 46 - 40 - 40 - ad/2 - 10;
-  await drawPerson(x, author.id, author.username, W/2, acy, ad, 26);
+  const ad = 150, acy = H - 46 - 40 - 48 - ad/2 - 10;
+  await drawPerson(x, author.id, author.username, W/2, acy, ad, 34);
   const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-poster.png`);
 }
