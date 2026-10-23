@@ -775,6 +775,17 @@
   </div>
 </div>
 
+<div class="sheet-wrap" id="shareProfWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shareProfTitle">
+    <h2 id="shareProfTitle">Share profile</h2>
+    <div class="set-list" style="margin-top:12px">
+      <button class="set-row" id="spLink">Share link<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Send or copy your profile URL</small></button>
+      <button class="set-row" id="spSnap">Save snapshot image<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">A picture of your profile — Top 5, shelves, ratings chart</small></button>
+    </div>
+    <div class="actions"><button class="cta ghost" id="shareProfCancel">Cancel</button></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="revStyleWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="revStyleTitle">
     <h2 id="revStyleTitle">Save as image</h2>
@@ -2505,7 +2516,7 @@ function renderLogs(app, P, isMe){
   $("#editProfBtn") && ($("#editProfBtn").onclick = openEditProf);
   $("#avatarFile") && ($("#avatarFile").onchange = e=>{ const f=e.target.files[0]; if (f) uploadAvatar(f); });
   $("#avatarClear") && ($("#avatarClear").onclick = ()=>{ if (confirm(`Remove ${P.username}'s profile picture?`)) clearAvatar(P.id); });
-  $("#shareBtn") && ($("#shareBtn").onclick = ()=> shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(P.username), `${P.username} on Joystickd`, "Profile link copied"));
+  $("#shareBtn") && ($("#shareBtn").onclick = ()=> $("#shareProfWrap").classList.add("open"));
   app.querySelectorAll("[data-payear]").forEach(b=> b.onclick = ()=>{ profileAwardYear=+b.dataset.payear; render(); });
   app.querySelectorAll("[data-awardsimg]").forEach(b=> b.onclick = ()=> openAwardsImg(P, +b.dataset.awardsimg));
   app.querySelectorAll("[data-plog]").forEach(b=> b.onclick = ()=> openT5(+b.dataset.plog, P, isMe));
@@ -2778,6 +2789,10 @@ async function savePlatinumWall(P, o){
   await deliverImage(blob, `joystickd-${P.username.toLowerCase()}-platinum-wall.png`);
 }
 function wireSnapUI(){
+  $("#shareProfCancel").onclick = ()=> $("#shareProfWrap").classList.remove("open");
+  $("#shareProfWrap").addEventListener("click", e=>{ if(e.target.id==="shareProfWrap") $("#shareProfWrap").classList.remove("open"); });
+  $("#spLink").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); if (me) shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(me.username), `${me.username} on Joystickd`, "Profile link copied"); };
+  $("#spSnap").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); $("#snapBtn").click(); };
   $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
   $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
   $("#revStyleCard").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewImage(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
@@ -4854,11 +4869,12 @@ async function followCounts(id){
 }
 function followButton(P){
   if (!LIVE || !me || !P.id || P.id===me.id) return "";
-  const st = 'style="margin:0 0 0 auto;padding:9px 14px;font-size:13px"';
-  const st2 = 'style="margin:0;padding:9px 14px;font-size:13px"';
-  const more = `<button class="cta ghost" id="profMoreBtn" ${st2} title="Block or report" aria-label="More options">\u22ef</button>`;
-  if (isBlocked(P.id)) return `<button class="cta ghost danger-btn" id="unblockBtn" ${st}>Unblock</button>` + more;
-  return (isFollowing(P.id) ? `<button class="cta ghost" id="fbtn" data-act="unfollow" ${st}>✓ Following</button>` : `<button class="cta" id="fbtn" data-act="follow" ${st}>Follow</button>`) + more;
+  // stacked column on the right (same as the owner's Edit / Share buttons), so nothing hangs off the edge
+  const st = 'style="margin:0;padding:9px 14px;font-size:13px"';
+  const more = `<button class="cta ghost" id="profMoreBtn" ${st} title="Share, snapshot, block or report" aria-label="More options">\u22ef More</button>`;
+  const main = isBlocked(P.id) ? `<button class="cta ghost danger-btn" id="unblockBtn" ${st}>Unblock</button>`
+             : isFollowing(P.id) ? `<button class="cta ghost" id="fbtn" data-act="unfollow" ${st}>✓ Following</button>` : `<button class="cta" id="fbtn" data-act="follow" ${st}>Follow</button>`;
+  return `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto;flex:none">${main}${more}</div>`;
 }
 function userRow(id, actions){
   const name = follows.names[id] || "…";
