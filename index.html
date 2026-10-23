@@ -3031,15 +3031,28 @@ async function saveListImage(L, P){
 
 // ---- awards share image ------------------------------------------------------
 let awardsImgCtx = null;
-function openAwardsImg(P, year){ awardsImgCtx = { P, year }; $("#awardsImgWrap").classList.add("open"); }
+function openAwardsImg(P, year, community){ awardsImgCtx = { P, year, community: !!community }; $("#awardsImgTitle").textContent = community ? `Save ${year} community awards as image` : "Save awards as image"; $("#awardsImgWrap").classList.add("open"); }
 
+// One user's ballot (P.ballot[year]) as an image. Pro users' Image style applies (card color, background, pattern, accent).
 async function saveAwardsImage(P, year, cols = 2){
-  try { await document.fonts.ready; } catch(e){}
   const b = (P.ballot||{})[year] || {};
   const picks = AWARDS.filter(a=>b[a.key]).map(a=>({ a, g:getGame(b[a.key]) })).filter(x=>x.g);
   if (!picks.length){ toast("No picks for that year yet"); return; }
+  return drawAwardsImage({ picks, cols, title:`My ${year} Game Awards \u{1F3C6}`, sub:`by ${P.username}`, ct: cardThemeFor(P.id, P), file:`joystickd-${P.username.toLowerCase()}-${year}-awards.png` });
+}
+// The community's winners for a year, same layout, with vote counts under each pick.
+async function saveCommunityAwardsImage(year, cols = 2){
+  if (LIVE && !loadedYears.has(year)) await loadYearBallots(year);
+  const picks = AWARDS.map(a=>{ const t=tally(year, a.key), w=t[0]; return w ? { a, g:getGame(w.id), votes:w.n, runners:t.length } : null; }).filter(x=> x && x.g);
+  if (!picks.length){ toast(`No ${year} ballots yet`); return; }
+  const voters = Object.values(ballots).filter(b=>b[year] && Object.keys(b[year]).length).length;
+  return drawAwardsImage({ picks, cols, title:`${year} Community Game Awards \u{1F3C6}`, sub:`Joystickd community winners \u00b7 ${voters} ballot${voters===1?"":"s"} cast`, ct: cardThemeFor(me?.id, me), file:`joystickd-${year}-community-awards.png` });
+}
+async function drawAwardsImage({ picks, cols, title, sub, ct, file }){
+  try { await document.fonts.ready; } catch(e){}
   const covers = await Promise.all(picks.map(x=> x.g.cover ? loadImg(coverHi(x.g.cover), true) : Promise.resolve(null)));
-  const gold="#f0b429", text="#e6ebf4", mut="#8b98b5", line="#28365a", panel2="#1e2a47";
+  ct = ct || cardThemeFor(me?.id, me);
+  const gold=ct.accent, text="#e6ebf4", mut="#8b98b5", line=ct.line, panel2=ct.panel2;
   const W = cols===3 ? 1024 : 720;
   const goty = picks[0].a.key==="goty";
   const rest = goty ? picks.slice(1) : picks, restCovers = goty ? covers.slice(1) : covers;
@@ -3049,9 +3062,8 @@ async function saveAwardsImage(P, year, cols = 2){
   const H = 112 + featH + rows*(cellH+gap) + 58;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  x.fillStyle="#0e1526"; x.fillRect(0,0,W,H);
-  x.fillStyle="#161f35"; x.strokeStyle=line; x.lineWidth=1;
-  x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.fill(); x.stroke();
+  paintCardBg(x, W, H, ct, null);
+  x.lineWidth=1;
   // helpers: rounded cover (with lettered placeholder when art is missing) + text truncation
   const cover=(cov,g,cx,cy,w,h,r)=>{ x.save(); x.beginPath(); x.roundRect(cx,cy,w,h,r); x.clip();
     if (cov) x.drawImage(cov,cx,cy,w,h);
@@ -3062,19 +3074,19 @@ async function saveAwardsImage(P, year, cols = 2){
   x.textAlign="right"; x.font="800 16px Outfit, sans-serif";
   x.fillStyle=text; x.fillText("JOYSTICK", W-56, 56); x.fillStyle=gold; x.fillText("D", W-44, 56);
   x.textAlign="left";
-  x.font="800 28px Outfit, sans-serif"; x.fillStyle=text; x.fillText(`My ${year} Game Awards \u{1F3C6}`, 52, 62);
-  x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(`by ${P.username}`, 52, 88);
+  x.font="800 28px Outfit, sans-serif"; x.fillStyle=text; x.fillText(fit(title, "800 28px Outfit, sans-serif", W-200), 52, 62);
+  x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(sub, 52, 88);
   let y=112;
   // featured Game of the Year card
   if (goty){
     const g=picks[0].g, cov=covers[0], fx=52, fw=W-104;
-    x.fillStyle="rgba(240,180,41,.08)"; x.beginPath(); x.roundRect(fx,y,fw,292,14); x.fill();
-    x.strokeStyle="rgba(240,180,41,.45)"; x.lineWidth=1.5; x.beginPath(); x.roundRect(fx,y,fw,292,14); x.stroke(); x.lineWidth=1;
+    x.fillStyle=rgba(gold,.08); x.beginPath(); x.roundRect(fx,y,fw,292,14); x.fill();
+    x.strokeStyle=rgba(gold,.45); x.lineWidth=1.5; x.beginPath(); x.roundRect(fx,y,fw,292,14); x.stroke(); x.lineWidth=1;
     x.textAlign="center";
     x.font="700 13px Outfit, sans-serif"; x.fillStyle=gold; x.fillText("\u2605  GAME OF THE YEAR  \u2605", W/2, y+30);
     cover(cov, g, W/2-70, y+44, 140, 187, 10);
     x.font="800 22px Outfit, sans-serif"; x.fillStyle=text; x.fillText(fit(g.title,"800 22px Outfit, sans-serif",fw-60), W/2, y+258);
-    x.font="500 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(String(g.year||""), W/2, y+278);
+    x.font="500 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(picks[0].votes!=null ? `${g.year||""} \u00b7 ${picks[0].votes} vote${picks[0].votes===1?"":"s"}` : String(g.year||""), W/2, y+278);
     y += 292+24;
   }
   // two-column grid for the remaining picks (a lone last card gets centered)
@@ -3091,12 +3103,12 @@ async function saveAwardsImage(P, year, cols = 2){
     x.fillText(fit(p.a.label.toUpperCase(),"700 11px Outfit, sans-serif",cellW-24), cx+cellW/2, cy+24);
     cover(restCovers[i], p.g, cx+cellW/2-48, cy+36, 96, 128, 8);
     x.font="700 15px Manrope, sans-serif"; x.fillStyle=text; x.fillText(fit(p.g.title,"700 15px Manrope, sans-serif",cellW-28), cx+cellW/2, cy+186);
-    x.font="500 12px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(String(p.g.year||""), cx+cellW/2, cy+204);
+    x.font="500 12px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(p.votes!=null ? `${p.g.year||""} \u00b7 ${p.votes} vote${p.votes===1?"":"s"}` : String(p.g.year||""), cx+cellW/2, cy+204);
   });
   x.textAlign="center"; x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", W/2, H-30);
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  await deliverImage(blob, `joystickd-${P.username.toLowerCase()}-${year}-awards.png`);
+  await deliverImage(blob, file);
 }
 
 // ---- top-5 review sheet ----------------------------------------------------
@@ -3264,6 +3276,7 @@ async function renderAwards(app){
       </div>
       ${yearSelect("awardYear", awardYear)}
     </div>
+    ${(!mine && voters) ? `<div style="display:flex;justify-content:flex-end;margin:-10px 0 14px"><button class="cta ghost sm" id="commAwardsImg" title="Save a picture of this year's community winners">\u2913 Save community image</button></div>` : ""}
     <div class="seg">
       <button class="segb ${!mine?"on":""}" data-mode="community">Community results</button>
       <button class="segb ${mine?"on":""}" data-mode="mine">My ballot${picked?` (${picked})`:""}</button>
@@ -3281,6 +3294,7 @@ async function renderAwards(app){
     </div>
     ${mine ? "" : `<div class="hint center">Winners are tallied from everyone's ballots.${LIVE ? "" : " (Demo voters included in sample mode.)"}</div>`}`;
   $("#awardYear").onchange = e=>{ awardYear=+e.target.value; awardsExpanded.clear(); render(); };
+  $("#commAwardsImg") && ($("#commAwardsImg").onclick = ()=> openAwardsImg(null, awardYear, true));
   app.querySelectorAll("[data-mode]").forEach(b=> b.onclick = ()=>{ if (b.dataset.mode==="mine" && !requireAuth()) return; awardMode=b.dataset.mode; render(); });
   app.querySelectorAll("[data-awexpand]").forEach(d=> d.onclick = e=>{
     if (e.target.closest("[data-awgame]")) return;
@@ -4463,8 +4477,10 @@ function wirePwUI(){
   $("#listImgList").onclick = ()=>{ $("#listImgWrap").classList.remove("open"); if (listImgCtx) saveListImage(listImgCtx.L, listImgCtx.P); };
   $("#listImgGrid").onclick = ()=>{ $("#listImgWrap").classList.remove("open"); if (listImgCtx) saveListGridImage(listImgCtx.L, listImgCtx.P); };
   $("#awardsImgCancel").onclick = ()=> $("#awardsImgWrap").classList.remove("open");
-  $("#awardsImgTall").onclick = ()=>{ $("#awardsImgWrap").classList.remove("open"); if (awardsImgCtx) saveAwardsImage(awardsImgCtx.P, awardsImgCtx.year, 2); };
-  $("#awardsImgWide").onclick = ()=>{ $("#awardsImgWrap").classList.remove("open"); if (awardsImgCtx) saveAwardsImage(awardsImgCtx.P, awardsImgCtx.year, 3); };
+  const goAwardsImg = async cols => { $("#awardsImgWrap").classList.remove("open"); const c = awardsImgCtx; if (!c) return;
+    try { if (c.community) await saveCommunityAwardsImage(c.year, cols); else await saveAwardsImage(c.P, c.year, cols); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#awardsImgTall").onclick = ()=> goAwardsImg(2);
+  $("#awardsImgWide").onclick = ()=> goAwardsImg(3);
   $("#pwSave").onclick = async ()=>{
     const a=$("#pwNew").value, b=$("#pwNew2").value;
     if (a.length<6){ $("#pwErr").textContent="Password needs at least 6 characters."; $("#pwErr").hidden=false; return; }
