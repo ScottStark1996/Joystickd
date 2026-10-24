@@ -794,6 +794,7 @@
       <button class="set-row" id="revStyleCard">Review card<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Score, platinum, sub-ratings and the written review</small></button>
       <button class="set-row" id="revStylePoster">Poster<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Big cover art, the score and trophy, your name — no review text</small></button>
       <button class="set-row" id="revStyleCine">Cinematic<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Widescreen art banner up top, then the full review</small></button>
+      <button class="set-row" id="revStyleMag">Magazine<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Two columns — art, title and boxed review left; score, trophy and sub-ratings right</small></button>
     </div>
     <div class="set-sub" style="padding-top:14px">Review text size</div>
     <div class="chips" id="revTextSize" style="padding:0 2px">
@@ -2802,6 +2803,7 @@ function wireSnapUI(){
   $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
   $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
   $("#revStyleCard").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewImage(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#revStyleMag").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewMagazine(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
   $("#revStyleCine").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewCinematic(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
   $("#revStylePoster").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewPoster(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the poster"); } };
   $("#snapCancel").onclick = ()=> $("#snapWrap").classList.remove("open");
@@ -3826,7 +3828,11 @@ function sheetLog(){
 function exportScale(W,H){ for (const s of [3,2.5,2,1.5,1]) if (W*s*H*s <= 16e6) return s; return 1; }
 // coverHi(): IGDB cover URL -> 2x variant (528x748) for export drawing only; other URLs pass through.
 function coverHi(url){ return typeof url==="string" ? url.replace("/t_cover_big/", "/t_cover_big_2x/") : url; }
-function loadImg(src, cors){ return new Promise(res=>{ const i=new Image(); if (cors) i.crossOrigin="anonymous"; const t=setTimeout(()=>res(null),2500); i.onload=()=>{clearTimeout(t);res(i)}; i.onerror=()=>{clearTimeout(t);res(null)}; i.src=src; }); }
+// Full-resolution IGDB art for wide banners (t_original), falling back to the 2x cover. Longer timeout: the file is bigger.
+async function loadCoverMax(url){ if (typeof url!=="string") return null;
+  if (/\/t_cover_big(_2x)?\//.test(url)){ const big = await loadImg(url.replace(/\/t_cover_big(_2x)?\//, "/t_original/"), true, 6000); if (big) return big; }
+  return loadImg(coverHi(url), true); }
+function loadImg(src, cors, ms=2500){ return new Promise(res=>{ const i=new Image(); if (cors) i.crossOrigin="anonymous"; const t=setTimeout(()=>res(null),ms); i.onload=()=>{clearTimeout(t);res(i)}; i.onerror=()=>{clearTimeout(t);res(null)}; i.src=src; }); }
 function wrapText(ctx, text, maxW){
   const out=[]; for (const para of text.split(/\n/)){ let line="";
     for (const w of para.split(/\s+/)){ const t=line?line+" "+w:w;
@@ -3910,7 +3916,7 @@ async function saveReviewCinematic(g, saved, who){
   const isMine = !who || (me && who.id===me.id);
   const ct = cardThemeFor(author.id), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";
   const W = 1080, heroH = 560, pad = 64;
-  const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
+  const [cover, hero] = g.cover ? await Promise.all([loadImg(coverHi(g.cover), true), loadCoverMax(g.cover)]) : [null, null];
   const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const rated = SUBS.filter(sc=> l.subs?.[sc.key]!=null);
@@ -3930,8 +3936,9 @@ async function saveReviewCinematic(g, saved, who){
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, ct);
   // hero banner: widescreen crop of the cover (full size, not blurred), fading into the card at the bottom
-  if (cover){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip();
-    const sc = Math.max(W/cover.width, heroH/cover.height), dw=cover.width*sc, dh=cover.height*sc; x.drawImage(cover, (W-dw)/2, 46 + (heroH-dh)*0.25, dw, dh);
+  const art = hero || cover;
+  if (art){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
+    const sc = Math.max(W/art.width, heroH/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, 46 + (heroH-dh)*0.25, dw, dh);
     const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
     x.restore(); }
@@ -3940,13 +3947,17 @@ async function saveReviewCinematic(g, saved, who){
   x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=30; x.shadowOffsetY=10; x.fillStyle="#000"; x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.fill(); x.restore();
   x.save(); x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.clip(); if (cover) x.drawImage(cover, pad, cy, cw, ch); else { x.fillStyle=ct.panel2; x.fillRect(pad,cy,cw,ch); } x.restore();
   x.strokeStyle="rgba(255,255,255,.18)"; x.lineWidth=1; x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.stroke();
-  const tx = pad + cw + 28, scoreW = 300;
-  x.fillStyle=text; x.font="800 50px Outfit, sans-serif"; x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=16; x.shadowOffsetY=3;
-  const tl = wrapText(x, g.title, W - tx - pad - scoreW).slice(0,2); let ty = cy + ch - 36 - (tl.length-1)*54; tl.forEach(ln=>{ x.fillText(ln, tx, ty); ty += 54; });
+  // how wide the score block (number + trophy) will be, so the title never runs into it
+  const size = 150, th = 130; x.font=`800 ${size}px Outfit, sans-serif`;
+  const sw = l.rating!=null ? x.measureText(String(l.rating)).width : 160, tw = l.platinum ? ((trophy && trophy.width) ? th*trophy.width/trophy.height : th*0.9) + 18 : 0;
+  const tx = pad + cw + 28, titleMax = W - pad - sw - tw - 36 - tx;
+  let tf = 50, tl; for (const f of [50, 44, 38, 32]){ tf = f; x.font=`800 ${f}px Outfit, sans-serif`; tl = wrapText(x, g.title, titleMax); if (tl.length <= 2) break; }
+  tl = tl.slice(0,2); const tlh = Math.round(tf*1.08);
+  x.fillStyle=text; x.font=`800 ${tf}px Outfit, sans-serif`; x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=16; x.shadowOffsetY=3;
+  let ty = cy + ch - 36 - (tl.length-1)*tlh; tl.forEach(ln=>{ x.fillText(ln, tx, ty); ty += tlh; });
   x.font="600 18px Manrope, sans-serif"; x.fillStyle=soft; x.fillText([g.year, g.dev].filter(Boolean).join(" · "), tx, cy + ch - 6); x.restore();
   // score + trophy, bottom right of the banner
-  { const size = 150, sy = cy + ch - 30; x.font=`800 ${size}px Outfit, sans-serif`; const sw = l.rating!=null ? x.measureText(String(l.rating)).width : 160;
-    const th = 130, right = W - pad;
+  { const sy = cy + ch - 30, right = W - pad;
     x.save(); x.shadowColor="rgba(0,0,0,.65)"; x.shadowBlur=24; x.shadowOffsetY=6;
     bigScore(x, l.rating, right - sw/2, sy, size);
     if (l.platinum) drawTrophy(x, trophy, right - sw - 18, sy - size*0.36, th);
@@ -3986,6 +3997,93 @@ async function drawPersonRow(x, uid, name, px, py, ad, caption, accent, ct){
   const nx = px + ad + 16; x.font="800 24px Outfit, sans-serif"; const t = themeFor(uid); const nw = x.measureText(name).width;
   x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, nx, cy-16, nx+nw, cy+4)) || "#e6ebf4"; x.fillText(name, nx, cy+2);
   x.font="600 14px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(caption, nx, cy+24);
+}
+// Magazine: two columns — art + title + stat pills + boxed review on the left; avatar, big score, trophy,
+// sub-rating ledger and awards on the right. Uses the author's Image style.
+async function saveReviewMagazine(g, saved, who){
+  try { await document.fonts.ready; } catch(e){}
+  const l = saved ? logForExport(saved) : sheetLog();
+  const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
+  const isMine = !who || (me && who.id===me.id);
+  const ct = cardThemeFor(author.id), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";
+  const W = 1080, pad = 48, gutter = 28, leftW = 610, rightX = pad + leftW + gutter, rightW = W - pad - rightX, heroH = 400;
+  const [cover, hero] = g.cover ? await Promise.all([loadImg(coverHi(g.cover), true), loadCoverMax(g.cover)]) : [null, null];
+  const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
+  const avatar = author.id && avatars[author.id] ? await loadImg(avatars[author.id], true) : null;
+  const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
+  const rated = SUBS.filter(sc=> l.subs?.[sc.key]!=null);
+  const RT = revText(), BF = Math.round(17*RT.font/16), BLH = Math.round(26*RT.font/16), BODY = `400 ${BF}px Manrope, sans-serif`;
+  const pills = [l.dateTrophy ? `First trophy: ${fmtDate(l.dateTrophy)}` : null, l.datePlat ? `Platinum date: ${fmtDate(l.datePlat)}` : null, l.datePlayed && !l.dateTrophy ? `Played: ${fmtDate(l.datePlayed)}` : null,
+    (l.platinum && l.showPlatStats && l.platDiff!=null) ? `Platinum difficulty: ${l.platDiff}/10` : null, (l.platinum && l.showPlatStats && l.platHours!=null) ? `Time to platinum: ${l.platHours} hours` : null].filter(Boolean).slice(0,4);
+  // measure
+  const m = document.createElement("canvas").getContext("2d");
+  m.font = "800 44px Outfit, sans-serif"; let tl = wrapText(m, g.title.toUpperCase(), leftW); let tf = 44; if (tl.length > 2){ tf = 36; m.font = "800 36px Outfit, sans-serif"; tl = wrapText(m, g.title.toUpperCase(), leftW).slice(0,2); }
+  m.font = BODY; const paras = (l.review||"").trim().split(/\n+/).filter(Boolean); const lines = []; paras.forEach((p,i)=>{ if (i) lines.push(""); wrapText(m, p, leftW-52).forEach(ln=> lines.push(ln)); });
+  const titleTop = 46 + heroH - 10, byY = titleTop + tl.length*(tf+6) + 8;
+  const infoY = byY + 26, infoH = Math.max(200, pills.length ? pills.length*48 : 0);
+  const revY = infoY + infoH + 22, revH = lines.length ? lines.length*BLH + 48 : 0;
+  const leftBottom = revH ? revY + revH : infoY + infoH;
+  // right column plan
+  const avY = 46 + 30, avD = 170, nameY = avY + avD + 42, scoreY = nameY + 120, trophyY = scoreY + 30, trophyH = l.platinum ? 190 : 0;
+  const subsY = trophyY + trophyH + 36, subsH = rated.length ? rated.length*38 + 20 : 0;
+  const awY = subsY + subsH + (subsH ? 26 : 0), awH = tags.length ? tags.length*40 : 0;
+  const rightBottom = awY + awH;
+  const H = Math.max(leftBottom, rightBottom) + 40 + 46;
+  const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  paintCinematic(x, W, H, cover, ct);
+  // hero art, left-heavy: fades to the card color at the bottom and towards the right column
+  const art = hero || cover;
+  if (art){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
+    const sc = Math.max(W/art.width, heroH/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, 46 + (heroH-dh)*0.2, dw, dh);
+    const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
+    const side = x.createLinearGradient(rightX-140, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.5, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.95)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
+    x.restore(); }
+  // ---- left column
+  x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=14; x.shadowOffsetY=3; x.fillStyle=text; x.font=`800 ${tf}px Outfit, sans-serif`;
+  let ty = titleTop; tl.forEach(ln=>{ x.fillText(ln, pad, ty); ty += tf+6; }); x.restore();
+  x.font="700 17px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(`${author.username}${l.platinum && platNumText(l) ? `  |  Platinum ${platNumText(l)}` : ""}${g.year ? `  |  ${g.year}` : ""}`, pad, byY);
+  // small cover + pills
+  const cw = 150, ch = 200;
+  x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=20; x.shadowOffsetY=8; x.fillStyle="#000"; x.beginPath(); x.roundRect(pad, infoY, cw, ch, 12); x.fill(); x.restore();
+  x.save(); x.beginPath(); x.roundRect(pad, infoY, cw, ch, 12); x.clip(); if (cover) x.drawImage(cover, pad, infoY, cw, ch); else { x.fillStyle=ct.panel2; x.fillRect(pad,infoY,cw,ch); } x.restore();
+  x.strokeStyle="rgba(255,255,255,.18)"; x.lineWidth=1; x.beginPath(); x.roundRect(pad, infoY, cw, ch, 12); x.stroke();
+  const px0 = pad + cw + 18, pw = leftW - cw - 18;
+  pills.forEach((t,i)=>{ const py = infoY + 6 + i*48;
+    x.fillStyle = rgba(ct.panel2, .95); x.beginPath(); x.roundRect(px0, py, pw, 38, 19); x.fill(); x.strokeStyle = ct.line; x.stroke();
+    x.fillStyle = accent; x.beginPath(); x.roundRect(px0, py, 8, 38, [19,0,0,19]); x.fill();
+    x.font="700 16px Manrope, sans-serif"; x.fillStyle=text; x.fillText(t, px0+22, py+25); });
+  if (!pills.length){ x.font="600 15px Manrope, sans-serif"; x.fillStyle=mut; x.fillText([g.year, g.dev].filter(Boolean).join(" · "), px0, infoY+30); }
+  // review box
+  if (revH){ x.fillStyle = rgba(ct.panel, .72); x.strokeStyle = rgba(accent, .5); x.lineWidth = 1.5; x.beginPath(); x.roundRect(pad, revY, leftW, revH, 16); x.fill(); x.stroke(); x.lineWidth = 1;
+    x.font = BODY; x.fillStyle = "#dbe2ee"; let y = revY + 24 + BF; lines.forEach(ln=>{ if (ln) x.fillText(ln, pad+26, y); y += BLH; }); }
+  // ---- right column
+  const rcx = rightX + rightW/2;
+  drawFrameRing(x, rcx, avY + avD/2, avD/2, author.id, avD/64);
+  if (avatar){ x.save(); x.beginPath(); x.arc(rcx, avY+avD/2, avD/2, 0, 7); x.clip(); x.drawImage(avatar, rcx-avD/2, avY, avD, avD); x.restore(); }
+  else { x.fillStyle=ct.panel2; x.beginPath(); x.arc(rcx, avY+avD/2, avD/2, 0, 7); x.fill(); x.fillStyle=accent; x.font="800 70px Outfit, sans-serif"; x.textAlign="center"; x.fillText((author.username[0]||"?").toUpperCase(), rcx, avY+avD/2+25); x.textAlign="left"; }
+  x.textAlign="center"; x.font="800 30px Outfit, sans-serif"; { const t = themeFor(author.id); const nw = x.measureText(author.username).width; x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, rcx-nw/2, nameY-26, rcx+nw/2, nameY)) || text; }
+  x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=10; x.shadowOffsetY=2; x.fillText(author.username, rcx, nameY); x.restore();
+  x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(isMine ? "my review" : "review", rcx, nameY+22);
+  // big score "9/10" in rating colors
+  if (l.rating!=null){ const big = 104, small = 62; x.font=`800 ${big}px Outfit, sans-serif`; const w1 = x.measureText(String(l.rating)).width; x.font=`800 ${small}px Outfit, sans-serif`; const w2 = x.measureText("/10").width;
+    const total = w1 + 6 + w2, left = rcx - total/2; const cols = ratingColors(snapHalf(+l.rating)); const gr = x.createLinearGradient(left, scoreY-big, left+total, scoreY); cols.forEach((cc,i)=> gr.addColorStop(cols.length===1?0:i/(cols.length-1), cc));
+    x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=18; x.shadowOffsetY=6; x.textAlign="left"; x.fillStyle=gr; x.font=`800 ${big}px Outfit, sans-serif`; x.fillText(String(l.rating), left, scoreY); x.font=`800 ${small}px Outfit, sans-serif`; x.fillText("/10", left+w1+6, scoreY); x.restore(); }
+  else { x.font="800 64px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("Played", rcx, scoreY); }
+  if (l.platinum){ const tw = (trophy && trophy.width) ? trophyH*trophy.width/trophy.height : trophyH*0.9; x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=24; x.shadowOffsetY=8; drawTrophy(x, trophy, rcx+tw/2, trophyY+trophyH/2, trophyH); x.restore(); }
+  x.textAlign="left";
+  // sub-ratings ledger
+  if (subsH){ x.fillStyle = rgba(ct.panel, .72); x.strokeStyle = rgba(accent, .5); x.lineWidth = 1.5; x.beginPath(); x.roundRect(rightX, subsY, rightW, subsH, 14); x.fill(); x.stroke(); x.lineWidth = 1;
+    rated.forEach((sr,i)=>{ const ry = subsY + 14 + i*38; const lab = SUB_LABELS[sr.key] ? SUB_LABELS[sr.key][2] : sr.label;
+      x.fillStyle = accent; x.beginPath(); x.arc(rightX+22, ry+13, 4, 0, 7); x.fill();
+      x.font="600 15px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(lab, rightX+36, ry+18);
+      x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle=ratingFillCtx(x, +l.subs[sr.key], rightX+rightW-60, ry, rightX+rightW-16, ry+18); x.fillText(`${l.subs[sr.key]}/10`, rightX+rightW-16, ry+18); x.textAlign="left";
+      if (i < rated.length-1){ x.fillStyle="rgba(255,255,255,.08)"; x.fillRect(rightX+14, ry+30, rightW-28, 1); } }); }
+  // awards
+  if (awH){ x.font="700 14px Outfit, sans-serif"; tags.forEach((t,i)=>{ const ay = awY + i*40; const goty = t.key==="goty"; const lb = `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
+      x.fillStyle = goty ? accent : rgba(ct.panel2, .95); x.beginPath(); x.roundRect(rightX, ay, rightW, 32, 16); x.fill(); if (!goty){ x.strokeStyle=ct.line; x.stroke(); }
+      x.fillStyle = goty ? (lum(accent) > 0.6 ? "#1a1200" : "#fff") : text; x.textAlign="center"; x.fillText(lb, rightX+rightW/2, ay+21); x.textAlign="left"; }); }
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-magazine.png`);
 }
 async function saveReviewImage(g, saved, who){
   try { await document.fonts.ready; } catch(e){}
