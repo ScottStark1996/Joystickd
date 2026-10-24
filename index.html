@@ -3964,7 +3964,7 @@ async function saveReviewCinematic(g, saved, who){
   const art = hero || cover;
   if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
     const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.25, dw, dh);
-    const top = x.createLinearGradient(0,0,0,70); top.addColorStop(0, rgba(ct.bg,.55)); top.addColorStop(1, rgba(ct.bg,0)); x.fillStyle=top; x.fillRect(0,0,W,70);
+
     const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
     x.restore(); }
@@ -4062,7 +4062,7 @@ async function saveReviewMagazine(g, saved, who){
   const art = hero || cover;
   if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
     const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.2, dw, dh);
-    const top = x.createLinearGradient(0,0,0,70); top.addColorStop(0, rgba(ct.bg,.55)); top.addColorStop(1, rgba(ct.bg,0)); x.fillStyle=top; x.fillRect(0,0,W,70);
+
     const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(rightX-140, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.5, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.95)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
     x.restore(); }
@@ -4307,7 +4307,7 @@ function paintCinematic(x, W, H, art, ct){
   x.font="600 12px Manrope, sans-serif"; x.fillStyle="#aab4c8"; x.fillText("joystickd.com", 40, H-22); x.restore();
 }
 // Re-draws the wordmark after hero art has been painted over the top of a card.
-function paintWordmark(x, W, ct){ x.save(); x.shadowColor="rgba(0,0,0,.75)"; x.shadowBlur=10; x.shadowOffsetY=2; x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 34); x.fillStyle=ct.accent; x.fillText("D", W-38, 34); x.restore(); x.textAlign="left"; }
+function paintWordmark(x, W, ct){ x.save(); x.shadowColor="rgba(0,0,0,.9)"; x.shadowBlur=14; x.shadowOffsetY=2; x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 34); x.fillStyle=ct.accent; x.fillText("D", W-38, 34); x.restore(); x.textAlign="left"; }
 function glassPanel(x, px, py, pw, ph, ct){ ct = ct || cardThemeFor(me?.id, me); x.fillStyle=rgba(ct.panel, .78); x.strokeStyle=rgba(ct.line, .9); x.lineWidth=1; x.beginPath(); x.roundRect(px,py,pw,ph,16); x.fill(); x.stroke(); }
 async function drawPerson(x, uid, name, cx, cy, ad, nameSize=17){      // avatar (with frame) + styled name, centered
   const av = avatars[uid] ? await loadImg(avatars[uid], true) : null;
