@@ -647,6 +647,8 @@
 
   /* log sheet */
   .sheet-wrap{position:fixed;inset:0;background:rgba(5,9,18,.7);display:none;align-items:flex-end;justify-content:center;z-index:20}
+  #revStyleWrap,#snapWrap,#awardsImgWrap,#shareProfWrap{z-index:30}   /* choosers open on top of a log or profile sheet */
+  #proWrap{z-index:32}                                                /* the Pro gate opens above a chooser */
   .sheet-wrap.open{display:flex}
   .sheet{background:var(--panel);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:22px 22px 28px;border:1px solid var(--line);border-bottom:0;max-height:92vh;overflow:auto}
   @media(min-width:640px){.sheet-wrap{align-items:center}.sheet{border-radius:22px;border-bottom:1px solid var(--line)}}
