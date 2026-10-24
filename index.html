@@ -931,7 +931,7 @@
     </div>
     <div class="pro-status" id="proStatus"></div>
     <p class="hint" style="margin-top:12px;text-align:center"><b style="color:var(--text)">Support Joystickd — help keep the community alive!</b><br>Everything you can do today stays free, forever. Pro is extra.</p>
-    <div class="actions"><button class="cta ghost" id="proRestore" hidden>Restore purchase</button><button class="cta ghost" id="proClose">Close</button></div>
+    <div class="actions"><button class="cta ghost" id="proManage" hidden>Manage subscription</button><button class="cta ghost" id="proRestore" hidden>Restore purchase</button><button class="cta ghost" id="proClose">Close</button></div>
   </div>
 </div>
 
@@ -1214,6 +1214,7 @@
 // ============================================================================
 const SUPABASE_URL      = "https://yctlohkszjmnnvgaspdn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_G1ev-iB1-BWr4k8z_d2GQA_wwJx9j9m";   // your publishable key
+const RC_IOS_API_KEY    = "";   // RevenueCat → Project → Apps → App Store app → Public API key (appl_...). Leave blank until the iOS build has the plugin.
 // Leave both blank and the site runs on a small built-in sample list instead.
 // ============================================================================
 
@@ -1247,25 +1248,37 @@ const PRO_FEATURES = [
 ];
 // Gate: true if the current user is Pro; otherwise opens the Pro sheet and returns false.
 function requirePro(featureKey){ if (!LIVE) { toast("Pro needs the live site"); return false; } if (!me){ openAuth("signin"); return false; } if (isPro(me)) return true; openPro(featureKey); return false; }
-function openPro(highlight){
+async function openPro(highlight){
+  const live = await proPurchaseLive();
   $("#proFeats").innerHTML = PRO_FEATURES.map(f=> `<div ${f.key===highlight ? 'style="border-color:var(--gold)"' : ""}><span class="ic">${f.ic}</span><span>${f.name}<small>${f.desc}</small></span>${f.built ? "" : `<span class="soon">soon</span>`}</div>`).join("");
   const pro = me && isPro(me);
   $("#proPlans").hidden = !!pro;
-  $("#proSoon").hidden = !!pro || PRO_PURCHASE_LIVE;                      // temporary: goes away by itself when PRO_PURCHASE_LIVE flips
-  $("#proPlans").classList.toggle("preview", !pro && !PRO_PURCHASE_LIVE);
-  $("#proStatus").textContent = pro ? `You're Pro${me.proUntil ? ` until ${fmtDate(String(me.proUntil).slice(0,10))}` : ""}. Thank you for supporting Joystickd.` : (PRO_PURCHASE_LIVE ? "" : "Subscriptions are opening soon \u2014 features unlock the moment they ship.");
+  $("#proSoon").hidden = !!pro || live;                                   // "Coming soon" until purchases work on this device
+  $("#proSoon").querySelector("small").textContent = (!live && isNativeApp()) ? "Pro purchases arrive in the next app update \u2014 here's a preview of what's included." : "Subscriptions aren't open yet \u2014 here's a preview of what's included.";
+  $("#proPlans").classList.toggle("preview", !pro && !live);
+  $("#proManage").hidden = !pro || !me?.proSource || !["stripe","apple","google"].includes(me.proSource);
+  $("#proManage").textContent = me?.proSource==="stripe" ? "Manage subscription" : me?.proSource==="google" ? "Manage in Google Play" : "Manage in App Store";
+  $("#proStatus").textContent = pro ? `You're Pro${me.proUntil ? ` until ${fmtDate(String(me.proUntil).slice(0,10))}` : ""}. Thank you for supporting Joystickd.` : (live ? "Cancel anytime. Pro keeps working until the end of the period you paid for." : "Subscriptions are opening soon \u2014 features unlock the moment they ship.");
   $("#proRestore").hidden = !(window.Capacitor?.isNativePlatform?.() && !pro);
   $("#proWrap").classList.add("open");
 }
-// Flip to true when the App Store (RevenueCat) / Stripe wiring is live. Until then the plan buttons explain.
-const PRO_PURCHASE_LIVE = false;
+// Can this device buy Pro right now? Web: the pro-checkout function says whether Stripe is configured.
+// Native app: only once the RevenueCat plugin is in the build. Cached per session.
+let proLiveCache = null;
+const isNativeApp = ()=> !!window.Capacitor?.isNativePlatform?.();
+async function proPurchaseLive(){
+  if (!LIVE) return false;
+  if (isNativeApp()) return !!(window.Purchases && RC_IOS_API_KEY);
+  if (proLiveCache !== null) return proLiveCache;
+  try { const { data } = await sb.functions.invoke("pro-checkout", { body: { action:"status" } }); proLiveCache = !!data?.live; } catch(e){ proLiveCache = false; }
+  return proLiveCache;
+}
 async function startProPurchase(plan){
   if (!me){ openAuth("signin"); return; }
-  if (!PRO_PURCHASE_LIVE){ toast("Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
-  const cap = window.Capacitor;
-  if (cap?.isNativePlatform?.() && window.Purchases){                       // RevenueCat (iOS): wired in the native build
-    try { const offs = await window.Purchases.getOfferings(); const pkg = offs.current?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("no package");
-      await window.Purchases.purchasePackage({ aPackage: pkg }); await refreshPro(); toast("Welcome to Pro!"); $("#proWrap").classList.remove("open"); }
+  if (!(await proPurchaseLive())){ toast(isNativeApp() ? "Pro purchases arrive in the next app update" : "Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
+  if (isNativeApp()){                                                        // RevenueCat (iOS): the native build has the plugin
+    try { await rcReady(); const { offerings } = await window.Purchases.getOfferings(); const pkg = offerings.current?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("no package");
+      await window.Purchases.purchasePackage({ aPackage: pkg }); await waitForPro(); $("#proWrap").classList.remove("open"); }
     catch(e){ if (!/cancel/i.test(String(e?.message||e))) toast("Purchase didn't go through"); }
     return;
   }
@@ -1273,6 +1286,13 @@ async function startProPurchase(plan){
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { plan } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; }
   catch(e){ toast("Couldn't start checkout \u2014 try again in a moment"); }
 }
+// RevenueCat on the native app: configure once, identify as the Supabase user so webhooks can map purchases.
+let rcConfigured = false;
+async function rcReady(){ if (!isNativeApp() || !window.Purchases || !RC_IOS_API_KEY || !me) return; if (!rcConfigured){ await window.Purchases.configure({ apiKey: RC_IOS_API_KEY, appUserID: me.id }); rcConfigured = true; } else { await window.Purchases.logIn({ appUserID: me.id }); } }
+// After a purchase the webhook flips pro_until a moment later: poll for it (up to ~20s) before declaring victory.
+async function waitForPro(){ toast("Activating Pro\u2026"); for (let i=0;i<10;i++){ await refreshPro(); if (isPro(me)) { toast("Welcome to Pro!"); return true; } await new Promise(r=>setTimeout(r,2000)); } toast("Payment received \u2014 Pro will switch on in a moment"); return false; }
+async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ window.open("https://apps.apple.com/account/subscriptions", "_blank"); return; } if (me.proSource==="google"){ window.open("https://play.google.com/store/account/subscriptions", "_blank"); return; }
+  try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
 const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels" };
@@ -1482,7 +1502,7 @@ async function saveLook(theme){
   if (error){ if (/PRO_REQUIRED/.test(error.message||"")) { $("#lookWrap").classList.remove("open"); openPro("theme"); return; } return dbFail(error); }
   me.theme = theme; notePro({ id: me.id, pro_until: me.proUntil, theme }); $("#lookWrap").classList.remove("open"); toast(theme ? "Saved" : "Back to the default look"); render();
 }
-async function refreshPro(){ if (!LIVE || !me) return; const { data } = await sb.from("profiles").select("pro_until").eq("id", me.id).maybeSingle(); if (data){ me.proUntil = data.pro_until||null; notePro({ id: me.id, pro_until: me.proUntil }); } render(); }
+async function refreshPro(){ if (!LIVE || !me) return; const { data } = await sb.from("profiles").select("pro_until,pro_source").eq("id", me.id).maybeSingle(); if (data){ me.proUntil = data.pro_until||null; me.proSource = data.pro_source||null; notePro({ id: me.id, pro_until: me.proUntil }); } render(); }
 const requireAuth = ()=>{ if (LIVE && !me){ openAuth(); return false; } return true; };
 // Supabase returns at most 1000 rows per request. fetchAll() pages through a query so popular games
 // (and prolific users) aren't silently truncated. `build` must return a fresh query each call.
@@ -4918,7 +4938,8 @@ function wireSettingsUI(){
   $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
   $("#proPlans").querySelectorAll("[data-plan]").forEach(b=> b.onclick = ()=> startProPurchase(b.dataset.plan));
-  $("#proRestore").onclick = async ()=>{ if (window.Purchases){ try { await window.Purchases.restorePurchases(); await refreshPro(); toast(isPro(me) ? "Pro restored" : "No Pro purchase found for this Apple ID"); } catch(e){ toast("Couldn't restore"); } } else toast("Restore is available in the app"); };
+  $("#proManage").onclick = ()=>{ $("#proWrap").classList.remove("open"); openProPortal(); };
+  $("#proRestore").onclick = async ()=>{ if (window.Purchases){ try { await rcReady(); await window.Purchases.restorePurchases(); await refreshPro(); toast(isPro(me) ? "Pro restored" : "No Pro purchase found for this Apple ID"); } catch(e){ toast("Couldn't restore"); } } else toast("Restore is available in the app"); };
   // Admin: gift Pro by username (also how you give yourself Pro for testing)
   $("#setGrantPro").onclick = async ()=>{ closeSettings(); if (!me?.isAdmin) return;
     const who = prompt("Username to grant Pro to:"); if (!who) return;
@@ -4968,7 +4989,7 @@ function wireSettingsUI(){
 // Read a profile by id or username, surviving a missing optional column.
 // If a newer optional column hasn't been added in Supabase yet, drop just that column and retry —
 // the bio, badges and everything else still load. (Used to fall back to id+username only.)
-const PROFILE_COLS = ["id","username","avatar_url","bio","is_admin","founder","badge_layout","emblem_url","emblem_name","emblem_desc","hide_plats","pro_until","theme","shelves"];
+const PROFILE_COLS = ["id","username","avatar_url","bio","is_admin","founder","badge_layout","emblem_url","emblem_name","emblem_desc","hide_plats","pro_until","pro_source","theme","shelves"];
 let profileCols = PROFILE_COLS.slice();
 async function readProfile(where){
   for (let attempt = 0; attempt < 8; attempt++){
@@ -5051,7 +5072,7 @@ async function loadMyData(){
     sb.from("wishlist").select("*").eq("user_id", me.id),
     sb.from("lists").select("*").eq("user_id", me.id).order("updated_at",{ascending:false}),
   ]);
-  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; me.proUntil = P.data.pro_until||null; me.theme = P.data.theme||null; me.shelves = Array.isArray(P.data.shelves) ? P.data.shelves : []; me.shelves.forEach(sh=> (sh.games||[]).forEach(g=> g && cacheGame(g))); notePro(P.data); }
+  if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; me.proUntil = P.data.pro_until||null; me.proSource = P.data.pro_source||null; me.theme = P.data.theme||null; me.shelves = Array.isArray(P.data.shelves) ? P.data.shelves : []; me.shelves.forEach(sh=> (sh.games||[]).forEach(g=> g && cacheGame(g))); notePro(P.data); }
   wishlist = {}; (W.data||[]).forEach(r=>{ wishlist[r.game_id]=r.added_at; cacheGame(r.game); });
   myLists = LS.error ? [] : (LS.data||[]); myLists.forEach(l=> (l.games||[]).forEach(cacheGame));
   if (me.isAdmin) await loadReports();
@@ -5349,7 +5370,10 @@ wirePushListeners();
   if (LIVE){
     await loadOverrides();
     const { data:{ session } } = await sb.auth.getSession();
-    if (session) { me = { id:session.user.id, username: session.user.user_metadata?.username || "you" }; await loadMyData(); pushOnSignIn(); }
+    if (session) { me = { id:session.user.id, username: session.user.user_metadata?.username || "you" }; await loadMyData(); pushOnSignIn(); rcReady().catch(()=>{}); }
+    const proBack = params.get("pro");
+    if (proBack){ history.replaceState(null, "", location.pathname + (u ? "?u="+encodeURIComponent(u) : g ? "?g="+g : "")); 
+      if (proBack==="success" && me){ waitForPro().then(()=> render()); } else if (proBack==="cancel"){ toast("Checkout cancelled \u2014 no charge"); } }
     paintAuthBtn();
     sb.auth.onAuthStateChange((evt, s)=>{ if (evt==="PASSWORD_RECOVERY"){ onAuth(s); openPw(); return; } if (evt==="SIGNED_IN"||evt==="SIGNED_OUT"||evt==="USER_UPDATED") onAuth(s); });
     if (AUTH_LINK.error){
