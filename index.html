@@ -792,9 +792,9 @@
     <div class="g">Pick a layout.</div>
     <div class="set-list" style="margin-top:12px">
       <button class="set-row" id="revStyleCard">Review card<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Score, platinum, sub-ratings and the written review</small></button>
-      <button class="set-row" id="revStylePoster">Poster<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Big cover art, the score and trophy, your name — no review text</small></button>
-      <button class="set-row" id="revStyleCine">Cinematic<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Widescreen art banner up top, then the full review</small></button>
-      <button class="set-row" id="revStyleMag">Magazine<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Two columns — art, title and boxed review left; score, trophy and sub-ratings right</small></button>
+      <button class="set-row" id="revStylePoster">Poster <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Big cover art, the score and trophy, your name — no review text</small></button>
+      <button class="set-row" id="revStyleCine">Cinematic <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Widescreen art banner up top, then the full review</small></button>
+      <button class="set-row" id="revStyleMag">Magazine <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Two columns — art, title and boxed review left; score, trophy and sub-ratings right</small></button>
     </div>
     <div class="set-sub" style="padding-top:14px">Review text size</div>
     <div class="chips" id="revTextSize" style="padding:0 2px">
@@ -1226,7 +1226,7 @@ const PRO_FEATURES = [
   { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:true },
   { key:"frames",  ic:"\uD83D\uDD36", name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
   { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
-  { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Colors and looks for the review and profile images you save.", built:true },
+  { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Poster, Cinematic and Magazine layouts, plus colors, backgrounds and patterns for every image you save.", built:true },
   { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:true },
   { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:true },
 ];
@@ -2803,9 +2803,9 @@ function wireSnapUI(){
   $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
   $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
   $("#revStyleCard").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewImage(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
-  $("#revStyleMag").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewMagazine(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
-  $("#revStyleCine").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewCinematic(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
-  $("#revStylePoster").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewPoster(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the poster"); } };
+  $("#revStyleMag").onclick = async ()=>{ if (!requirePro("cards")) return; $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewMagazine(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#revStyleCine").onclick = async ()=>{ if (!requirePro("cards")) return; $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewCinematic(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#revStylePoster").onclick = async ()=>{ if (!requirePro("cards")) return; $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewPoster(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the poster"); } };
   $("#snapCancel").onclick = ()=> $("#snapWrap").classList.remove("open");
   $("#snapWrap").addEventListener("click", e=>{ if(e.target.id==="snapWrap") $("#snapWrap").classList.remove("open"); });
   $("#snapChart").onclick = ()=>{ snapChartOn=!snapChartOn; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn); };
@@ -4036,9 +4036,7 @@ async function saveReviewMagazine(g, saved, who){
   if (art){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
     const sc = Math.max(W/art.width, heroH/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, 46 + (heroH-dh)*0.2, dw, dh);
     const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
-    const side = x.createLinearGradient(rightX-220, 0, rightX+20, 0); side.addColorStop(0, "rgba(4,5,9,0)"); side.addColorStop(1, "rgba(4,5,9,1)"); x.fillStyle=side; x.fillRect(0,46,W,heroH);
-    x.fillStyle="#040509"; x.fillRect(rightX+20, 46, W-rightX-20, heroH);
-    const fade2 = x.createLinearGradient(0, 46+heroH*0.6, 0, 46+heroH); fade2.addColorStop(0, rgba(ct.bg,0)); fade2.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade2; x.fillRect(rightX-220,46,W-rightX+220,heroH);
+    const side = x.createLinearGradient(rightX-140, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.5, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.95)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
     x.restore(); }
   // ---- left column
   x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=14; x.shadowOffsetY=3; x.fillStyle=text; x.font=`800 ${tf}px Outfit, sans-serif`;
@@ -4116,7 +4114,7 @@ async function saveReviewImage(g, saved, who){
   const cvW=110, cvH=147;
   const AV=52;                                                                   // avatar size on the card
   const tx0 = g.cover ? 44+cvW+18 : 44;
-  measure.font="800 26px Outfit, sans-serif"; const titleLines = wrapText(measure, g.title, W-tx0-150).slice(0,2);
+  measure.font="800 26px Outfit, sans-serif"; const titleLines = wrapText(measure, g.title, W-tx0-44).slice(0,2);   // full width: the score now sits lower, level with the avatar row
   const authY = 42 + titleLines.length*30;                                       // baseline of "name's review", relative to y
   const hdrExtra = Math.max(0, (authY + 10 + AV) - (cvH - 12));                  // header grows if the avatar would run past the cover
   let H = 56 + cvH + 22 + hdrExtra;
@@ -4149,8 +4147,13 @@ async function saveReviewImage(g, saved, who){
   const tx = cover ? 44+cvW+18 : 44;
   x.font="800 26px Outfit, sans-serif"; x.fillStyle=text;
   titleLines.forEach((t,i)=> x.fillText(t, tx, y+16+i*30));
+  // score block geometry first (big number + trophy to its left, bottom-right of the header), so the meta line can stay clear of it
+  const sc = l.rating!=null ? String(l.rating) : "Played", big = l.rating!=null ? 84 : 26;
+  x.font=`800 ${big}px Outfit, sans-serif`; const sw = x.measureText(sc).width;
+  const th = troph ? 78 : 0, tw = troph ? troph.width*th/troph.height : 0;
+  const scRight = W-56, scLeft = scRight - sw - (troph ? tw + 14 : 0), scY = y+cvH-20;
   x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut;
-  x.fillText([g.year, g.dev].filter(Boolean).join(" · "), tx, y+20+titleLines.length*30);
+  { let meta = [g.year, g.dev].filter(Boolean).join(" · "); const maxW = scLeft - tx - 16; while (x.measureText(meta).width > maxW && meta.length > 6) meta = meta.slice(0,-2).trimEnd() + "…"; x.fillText(meta, tx, y+20+titleLines.length*30); }
   // author line ("name's review"), then their avatar below it with profile badges on the corners
   { const ly = y+authY, ad=AV, ax=tx, ay=ly+10;
     x.font="700 14px Manrope, sans-serif"; { const tN = themeFor(author.id); const nw0 = x.measureText(author.username).width; x.fillStyle = (tN && tN.nameColor && nameFillCtx(x, tN, ax, ly-12, ax+nw0, ly)) || soft; } x.fillText(author.username, ax, ly);
@@ -4163,14 +4166,12 @@ async function saveReviewImage(g, saved, who){
     badgeList.forEach((b,i)=>{ const im=badgeImgs[i]; if (!im) return; const bd=24;
       const bx = b.corner==="right" ? ax+ad-bd+6 : ax-6, by = b.corner==="bl" ? ay+ad-bd+5 : ay-5;
       x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=5; x.shadowOffsetY=1; x.drawImage(im, bx, by, bd, bd); x.restore(); }); }
-  const sc = l.rating!=null ? String(l.rating) : "Played";
-  x.textAlign="right"; x.font = l.rating!=null ? "800 46px Outfit, sans-serif" : "800 22px Outfit, sans-serif";
-  const scY = y+cvH-30;
-  if (l.rating!=null){ const cols=ratingColors(snapHalf(l.rating)); const grd=x.createLinearGradient(W-160, scY-40, W-56, scY); cols.forEach((cc,i)=>grd.addColorStop(cols.length===1?0:i/(cols.length-1), cc)); x.fillStyle=grd; }
+  x.textAlign="right"; x.font=`800 ${big}px Outfit, sans-serif`;
+  if (l.rating!=null){ const cols=ratingColors(snapHalf(l.rating)); const grd=x.createLinearGradient(scRight-sw, scY-big*0.7, scRight, scY); cols.forEach((cc,i)=>grd.addColorStop(cols.length===1?0:i/(cols.length-1), cc)); x.fillStyle=grd; }
   else x.fillStyle="#c9d3e0";
-  x.fillText(sc, W-56, scY);
-  if (l.rating!=null){ x.font="700 15px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("/ 10", W-56, scY+20); }
-  if (troph){ const th=62, tw=troph.width*th/troph.height; x.drawImage(troph, W-56-tw, scY-th-40, tw, th); }
+  x.save(); x.shadowColor="rgba(0,0,0,.35)"; x.shadowBlur=10; x.shadowOffsetY=3; x.fillText(sc, scRight, scY); x.restore();
+  if (l.rating!=null){ x.font="700 15px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("/ 10", scRight, scY+20); }
+  if (troph){ x.save(); x.shadowColor="rgba(0,0,0,.45)"; x.shadowBlur=8; x.shadowOffsetY=3; x.drawImage(troph, scLeft, scY - big*0.36 - th/2, tw, th); x.restore(); }
   x.textAlign="left";
   y += cvH + 22 + hdrExtra;
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut;
