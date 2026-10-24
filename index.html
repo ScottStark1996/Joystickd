@@ -793,6 +793,11 @@
     <div class="set-list" style="margin-top:12px">
       <button class="set-row" id="revStyleCard">Review card<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Score, platinum, sub-ratings and the written review</small></button>
       <button class="set-row" id="revStylePoster">Poster<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Big cover art, the score and trophy, your name — no review text</small></button>
+      <button class="set-row" id="revStyleCine">Cinematic<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Widescreen art banner up top, then the full review</small></button>
+    </div>
+    <div class="set-sub" style="padding-top:14px">Review text size</div>
+    <div class="chips" id="revTextSize" style="padding:0 2px">
+      <button class="chip" data-rts="s">Small</button><button class="chip" data-rts="m">Medium</button><button class="chip" data-rts="l">Large</button>
     </div>
     <div class="actions"><button class="cta ghost" id="revStyleCancel">Cancel</button></div>
   </div>
@@ -2793,9 +2798,11 @@ function wireSnapUI(){
   $("#shareProfWrap").addEventListener("click", e=>{ if(e.target.id==="shareProfWrap") $("#shareProfWrap").classList.remove("open"); });
   $("#spLink").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); if (me) shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(me.username), `${me.username} on Joystickd`, "Profile link copied"); };
   $("#spSnap").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); $("#snapBtn").click(); };
+  $("#revTextSize").querySelectorAll("[data-rts]").forEach(b=> b.onclick = ()=>{ revTextSize = b.dataset.rts; try { localStorage.setItem("jd_revTextSize", revTextSize); } catch(e){} paintRevTextSize(); });
   $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
   $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
   $("#revStyleCard").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewImage(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#revStyleCine").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewCinematic(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
   $("#revStylePoster").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewPoster(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the poster"); } };
   $("#snapCancel").onclick = ()=> $("#snapWrap").classList.remove("open");
   $("#snapWrap").addEventListener("click", e=>{ if(e.target.id==="snapWrap") $("#snapWrap").classList.remove("open"); });
@@ -3276,7 +3283,8 @@ async function renderAwards(app){
       </div>
       ${yearSelect("awardYear", awardYear)}
     </div>
-    ${(!mine && voters) ? `<div style="display:flex;justify-content:flex-end;margin:-10px 0 14px"><button class="cta ghost sm" id="commAwardsImg" title="Save a picture of this year's community winners">\u2913 Save community image</button></div>` : ""}
+    ${(!mine && voters) ? `<div style="display:flex;justify-content:flex-end;margin:-10px 0 14px"><button class="cta ghost sm" id="commAwardsImg" title="Save a picture of this year's community winners">\u2913 Save community image</button></div>`
+      : (mine && picked) ? `<div style="display:flex;justify-content:flex-end;margin:-10px 0 14px"><button class="cta ghost sm" id="myAwardsImg" title="Save a picture of your ${awardYear} ballot">\u2913 Save my ballot image</button></div>` : ""}
     <div class="seg">
       <button class="segb ${!mine?"on":""}" data-mode="community">Community results</button>
       <button class="segb ${mine?"on":""}" data-mode="mine">My ballot${picked?` (${picked})`:""}</button>
@@ -3295,6 +3303,7 @@ async function renderAwards(app){
     ${mine ? "" : `<div class="hint center">Winners are tallied from everyone's ballots.${LIVE ? "" : " (Demo voters included in sample mode.)"}</div>`}`;
   $("#awardYear").onchange = e=>{ awardYear=+e.target.value; awardsExpanded.clear(); render(); };
   $("#commAwardsImg") && ($("#commAwardsImg").onclick = ()=> openAwardsImg(null, awardYear, true));
+  $("#myAwardsImg") && ($("#myAwardsImg").onclick = ()=>{ if (!me) return; openAwardsImg({ id: me.id, username: me.username, ballot: ballots.me }, awardYear); });
   app.querySelectorAll("[data-mode]").forEach(b=> b.onclick = ()=>{ if (b.dataset.mode==="mine" && !requireAuth()) return; awardMode=b.dataset.mode; render(); });
   app.querySelectorAll("[data-awexpand]").forEach(d=> d.onclick = e=>{
     if (e.target.closest("[data-awgame]")) return;
@@ -3836,9 +3845,14 @@ function logForExport(s){
 // who = { id, username, ballot } — the review's author. Omitted = you (the sheet or your own saved log).
 // Card or poster? Asked every time a review is saved as an image.
 let revStyleCtx = null;
+let revTextSize = (()=>{ try { return localStorage.getItem("jd_revTextSize") || "m"; } catch(e){ return "m"; } })();   // s | m | l, remembered on this device
+const REV_TEXT = { s:{ font:14, lh:22 }, m:{ font:16, lh:25 }, l:{ font:18, lh:29 } };
+const revText = ()=> REV_TEXT[revTextSize] || REV_TEXT.m;
+function paintRevTextSize(){ $("#revTextSize").querySelectorAll("[data-rts]").forEach(b=> b.classList.toggle("on", b.dataset.rts===revTextSize)); }
 function chooseReviewImage(g, saved, who){
   if (!g) return;
   revStyleCtx = { g, saved, who };
+  paintRevTextSize();
   $("#revStyleWrap").classList.add("open");
 }
 // Poster: big cover art, the score (with trophy), awards, and the reviewer — no review text.
@@ -3887,6 +3901,92 @@ async function saveReviewPoster(g, saved, who){
   const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-poster.png`);
 }
+// Cinematic: a widescreen crop of the cover as a banner that fades into the card, score + trophy over it,
+// then the reviewer, dates, platinum, awards and the full review. Uses the author's Image style.
+async function saveReviewCinematic(g, saved, who){
+  try { await document.fonts.ready; } catch(e){}
+  const l = saved ? logForExport(saved) : sheetLog();
+  const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
+  const isMine = !who || (me && who.id===me.id);
+  const ct = cardThemeFor(author.id), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";
+  const W = 1080, heroH = 560, pad = 64;
+  const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
+  const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
+  const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
+  const rated = SUBS.filter(sc=> l.subs?.[sc.key]!=null);
+  const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null].filter(Boolean);
+  const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null)));
+  // measure the review first so the canvas is exactly tall enough
+  const RT = revText(), CF = Math.round(19*RT.font/16), CLH = Math.round(29*RT.font/16), CBODY = `400 ${CF}px Manrope, sans-serif`;
+  const m = document.createElement("canvas").getContext("2d"); m.font = CBODY;
+  const paras = (l.review||"").trim().split(/\n+/).filter(Boolean); const lines = []; paras.forEach((p,i)=>{ if (i) lines.push(""); wrapText(m, p, W-pad*2-26).forEach(ln=> lines.push(ln)); });
+  m.font = "700 15px Outfit, sans-serif"; const pillLabel = t => `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
+  const pillW = tags.map(t=> m.measureText(pillLabel(t)).width + 28);
+  let pillRows = 0; { let px = pad; pillW.forEach(w=>{ if (px + w > W-pad && px > pad){ pillRows++; px = pad; } px += w + 10; }); if (tags.length) pillRows++; }
+  const metaH = 110 + (dparts.length ? 30 : 0) + (showPlatLine ? 34 : 0) + (pillRows ? pillRows*44 + 6 : 0);
+  const subsH = rated.length ? 40 + Math.ceil(rated.length/2)*34 : 0;
+  const revH = lines.length ? lines.length*CLH + 30 : 0;
+  const H = 46 + heroH + metaH + subsH + revH + 46 + 46;
+  const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
+  paintCinematic(x, W, H, cover, ct);
+  // hero banner: widescreen crop of the cover (full size, not blurred), fading into the card at the bottom
+  if (cover){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip();
+    const sc = Math.max(W/cover.width, heroH/cover.height), dw=cover.width*sc, dh=cover.height*sc; x.drawImage(cover, (W-dw)/2, 46 + (heroH-dh)*0.25, dw, dh);
+    const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
+    const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
+    x.restore(); }
+  // small cover + title, sitting on the fade
+  const cw = 150, ch = 200, cy = 46 + heroH - ch - 20;
+  x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=30; x.shadowOffsetY=10; x.fillStyle="#000"; x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.fill(); x.restore();
+  x.save(); x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.clip(); if (cover) x.drawImage(cover, pad, cy, cw, ch); else { x.fillStyle=ct.panel2; x.fillRect(pad,cy,cw,ch); } x.restore();
+  x.strokeStyle="rgba(255,255,255,.18)"; x.lineWidth=1; x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.stroke();
+  const tx = pad + cw + 28, scoreW = 300;
+  x.fillStyle=text; x.font="800 50px Outfit, sans-serif"; x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=16; x.shadowOffsetY=3;
+  const tl = wrapText(x, g.title, W - tx - pad - scoreW).slice(0,2); let ty = cy + ch - 36 - (tl.length-1)*54; tl.forEach(ln=>{ x.fillText(ln, tx, ty); ty += 54; });
+  x.font="600 18px Manrope, sans-serif"; x.fillStyle=soft; x.fillText([g.year, g.dev].filter(Boolean).join(" · "), tx, cy + ch - 6); x.restore();
+  // score + trophy, bottom right of the banner
+  { const size = 150, sy = cy + ch - 30; x.font=`800 ${size}px Outfit, sans-serif`; const sw = l.rating!=null ? x.measureText(String(l.rating)).width : 160;
+    const th = 130, right = W - pad;
+    x.save(); x.shadowColor="rgba(0,0,0,.65)"; x.shadowBlur=24; x.shadowOffsetY=6;
+    bigScore(x, l.rating, right - sw/2, sy, size);
+    if (l.platinum) drawTrophy(x, trophy, right - sw - 18, sy - size*0.36, th);
+    x.restore();
+    x.textAlign="center"; x.font="700 18px Outfit, sans-serif"; x.fillStyle=mut; if (l.rating!=null) x.fillText("/ 10", right - sw/2, sy + 30); x.textAlign="left"; }
+  // meta block
+  let y = 46 + heroH + 34;
+  await drawPersonRow(x, author.id, author.username, pad, y, 56, isMine ? "my review" : `${author.username}'s review`, accent, ct);
+  y += 56 + 30;
+  if (dparts.length){ x.font="600 16px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(dparts.join("   ·   "), pad, y); y += 30; }
+  if (showPlatLine){ x.fillStyle=accent; x.font="700 17px Outfit, sans-serif";
+    const pbits=[platNumText(l) ? `Platinum ${platNumText(l)}` : "Platinum", l.showPlatStats&&l.platDiff!=null?`difficulty ${l.platDiff}/10`:null, l.showPlatStats&&l.platHours!=null?`${l.platHours} hrs`:null].filter(Boolean);
+    x.fillText("🏆 " + pbits.join("  ·  "), pad, y); y += 34; }
+  if (tags.length){ x.font="700 15px Outfit, sans-serif"; let px = pad; tags.forEach((t,i)=>{ const lb = pillLabel(t);
+      if (px + pillW[i] > W-pad && px > pad){ px = pad; y += 44; } const goty = t.key==="goty";
+      x.fillStyle = goty ? accent : rgba(ct.panel2, .9); x.beginPath(); x.roundRect(px, y-6, pillW[i], 34, 17); x.fill(); if (!goty){ x.strokeStyle=ct.line; x.stroke(); }
+      x.fillStyle = goty ? (lum(accent) > 0.6 ? "#1a1200" : "#fff") : text; x.fillText(lb, px+14, y+17); px += pillW[i] + 10; }); y += 44 + 6; }
+  // sub-ratings, two columns
+  if (rated.length){ y += 10; const colW = (W - pad*2 - 24)/2;
+    rated.forEach((sr,i)=>{ const col=i%2, row=Math.floor(i/2), bx = pad + col*(colW+24), by = y + row*34;
+      x.font="600 16px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(SUB_LABELS[sr.key] ? SUB_LABELS[sr.key][1] : sr.label, bx, by);
+      x.textAlign="right"; x.font="800 18px Outfit, sans-serif"; x.fillStyle=ratingFillCtx(x, +l.subs[sr.key], bx+colW-40, by-14, bx+colW, by); x.fillText(String(l.subs[sr.key]), bx+colW, by); x.textAlign="left";
+      x.fillStyle="rgba(255,255,255,.08)"; x.fillRect(bx, by+10, colW, 1); });
+    y += Math.ceil(rated.length/2)*34 + 10; }
+  // the review, with an accent rule down the left
+  if (lines.length){ y += 20; x.fillStyle=accent; x.fillRect(pad, y-20, 4, lines.length*CLH + 6);
+    x.font=CBODY; x.fillStyle="#dbe2ee"; lines.forEach(ln=>{ if (ln) x.fillText(ln, pad+26, y); y += CLH; }); }
+  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-cinematic.png`);
+}
+// avatar (framed) + styled name + a small caption, left-aligned in a row
+async function drawPersonRow(x, uid, name, px, py, ad, caption, accent, ct){
+  const av = uid && avatars[uid] ? await loadImg(avatars[uid], true) : null; const cx = px + ad/2, cy = py + ad/2;
+  drawFrameRing(x, cx, cy, ad/2, uid, ad/64);
+  if (av){ x.save(); x.beginPath(); x.arc(cx, cy, ad/2, 0, 7); x.clip(); x.drawImage(av, px, py, ad, ad); x.restore(); }
+  else { x.fillStyle=ct.panel2; x.beginPath(); x.arc(cx, cy, ad/2, 0, 7); x.fill(); x.fillStyle=accent; x.font=`800 ${Math.round(ad*0.42)}px Outfit, sans-serif`; x.textAlign="center"; x.fillText((name[0]||"?").toUpperCase(), cx, cy+ad*0.15); x.textAlign="left"; }
+  const nx = px + ad + 16; x.font="800 24px Outfit, sans-serif"; const t = themeFor(uid); const nw = x.measureText(name).width;
+  x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, nx, cy-16, nx+nw, cy+4)) || "#e6ebf4"; x.fillText(name, nx, cy+2);
+  x.font="600 14px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(caption, nx, cy+24);
+}
 async function saveReviewImage(g, saved, who){
   try { await document.fonts.ready; } catch(e){}
   const l = saved ? logForExport(saved) : sheetLog(), W=720;
@@ -3902,10 +4002,11 @@ async function saveReviewImage(g, saved, who){
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const troph = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating ?? 10}.png`) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
-  const measure=document.createElement("canvas").getContext("2d"); measure.font="400 16px Manrope, sans-serif";
+  const RT = revText(), BODY = `400 ${RT.font}px Manrope, sans-serif`, LH = RT.lh;
+  const measure=document.createElement("canvas").getContext("2d"); measure.font=BODY;
   // Long reviews become a series: part 1 is the full card, later parts are continuation cards.
   const allLines = l.review ? wrapText(measure, l.review, W-64-32) : [];
-  const PART1 = 34, PARTN = 46, MAXPARTS = 4;
+  const PART1 = Math.round(34*25/LH), PARTN = Math.round(46*25/LH), MAXPARTS = 4;
   const parts = [allLines.slice(0, PART1)];
   for (let i = PART1; i < allLines.length && parts.length < MAXPARTS; i += PARTN) parts.push(allLines.slice(i, i+PARTN));
   if (allLines.length > PART1 + PARTN*(MAXPARTS-1)){ const last = parts[parts.length-1]; last[last.length-1] = last[last.length-1].replace(/\s*$/, "") + " \u2026"; }
@@ -3934,7 +4035,7 @@ async function saveReviewImage(g, saved, who){
       pills.push({ label, x:px, y:py, w, goty: t.key==="goty" }); px += w + PILL_GAP; });
     H += (pills.length ? pills[pills.length-1].y + PILL_H : 0) + 14; }
   const tagLines = pills;
-  if (revLines.length) H += 18 + revLines.length*25;
+  if (revLines.length) H += 18 + revLines.length*LH;
   H += 70;
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   const ct = cardThemeFor(author.id);
@@ -4000,9 +4101,9 @@ async function saveReviewImage(g, saved, who){
       x.fillText(pl.label, pl.x + PILL_PAD, top + pl.y + PILL_H/2 + 1); x.textBaseline="alphabetic"; });
     y += pills[pills.length-1].y + PILL_H + 14; }
   if (revLines.length){
-    x.font="400 16px Manrope, sans-serif"; x.fillStyle="#d7deea";
-    revLines.forEach((ln,i)=> x.fillText(ln, 44, y + 8 + i*25));
-    y += 18 + revLines.length*25;
+    x.font=BODY; x.fillStyle="#d7deea";
+    revLines.forEach((ln,i)=> x.fillText(ln, 44, y + 8 + i*LH));
+    y += 18 + revLines.length*LH;
   }
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
   if (nParts > 1){ x.textAlign="right"; x.fillStyle=gold; x.font="700 13px Outfit, sans-serif"; x.fillText(`Part 1 of ${nParts}  \u2192`, W-44, H-40); x.textAlign="left"; }
@@ -4013,15 +4114,15 @@ async function saveReviewImage(g, saved, who){
   // continuation cards: compact header (title + author), then the next slice of the review
   for (let pi = 1; pi < nParts; pi++){
     const lines = parts[pi], c2 = document.createElement("canvas"), x2 = c2.getContext("2d");
-    const H2 = 56 + 40 + 26 + 18 + lines.length*25 + 70;
+    const H2 = 56 + 40 + 26 + 18 + lines.length*LH + 70;
     const S2 = exportScale(W, H2); c2.width = W*S2; c2.height = H2*S2; x2.scale(S2, S2);
     paintCardBg(x2, W, H2, ct, cover);
     x2.textAlign="right"; x2.font="800 16px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText("JOYSTICK", W-56, 48); x2.fillStyle=gold; x2.fillText("D", W-44, 48); x2.textAlign="left";
     x2.font="800 22px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText(wrapText(x2, g.title, W-88-150)[0] || "", 44, 70);
     x2.font="700 14px Manrope, sans-serif"; x2.fillStyle=soft; x2.fillText(author.username, 44, 96);
     const nw2 = x2.measureText(author.username).width; x2.font="600 14px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText(`'s review \u00b7 continued`, 44+nw2, 96);
-    x2.font="400 16px Manrope, sans-serif"; x2.fillStyle="#d7deea";
-    lines.forEach((ln,i)=> x2.fillText(ln, 44, 140 + i*25));
+    x2.font=BODY; x2.fillStyle="#d7deea";
+    lines.forEach((ln,i)=> x2.fillText(ln, 44, 140 + i*LH));
     x2.font="600 13px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText("joystickd.com", 44, H2-40);
     x2.textAlign="right"; x2.fillStyle=gold; x2.font="700 13px Outfit, sans-serif"; x2.fillText(`Part ${pi+1} of ${nParts}${pi+1<nParts ? "  \u2192" : ""}`, W-44, H2-40); x2.textAlign="left";
     const b2 = await new Promise(res=> c2.toBlob(res, "image/png")); if (b2) items.push({ blob: b2, filename: `${base}-part-${pi+1}.png` });
