@@ -138,7 +138,7 @@
   /* profile */
   .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:14px}
   .avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(160deg,var(--gold),#8a5a10);display:grid;place-items:center;font-family:Outfit;font-weight:800;font-size:28px;color:#1a1200;flex-shrink:0}
-  .profile-head h1{font-size:30px;font-weight:800}
+  .profile-head h1{font-size:30px;font-weight:800;line-height:1.1}
   .stats{color:var(--muted);font-size:14px;margin-top:4px}
   .stats b{color:var(--text)}
   .platstat-inline{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;vertical-align:middle;position:relative;top:-1px}
@@ -478,7 +478,7 @@
   .slock{text-align:center;padding:36px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
   .slock h3{font-size:20px;margin:8px 0 6px}.slock p{color:var(--muted);font-size:14px;max-width:420px;margin:0 auto 16px}
   /* Pro: profile look (accent / pattern / tint) and avatar frames */
-  .profile-head.themed{padding:18px 16px;margin:-6px -16px 16px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
+  .profile-head.themed{padding:16px 16px 18px;margin:-6px -16px 16px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
   @media(max-width:640px){.profile-head.themed{margin-left:-12px;margin-right:-12px}}
   .profile-head.themed h1{color:var(--acc)}
   .ptabs.themed .ptab.on{border-bottom-color:var(--acc)}.ptabs.themed .ptab b{color:var(--acc)}
@@ -798,6 +798,7 @@
       <button class="set-row" id="revStyleCine">Cinematic <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Widescreen art banner up top, then the full review</small></button>
       <button class="set-row" id="revStyleMag">Magazine <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Two columns — art, title and boxed review left; score, trophy and sub-ratings right</small></button>
     </div>
+    <button class="set-row" id="revStyleEdit" style="margin-top:10px">Image style… <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Card color, background, pattern and highlight color for everything you save</small></button>
     <div class="set-sub" style="padding-top:14px">Image size</div>
     <div class="chips" id="revFormat" style="padding:0 2px">
       <button class="chip" data-rfmt="auto">Adaptive</button><button class="chip" data-rfmt="letter">8.5 × 11</button><button class="chip" data-rfmt="square">IG square</button><button class="chip" data-rfmt="portrait">IG portrait</button>
@@ -899,7 +900,7 @@
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
     <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
     <div class="look-sec"><h3>Pattern</h3><div class="chips" id="cardPattern"></div></div>
-    <div class="look-sec"><h3>Highlight color</h3><div class="chips" id="cardAccent"></div></div>
+    <div class="look-sec"><h3>Highlight color</h3><div class="swatches" id="cardAccent"></div></div>
     <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
   </div>
 </div>
@@ -1321,12 +1322,15 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
   badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
   bg: PAGE_BGS[t.bg] ? t.bg : "navy",
-  card: { bg: PAGE_BGS[t.card?.bg] ? t.card.bg : "navy", accent: t.card?.accent==="theme" ? "theme" : "gold", style: ["solid","cover","glow"].includes(t.card?.style) ? t.card.style : "solid", pattern: PATTERNS[t.card?.pattern] ? t.card.pattern : "none" } }; }
+  card: { bg: PAGE_BGS[t.card?.bg] ? t.card.bg : "navy",
+          // the card's highlight color is its own hex (older saves used "gold" / "theme" — mapped here)
+          accent: /^#[0-9a-f]{6}$/i.test(t.card?.accent||"") ? t.card.accent.toLowerCase() : t.card?.accent==="theme" ? (/^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent) : "#f0b429",
+          style: ["solid","cover","glow"].includes(t.card?.style) ? t.card.style : "solid", pattern: PATTERNS[t.card?.pattern] ? t.card.pattern : "none" } }; }
 // Colors for the images a Pro user saves (review cards, continuation cards, profile snapshot).
 const CARD_STYLES = { solid:"Solid", cover:"Blurred cover", glow:"Accent glow" };
 function cardThemeFor(uid, P){
   const t = themeFor(uid, P); const b = PAGE_BGS[t?.card?.bg] || PAGE_BGS.navy;
-  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t && t.card.accent==="theme" ? t.accent : "#f0b429", style: t ? t.card.style : "solid", pattern: t ? (t.card.pattern||"none") : "none", isDefault: !t || (t.card.bg==="navy" && t.card.accent==="gold" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
+  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", pattern: t ? (t.card.pattern||"none") : "none", isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
 }
 // Canvas twin of patternCss(): the same five header patterns, drawn in the accent color at low alpha.
 function paintPattern(x, W, H, pattern, accent){
@@ -1451,7 +1455,7 @@ function paintLook(){
 let cardDraft = null;
 function openCardStyle(){ if (!requirePro("cards")) return; cardDraft = cleanTheme(me.theme); paintCardStyle(); $("#cardWrap").classList.add("open"); }
 function paintCardStyle(){
-  const t = cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent==="theme" ? t.accent : "#f0b429";
+  const t = cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent;
   const bgCss = t.card.style==="glow" ? `radial-gradient(circle at 15% 10%, ${rgba(acc,.3)}, ${rgba(acc,.05)} 45%, transparent 70%), ${b.panel}`
               : t.card.style==="cover" ? `linear-gradient(${rgba(b.bg,.55)},${rgba(b.bg,.55)}), linear-gradient(135deg,#3b4a7a,#7a3b5a 60%,#2a6a5a)` : b.panel;
   const [patImg, patSz] = patternCss({ accent: acc, pattern: t.card.pattern||"none" });
@@ -1466,10 +1470,12 @@ function paintCardStyle(){
   $("#cardStyle").innerHTML = Object.entries(CARD_STYLES).map(([k,v])=> `<button class="chip ${t.card.style===k?"on":""}" data-cstyle="${k}">${v}</button>`).join("");
   $("#cardPattern").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${(t.card.pattern||"none")===k?"on":""}" data-cpat="${k}">${v}</button>`).join("");
   $("#cardPattern").querySelectorAll("[data-cpat]").forEach(b=> b.onclick = ()=>{ cardDraft.card.pattern=b.dataset.cpat; paintCardStyle(); });
-  $("#cardAccent").innerHTML = [["gold","Joystickd gold"],["theme","My accent color"]].map(([k,v])=> `<button class="chip ${t.card.accent===k?"on":""}" data-caccent="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;background:${k==="gold"?"#f0b429":t.accent};flex:none"></span>${v}</button>`).join("");
+  $("#cardAccent").innerHTML = ACCENTS.map(c=> `<button class="swatch ${acc===c?"on":""}" data-cacc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
+    + `<label class="swatch custom ${ACCENTS.includes(acc)?"":"on"}">Custom <input type="color" id="cardCustom" value="${acc}"></label>`;
   $("#cardBg").querySelectorAll("[data-cbg]").forEach(b=> b.onclick = ()=>{ cardDraft.card.bg=b.dataset.cbg; paintCardStyle(); });
   $("#cardStyle").querySelectorAll("[data-cstyle]").forEach(b=> b.onclick = ()=>{ cardDraft.card.style=b.dataset.cstyle; paintCardStyle(); });
-  $("#cardAccent").querySelectorAll("[data-caccent]").forEach(b=> b.onclick = ()=>{ cardDraft.card.accent=b.dataset.caccent; paintCardStyle(); });
+  $("#cardAccent").querySelectorAll("[data-cacc]").forEach(b=> b.onclick = ()=>{ cardDraft.card.accent=b.dataset.cacc; paintCardStyle(); });
+  $("#cardCustom").oninput = e=>{ cardDraft.card.accent = e.target.value.toLowerCase(); paintCardStyle(); $("#cardCustom").focus(); };
 }
 async function saveLook(theme){
   const { error } = await sb.from("profiles").update({ theme }).eq("id", me.id);
@@ -2819,6 +2825,7 @@ function wireSnapUI(){
   $("#spSnap").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); $("#snapBtn").click(); };
   $("#revFormat").querySelectorAll("[data-rfmt]").forEach(b=> b.onclick = ()=>{ revFormat = b.dataset.rfmt; try { localStorage.setItem("jd_revFormat", revFormat); } catch(e){} paintRevFormat(); });
   $("#revTextSize").querySelectorAll("[data-rts]").forEach(b=> b.onclick = ()=>{ revTextSize = b.dataset.rts; try { localStorage.setItem("jd_revTextSize", revTextSize); } catch(e){} paintRevTextSize(); });
+  $("#revStyleEdit").onclick = ()=>{ $("#revStyleWrap").classList.remove("open"); openCardStyle(); };
   $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
   $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
   $("#revStyleCard").onclick = async ()=>{ $("#revStyleWrap").classList.remove("open"); const c=revStyleCtx; if (!c) return; try { await saveReviewImage(c.g, c.saved, c.who); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
@@ -4906,7 +4913,7 @@ function wireSettingsUI(){
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
-  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"gold", style:"solid" }; saveLook(t); };
+  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none" }; saveLook(t); };
   $("#lookReset").onclick = ()=> saveLook(null);
   $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
