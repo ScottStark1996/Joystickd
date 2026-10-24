@@ -4024,7 +4024,7 @@ async function saveReviewMagazine(g, saved, who){
   const revY = infoY + infoH + 22, revH = lines.length ? lines.length*BLH + 48 : 0;
   const leftBottom = revH ? revY + revH : infoY + infoH;
   // right column plan
-  const avY = 46 + 30, avD = 170, nameY = avY + avD + 42, scoreY = nameY + 120, trophyY = scoreY + 30, trophyH = l.platinum ? 190 : 0;
+  const avY = 46 + 30, avD = 170, nameY = avY + avD + 42, scoreY = nameY + 120, trophyY = scoreY + 70, trophyH = l.platinum ? 190 : 0;
   const subsY = trophyY + trophyH + 36, subsH = rated.length ? rated.length*38 + 20 : 0;
   const awY = subsY + subsH + (subsH ? 26 : 0), awH = tags.length ? tags.length*40 : 0;
   const rightBottom = awY + awH;
@@ -4036,7 +4036,9 @@ async function saveReviewMagazine(g, saved, who){
   if (art){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
     const sc = Math.max(W/art.width, heroH/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, 46 + (heroH-dh)*0.2, dw, dh);
     const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
-    const side = x.createLinearGradient(rightX-140, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.5, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.95)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
+    const side = x.createLinearGradient(rightX-220, 0, rightX+20, 0); side.addColorStop(0, "rgba(4,5,9,0)"); side.addColorStop(1, "rgba(4,5,9,1)"); x.fillStyle=side; x.fillRect(0,46,W,heroH);
+    x.fillStyle="#040509"; x.fillRect(rightX+20, 46, W-rightX-20, heroH);
+    const fade2 = x.createLinearGradient(0, 46+heroH*0.6, 0, 46+heroH); fade2.addColorStop(0, rgba(ct.bg,0)); fade2.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade2; x.fillRect(rightX-220,46,W-rightX+220,heroH);
     x.restore(); }
   // ---- left column
   x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=14; x.shadowOffsetY=3; x.fillStyle=text; x.font=`800 ${tf}px Outfit, sans-serif`;
@@ -4065,9 +4067,9 @@ async function saveReviewMagazine(g, saved, who){
   x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=10; x.shadowOffsetY=2; x.fillText(author.username, rcx, nameY); x.restore();
   x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(isMine ? "my review" : "review", rcx, nameY+22);
   // big score "9/10" in rating colors
-  if (l.rating!=null){ const big = 104, small = 62; x.font=`800 ${big}px Outfit, sans-serif`; const w1 = x.measureText(String(l.rating)).width; x.font=`800 ${small}px Outfit, sans-serif`; const w2 = x.measureText("/10").width;
-    const total = w1 + 6 + w2, left = rcx - total/2; const cols = ratingColors(snapHalf(+l.rating)); const gr = x.createLinearGradient(left, scoreY-big, left+total, scoreY); cols.forEach((cc,i)=> gr.addColorStop(cols.length===1?0:i/(cols.length-1), cc));
-    x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=18; x.shadowOffsetY=6; x.textAlign="left"; x.fillStyle=gr; x.font=`800 ${big}px Outfit, sans-serif`; x.fillText(String(l.rating), left, scoreY); x.font=`800 ${small}px Outfit, sans-serif`; x.fillText("/10", left+w1+6, scoreY); x.restore(); }
+  if (l.rating!=null){ const txt = `${l.rating}/10`; let big = 100; x.font=`800 ${big}px Outfit, sans-serif`; let total = x.measureText(txt).width; if (total > rightW){ big = Math.floor(big*rightW/total); x.font=`800 ${big}px Outfit, sans-serif`; total = x.measureText(txt).width; }
+    const left = rcx - total/2; const cols = ratingColors(snapHalf(+l.rating)); const gr = x.createLinearGradient(left, scoreY-big, left+total, scoreY); cols.forEach((cc,i)=> gr.addColorStop(cols.length===1?0:i/(cols.length-1), cc));
+    x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=18; x.shadowOffsetY=6; x.textAlign="left"; x.fillStyle=gr; x.fillText(txt, left, scoreY); x.restore(); }
   else { x.font="800 64px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("Played", rcx, scoreY); }
   if (l.platinum){ const tw = (trophy && trophy.width) ? trophyH*trophy.width/trophy.height : trophyH*0.9; x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=24; x.shadowOffsetY=8; drawTrophy(x, trophy, rcx+tw/2, trophyY+trophyH/2, trophyH); x.restore(); }
   x.textAlign="left";
