@@ -798,6 +798,10 @@
       <button class="set-row" id="revStyleCine">Cinematic <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Widescreen art banner up top, then the full review</small></button>
       <button class="set-row" id="revStyleMag">Magazine <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Two columns — art, title and boxed review left; score, trophy and sub-ratings right</small></button>
     </div>
+    <div class="set-sub" style="padding-top:14px">Image size</div>
+    <div class="chips" id="revFormat" style="padding:0 2px">
+      <button class="chip" data-rfmt="auto">Adaptive</button><button class="chip" data-rfmt="letter">8.5 × 11</button><button class="chip" data-rfmt="square">IG square</button><button class="chip" data-rfmt="portrait">IG portrait</button>
+    </div>
     <div class="set-sub" style="padding-top:14px">Review text size</div>
     <div class="chips" id="revTextSize" style="padding:0 2px">
       <button class="chip" data-rts="s">Small</button><button class="chip" data-rts="m">Medium</button><button class="chip" data-rts="l">Large</button>
@@ -2801,6 +2805,7 @@ function wireSnapUI(){
   $("#shareProfWrap").addEventListener("click", e=>{ if(e.target.id==="shareProfWrap") $("#shareProfWrap").classList.remove("open"); });
   $("#spLink").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); if (me) shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(me.username), `${me.username} on Joystickd`, "Profile link copied"); };
   $("#spSnap").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); $("#snapBtn").click(); };
+  $("#revFormat").querySelectorAll("[data-rfmt]").forEach(b=> b.onclick = ()=>{ revFormat = b.dataset.rfmt; try { localStorage.setItem("jd_revFormat", revFormat); } catch(e){} paintRevFormat(); });
   $("#revTextSize").querySelectorAll("[data-rts]").forEach(b=> b.onclick = ()=>{ revTextSize = b.dataset.rts; try { localStorage.setItem("jd_revTextSize", revTextSize); } catch(e){} paintRevTextSize(); });
   $("#revStyleCancel").onclick = ()=> $("#revStyleWrap").classList.remove("open");
   $("#revStyleWrap").addEventListener("click", e=>{ if(e.target.id==="revStyleWrap") $("#revStyleWrap").classList.remove("open"); });
@@ -3856,11 +3861,28 @@ let revStyleCtx = null;
 let revTextSize = (()=>{ try { return localStorage.getItem("jd_revTextSize") || "m"; } catch(e){ return "m"; } })();   // s | m | l, remembered on this device
 const REV_TEXT = { s:{ font:14, lh:22 }, m:{ font:16, lh:25 }, l:{ font:18, lh:29 } };
 const revText = ()=> REV_TEXT[revTextSize] || REV_TEXT.m;
+// Image size: adaptive (the card is as tall as it needs to be) or a fixed shape — Letter 8.5x11, Instagram square 1:1, Instagram portrait 4:5.
+let revFormat = (()=>{ try { return localStorage.getItem("jd_revFormat") || "auto"; } catch(e){ return "auto"; } })();
+const REV_FORMATS = { auto:null, letter:8.5/11, square:1, portrait:4/5 };
+function paintRevFormat(){ $("#revFormat").querySelectorAll("[data-rfmt]").forEach(b=> b.classList.toggle("on", b.dataset.rfmt===revFormat)); }
+// Fit a finished card canvas (drawn at W x H CSS px, scale S) into the chosen shape: shorter cards get padded top and
+// bottom with the card color + pattern, taller ones are scaled down to fit the height and centered.
+function fitCanvasToFormat(c, W, H, S, ct){
+  const A = REV_FORMATS[revFormat]; if (!A) return c;
+  const OW = W, OH = Math.round(W / A);
+  const out = document.createElement("canvas"); out.width = Math.round(OW*S); out.height = Math.round(OH*S); const x = out.getContext("2d"); x.scale(S, S);
+  ct = ct || cardThemeFor(me?.id, me);
+  x.fillStyle = ct.bg; x.fillRect(0,0,OW,OH); paintPattern(x, OW, OH, ct.pattern, ct.accent);
+  let dw = W, dh = H; if (H > OH){ const k = OH/H; dw = W*k; dh = OH; }
+  const dx = (OW-dw)/2, dy = (OH-dh)/2;
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(c, dx, dy, dw, dh);
+  return out;
+}
 function paintRevTextSize(){ $("#revTextSize").querySelectorAll("[data-rts]").forEach(b=> b.classList.toggle("on", b.dataset.rts===revTextSize)); }
 function chooseReviewImage(g, saved, who){
   if (!g) return;
   revStyleCtx = { g, saved, who };
-  paintRevTextSize();
+  paintRevTextSize(); paintRevFormat();
   $("#revStyleWrap").classList.add("open");
 }
 // Poster: big cover art, the score (with trophy), awards, and the reviewer — no review text.
@@ -3874,7 +3896,8 @@ async function saveReviewPoster(g, saved, who){
   const tags = [];                                         // posters stay clean: no award pills
   const H = 1350;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  paintCinematic(x, W, H, cover, cardThemeFor(author.id));
+  const ct = cardThemeFor(author.id);
+  paintCinematic(x, W, H, cover, ct);
   // cover, centered
   const cw = 390, ch = 520, cx0 = (W-cw)/2, cy0 = 90;
   x.save(); x.shadowColor="rgba(0,0,0,.65)"; x.shadowBlur=44; x.shadowOffsetY=18; x.fillStyle="#000"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,20); x.fill(); x.restore();
@@ -3906,7 +3929,7 @@ async function saveReviewPoster(g, saved, who){
   // the reviewer
   const ad = 150, acy = H - 46 - 40 - 48 - ad/2 - 10;
   await drawPerson(x, author.id, author.username, W/2, acy, ad, 34);
-  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  const blob = await new Promise(res=> fitCanvasToFormat(c, W, H, S, ct).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-poster.png`);
 }
 // Cinematic: a widescreen crop of the cover as a banner that fades into the card, score + trophy over it,
@@ -3939,11 +3962,13 @@ async function saveReviewCinematic(g, saved, who){
   paintCinematic(x, W, H, cover, ct);
   // hero banner: widescreen crop of the cover (full size, not blurred), fading into the card at the bottom
   const art = hero || cover;
-  if (art){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
-    const sc = Math.max(W/art.width, heroH/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, 46 + (heroH-dh)*0.25, dw, dh);
+  if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
+    const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.25, dw, dh);
+    const top = x.createLinearGradient(0,0,0,70); top.addColorStop(0, rgba(ct.bg,.55)); top.addColorStop(1, rgba(ct.bg,0)); x.fillStyle=top; x.fillRect(0,0,W,70);
     const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
     x.restore(); }
+  paintWordmark(x, W, ct);
   // small cover + title, sitting on the fade
   const cw = 150, ch = 200, cy = 46 + heroH - ch - 20;
   x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=30; x.shadowOffsetY=10; x.fillStyle="#000"; x.beginPath(); x.roundRect(pad, cy, cw, ch, 14); x.fill(); x.restore();
@@ -3987,7 +4012,7 @@ async function saveReviewCinematic(g, saved, who){
   // the review, with an accent rule down the left
   if (lines.length){ y += 20; x.fillStyle=accent; x.fillRect(pad, y-20, 4, lines.length*CLH + 6);
     x.font=CBODY; x.fillStyle="#dbe2ee"; lines.forEach(ln=>{ if (ln) x.fillText(ln, pad+26, y); y += CLH; }); }
-  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  const blob = await new Promise(res=> fitCanvasToFormat(c, W, H, S, ct).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-cinematic.png`);
 }
 // avatar (framed) + styled name + a small caption, left-aligned in a row
@@ -4035,11 +4060,13 @@ async function saveReviewMagazine(g, saved, who){
   paintCinematic(x, W, H, cover, ct);
   // hero art, left-heavy: fades to the card color at the bottom and towards the right column
   const art = hero || cover;
-  if (art){ x.save(); x.beginPath(); x.rect(0,46,W,heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
-    const sc = Math.max(W/art.width, heroH/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, 46 + (heroH-dh)*0.2, dw, dh);
+  if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
+    const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.2, dw, dh);
+    const top = x.createLinearGradient(0,0,0,70); top.addColorStop(0, rgba(ct.bg,.55)); top.addColorStop(1, rgba(ct.bg,0)); x.fillStyle=top; x.fillRect(0,0,W,70);
     const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(rightX-140, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.5, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.95)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
     x.restore(); }
+  paintWordmark(x, W, ct);
   // ---- left column
   x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=14; x.shadowOffsetY=3; x.fillStyle=text; x.font=`800 ${tf}px Outfit, sans-serif`;
   let ty = titleTop; tl.forEach(ln=>{ x.fillText(ln, pad, ty); ty += tf+6; }); x.restore();
@@ -4084,7 +4111,7 @@ async function saveReviewMagazine(g, saved, who){
   if (awH){ x.font="700 14px Outfit, sans-serif"; tags.forEach((t,i)=>{ const ay = awY + i*40; const goty = t.key==="goty"; const lb = `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
       x.fillStyle = goty ? accent : rgba(ct.panel2, .95); x.beginPath(); x.roundRect(rightX, ay, rightW, 32, 16); x.fill(); if (!goty){ x.strokeStyle=ct.line; x.stroke(); }
       x.fillStyle = goty ? (lum(accent) > 0.6 ? "#1a1200" : "#fff") : text; x.textAlign="center"; x.fillText(lb, rightX+rightW/2, ay+21); x.textAlign="left"; }); }
-  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  const blob = await new Promise(res=> fitCanvasToFormat(c, W, H, S, ct).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-magazine.png`);
 }
 async function saveReviewImage(g, saved, who){
@@ -4210,7 +4237,7 @@ async function saveReviewImage(g, saved, who){
   }
   x.font="600 13px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("joystickd.com", 44, H-40);
   if (nParts > 1){ x.textAlign="right"; x.fillStyle=gold; x.font="700 13px Outfit, sans-serif"; x.fillText(`Part 1 of ${nParts}  \u2192`, W-44, H-40); x.textAlign="left"; }
-  const blob = await new Promise(res=> c.toBlob(res, "image/png"));
+  const blob = await new Promise(res=> fitCanvasToFormat(c, W, H, S, ct).toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
   const base = `joystickd-${(g.title||"review").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}${isMine ? "" : "-by-"+String(author.username).toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,24)}`;
   const items = [{ blob, filename: nParts > 1 ? `${base}-part-1.png` : `${base}.png` }];
@@ -4228,7 +4255,7 @@ async function saveReviewImage(g, saved, who){
     lines.forEach((ln,i)=> x2.fillText(ln, 44, 140 + i*LH));
     x2.font="600 13px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText("joystickd.com", 44, H2-40);
     x2.textAlign="right"; x2.fillStyle=gold; x2.font="700 13px Outfit, sans-serif"; x2.fillText(`Part ${pi+1} of ${nParts}${pi+1<nParts ? "  \u2192" : ""}`, W-44, H2-40); x2.textAlign="left";
-    const b2 = await new Promise(res=> c2.toBlob(res, "image/png")); if (b2) items.push({ blob: b2, filename: `${base}-part-${pi+1}.png` });
+    const b2 = await new Promise(res=> fitCanvasToFormat(c2, W, H2, S2, ct).toBlob(res, "image/png")); if (b2) items.push({ blob: b2, filename: `${base}-part-${pi+1}.png` });
   }
   await deliverImages(items);
 }
@@ -4274,14 +4301,13 @@ function paintCinematic(x, W, H, art, ct){
   }
   paintPattern(x, W, H, ct.pattern, ct.accent);
   const v = x.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.85); v.addColorStop(0,"rgba(0,0,0,0)"); v.addColorStop(1, rgba(ct.bg, .7)); x.fillStyle=v; x.fillRect(0,0,W,H);
-  // header / footer bands: translucent panel color with a hairline in the accent that fades at the edges
-  const band = 46;
-  x.fillStyle = rgba(ct.panel, .82); x.fillRect(0,0,W,band); x.fillRect(0,H-band,W,band);
-  const hl = x.createLinearGradient(0,0,W,0); hl.addColorStop(0, rgba(ct.accent, 0)); hl.addColorStop(0.5, rgba(ct.accent, .75)); hl.addColorStop(1, rgba(ct.accent, 0));
-  x.fillStyle = hl; x.fillRect(0, band-1, W, 1); x.fillRect(0, H-band, W, 1);
-  x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 30); x.fillStyle=ct.accent; x.fillText("D", W-38, 30); x.textAlign="left";
-  x.font="600 12px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText("joystickd.com", 40, H-18);
+  // no bands: the background runs edge to edge; the wordmark and URL sit straight on it with a soft shadow
+  x.save(); x.shadowColor="rgba(0,0,0,.7)"; x.shadowBlur=10; x.shadowOffsetY=2;
+  x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 34); x.fillStyle=ct.accent; x.fillText("D", W-38, 34); x.textAlign="left";
+  x.font="600 12px Manrope, sans-serif"; x.fillStyle="#aab4c8"; x.fillText("joystickd.com", 40, H-22); x.restore();
 }
+// Re-draws the wordmark after hero art has been painted over the top of a card.
+function paintWordmark(x, W, ct){ x.save(); x.shadowColor="rgba(0,0,0,.75)"; x.shadowBlur=10; x.shadowOffsetY=2; x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("JOYSTICK", W-50, 34); x.fillStyle=ct.accent; x.fillText("D", W-38, 34); x.restore(); x.textAlign="left"; }
 function glassPanel(x, px, py, pw, ph, ct){ ct = ct || cardThemeFor(me?.id, me); x.fillStyle=rgba(ct.panel, .78); x.strokeStyle=rgba(ct.line, .9); x.lineWidth=1; x.beginPath(); x.roundRect(px,py,pw,ph,16); x.fill(); x.stroke(); }
 async function drawPerson(x, uid, name, cx, cy, ad, nameSize=17){      // avatar (with frame) + styled name, centered
   const av = avatars[uid] ? await loadImg(avatars[uid], true) : null;
