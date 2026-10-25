@@ -1254,7 +1254,8 @@ async function openPro(highlight){
   const pro = me && isPro(me);
   $("#proPlans").hidden = !!pro;
   $("#proSoon").hidden = !!pro || live;                                   // "Coming soon" until purchases work on this device
-  $("#proSoon").querySelector("small").textContent = (!live && isNativeApp()) ? "Pro purchases arrive in the next app update \u2014 here's a preview of what's included." : "Subscriptions aren't open yet \u2014 here's a preview of what's included.";
+  $("#proSoon").querySelector("small").textContent = (!live && isNativeApp()) ? nativeNoPurchaseMsg() : "Subscriptions aren't open yet \u2014 here's a preview of what's included.";
+  $("#proSoon").querySelector("b").textContent = (!live && isNativeApp() && deviceRegionUS()) ? "Available on joystickd.com" : "Coming soon";
   $("#proPlans").classList.toggle("preview", !pro && !live);
   $("#proManage").hidden = !pro || !me?.proSource || !["stripe","apple","google"].includes(me.proSource);
   $("#proManage").textContent = me?.proSource==="stripe" ? "Manage subscription" : me?.proSource==="google" ? "Manage in Google Play" : "Manage in App Store";
@@ -1266,6 +1267,10 @@ async function openPro(highlight){
 // Native app: only once the RevenueCat plugin is in the build. Cached per session.
 let proLiveCache = null;
 const isNativeApp = ()=> !!window.Capacitor?.isNativePlatform?.();
+// Apple's US storefront allows telling users about purchases outside the app (3.1.1, since 2025); other storefronts
+// don't. We only know the device region, so the website mention is shown for US-region devices and a neutral line elsewhere.
+const deviceRegionUS = ()=> { try { const l = (navigator.languages||[navigator.language||""]).map(x=>String(x).toUpperCase()); return l.some(x=> /[-_]US\b/.test(x)) || (!l.some(x=>/[-_][A-Z]{2}\b/.test(x)) && (Intl.DateTimeFormat().resolvedOptions().timeZone||"").startsWith("America/")); } catch(e){ return false; } };
+const nativeNoPurchaseMsg = ()=> deviceRegionUS() ? "Right now Pro can only be purchased on joystickd.com \u2014 your membership works in the app too." : "Pro purchases arrive in the next app update.";
 async function proPurchaseLive(){
   if (!LIVE) return false;
   if (isNativeApp()) return !!(window.Purchases && RC_IOS_API_KEY);
@@ -1275,7 +1280,7 @@ async function proPurchaseLive(){
 }
 async function startProPurchase(plan){
   if (!me){ openAuth("signin"); return; }
-  if (!(await proPurchaseLive())){ toast(isNativeApp() ? "Pro purchases arrive in the next app update" : "Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
+  if (!(await proPurchaseLive())){ toast(isNativeApp() ? nativeNoPurchaseMsg() : "Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
   if (isNativeApp()){                                                        // RevenueCat (iOS): the native build has the plugin
     try { await rcReady(); const { offerings } = await window.Purchases.getOfferings(); const pkg = offerings.current?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("no package");
       await window.Purchases.purchasePackage({ aPackage: pkg }); await waitForPro(); $("#proWrap").classList.remove("open"); }
