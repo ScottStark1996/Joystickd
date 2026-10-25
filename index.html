@@ -516,6 +516,7 @@
   .pro-soon b{display:block;font-family:Outfit;font-weight:800;font-size:30px;line-height:1;letter-spacing:.04em;text-transform:uppercase;color:var(--gold);text-shadow:0 2px 12px rgba(240,180,41,.35)}
   .pro-soon small{display:block;margin-top:8px;font-size:13px;font-weight:600;color:var(--text)}
   .pro-plans.preview{opacity:.45;pointer-events:none}
+  .pro-plans[hidden]{display:none}                                   /* the grid display was beating the hidden attribute */
   .pro-feats{display:flex;flex-direction:column;gap:8px;margin-top:10px}
   .pro-feats div{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:600;padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
   .pro-feats div span.ic{font-size:18px;line-height:1.2;flex:none}
