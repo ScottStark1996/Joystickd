@@ -3918,6 +3918,9 @@ const REV_FORMATS = { auto:null, letter:8.5/11, square:1, portrait:4/5 };
 function paintRevFormat(){ $("#revFormat").querySelectorAll("[data-rfmt]").forEach(b=> b.classList.toggle("on", b.dataset.rfmt===revFormat)); }
 // Fit a finished card canvas (drawn at W x H CSS px, scale S) into the chosen shape: shorter cards get padded top and
 // bottom with the card color + pattern, taller ones are scaled down to fit the height and centered.
+// Height a fixed format wants for a given width (null when adaptive). Wide layouts draw their backdrop at this
+// height so the extra space matches instead of being padded afterwards.
+const revTargetH = W => { const A = REV_FORMATS[revFormat]; return A ? Math.round(W / A) : null; };
 function fitCanvasToFormat(c, W, H, S, ct){
   const A = REV_FORMATS[revFormat]; if (!A) return c;
   const OW = W, OH = Math.round(W / A);
@@ -3945,7 +3948,7 @@ async function saveReviewPoster(g, saved, who){
   const W = 1080, cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
   const tags = [];                                         // posters stay clean: no award pills
-  const H = 1350;
+  const H = Math.max(1350, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   const ct = cardThemeFor(author.id);
   paintCinematic(x, W, H, cover, ct);
@@ -4008,7 +4011,7 @@ async function saveReviewCinematic(g, saved, who){
   const metaH = 110 + (dparts.length ? 30 : 0) + (showPlatLine ? 34 : 0) + (pillRows ? pillRows*44 + 6 : 0);
   const subsH = rated.length ? 40 + Math.ceil(rated.length/2)*34 : 0;
   const revH = lines.length ? lines.length*CLH + 30 : 0;
-  const H = 46 + heroH + metaH + subsH + revH + 46 + 46;
+  const H = Math.max(46 + heroH + metaH + subsH + revH + 46 + 46, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, ct);
   // hero banner: widescreen crop of the cover (full size, not blurred), fading into the card at the bottom
@@ -4106,7 +4109,7 @@ async function saveReviewMagazine(g, saved, who){
   const subsY = trophyY + trophyH + 36, subsH = rated.length ? rated.length*38 + 20 : 0;
   const awY = subsY + subsH + (subsH ? 26 : 0), awH = tags.length ? tags.length*40 : 0;
   const rightBottom = awY + awH;
-  const H = Math.max(leftBottom, rightBottom) + 40 + 46;
+  const H = Math.max(Math.max(leftBottom, rightBottom) + 40 + 46, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, ct);
   // hero art, left-heavy: fades to the card color at the bottom and towards the right column
@@ -4115,7 +4118,7 @@ async function saveReviewMagazine(g, saved, who){
     const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.2, dw, dh);
 
     const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
-    const side = x.createLinearGradient(rightX-140, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.5, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.95)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
+    const side = x.createLinearGradient(rightX-360, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.45, rgba(ct.bg,.55)); side.addColorStop(0.75, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.92)); x.fillStyle=side; x.fillRect(0,0,W,46+heroH);
     x.restore(); }
   paintWordmark(x, W, ct);
   // ---- left column
