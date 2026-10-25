@@ -935,6 +935,7 @@
       <button class="pro-plan best" data-plan="yearly"><b>$29.99</b><small>per year</small><span class="save">save 58%</span></button>
     </div>
     <div class="pro-status" id="proStatus"></div>
+    <p class="hint" id="proLegal" style="margin-top:8px;text-align:center;font-size:11.5px" hidden>Joystickd Pro renews automatically until cancelled. Monthly plan $5.99/month, yearly plan $29.99/year. Payment is charged to your Apple ID account; cancel any time in your Apple ID settings. <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener">Terms of Use</a> · <a href="#" data-privacy>Privacy Policy</a></p>
     <p class="hint" style="margin-top:12px;text-align:center"><b style="color:var(--text)">Support Joystickd — help keep the community alive!</b><br>Everything you can do today stays free, forever. Pro is extra.</p>
     <div class="actions"><button class="cta ghost" id="proManage" hidden>Manage subscription</button><button class="cta ghost" id="proRestore" hidden>Restore purchase</button><button class="cta ghost" id="proClose">Close</button></div>
   </div>
@@ -1219,7 +1220,7 @@
 // ============================================================================
 const SUPABASE_URL      = "https://yctlohkszjmnnvgaspdn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_G1ev-iB1-BWr4k8z_d2GQA_wwJx9j9m";   // your publishable key
-const RC_IOS_API_KEY    = "";   // RevenueCat → Project → Apps → App Store app → Public API key (appl_...). Leave blank until the iOS build has the plugin.
+const RC_IOS_API_KEY    = "appl_DRrXTUJqtiUdrIXEGzKGBLLlsHE";   // RevenueCat public SDK key (iOS). Safe to ship: it only identifies the app.
 // Leave both blank and the site runs on a small built-in sample list instead.
 // ============================================================================
 
@@ -1258,6 +1259,7 @@ async function openPro(highlight){
   $("#proFeats").innerHTML = PRO_FEATURES.map(f=> `<div ${f.key===highlight ? 'style="border-color:var(--gold)"' : ""}><span class="ic">${f.ic}</span><span>${f.name}<small>${f.desc}</small></span>${f.built ? "" : `<span class="soon">soon</span>`}</div>`).join("");
   const pro = me && isPro(me);
   $("#proPlans").hidden = !!pro;
+  $("#proLegal").hidden = !!pro || !isNativeApp();   // Apple requires the renewal terms + Terms/Privacy links on the in-app paywall
   $("#proSoon").hidden = !!pro || live;                                   // "Coming soon" until purchases work on this device
   $("#proSoon").querySelector("small").textContent = (!live && isNativeApp()) ? nativeNoPurchaseMsg() : "Subscriptions aren't open yet \u2014 here's a preview of what's included.";
   $("#proSoon").querySelector("b").textContent = (!live && isNativeApp() && deviceRegionUS()) ? "Available on joystickd.com" : "Coming soon";
@@ -1272,13 +1274,15 @@ async function openPro(highlight){
 // Native app: only once the RevenueCat plugin is in the build. Cached per session.
 let proLiveCache = null;
 const isNativeApp = ()=> !!window.Capacitor?.isNativePlatform?.();
+// RevenueCat plugin: the app loads joystickd.com, so the plugin is reached through Capacitor's bridge (like push), not a bundled import.
+const rcPlugin = ()=> (isNativeApp() && (window.Purchases || window.Capacitor?.Plugins?.Purchases)) || null;
 // Apple's US storefront allows telling users about purchases outside the app (3.1.1, since 2025); other storefronts
 // don't. We only know the device region, so the website mention is shown for US-region devices and a neutral line elsewhere.
 const deviceRegionUS = ()=> { try { const l = (navigator.languages||[navigator.language||""]).map(x=>String(x).toUpperCase()); return l.some(x=> /[-_]US\b/.test(x)) || (!l.some(x=>/[-_][A-Z]{2}\b/.test(x)) && (Intl.DateTimeFormat().resolvedOptions().timeZone||"").startsWith("America/")); } catch(e){ return false; } };
 const nativeNoPurchaseMsg = ()=> deviceRegionUS() ? "Right now Pro can only be purchased on joystickd.com \u2014 your membership works in the app too." : "Pro purchases arrive in the next app update.";
 async function proPurchaseLive(){
   if (!LIVE) return false;
-  if (isNativeApp()) return !!(window.Purchases && RC_IOS_API_KEY);
+  if (isNativeApp()) return !!(rcPlugin() && RC_IOS_API_KEY);
   if (proLiveCache !== null) return proLiveCache;
   try { const { data } = await sb.functions.invoke("pro-checkout", { body: { action:"status" } }); proLiveCache = !!data?.live; } catch(e){ proLiveCache = false; }
   return proLiveCache;
@@ -1287,9 +1291,9 @@ async function startProPurchase(plan){
   if (!me){ openAuth("signin"); return; }
   if (!(await proPurchaseLive())){ toast(isNativeApp() ? nativeNoPurchaseMsg() : "Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
   if (isNativeApp()){                                                        // RevenueCat (iOS): the native build has the plugin
-    try { await rcReady(); const { offerings } = await window.Purchases.getOfferings(); const pkg = offerings.current?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("no package");
-      await window.Purchases.purchasePackage({ aPackage: pkg }); await waitForPro(); $("#proWrap").classList.remove("open"); }
-    catch(e){ if (!/cancel/i.test(String(e?.message||e))) toast("Purchase didn't go through"); }
+    try { const RC = rcPlugin(); await rcReady(); const offerings = await RC.getOfferings(); const pkg = (offerings.current || Object.values(offerings.all||{})[0])?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("Plans aren't available yet");
+      await RC.purchasePackage({ aPackage: pkg }); await waitForPro(); $("#proWrap").classList.remove("open"); }
+    catch(e){ const m = String(e?.message||e||""); if (!/cancel/i.test(m) && !(e && e.userCancelled)) toast("Purchase didn't go through" + (m ? ": " + m.slice(0,80) : "")); }
     return;
   }
   // Web: Stripe Checkout via edge function (returns a hosted checkout URL)
@@ -1298,7 +1302,7 @@ async function startProPurchase(plan){
 }
 // RevenueCat on the native app: configure once, identify as the Supabase user so webhooks can map purchases.
 let rcConfigured = false;
-async function rcReady(){ if (!isNativeApp() || !window.Purchases || !RC_IOS_API_KEY || !me) return; if (!rcConfigured){ await window.Purchases.configure({ apiKey: RC_IOS_API_KEY, appUserID: me.id }); rcConfigured = true; } else { await window.Purchases.logIn({ appUserID: me.id }); } }
+async function rcReady(){ const RC = rcPlugin(); if (!RC || !RC_IOS_API_KEY || !me) return; if (!rcConfigured){ await RC.configure({ apiKey: RC_IOS_API_KEY, appUserID: me.id }); rcConfigured = true; } else { await RC.logIn({ appUserID: me.id }); } }
 // After a purchase the webhook flips pro_until a moment later: poll for it (up to ~20s) before declaring victory.
 async function waitForPro(){ toast("Activating Pro\u2026"); for (let i=0;i<10;i++){ await refreshPro(); if (isPro(me)) { toast("Welcome to Pro!"); return true; } await new Promise(r=>setTimeout(r,2000)); } toast("Payment received \u2014 Pro will switch on in a moment"); return false; }
 async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ window.open("https://apps.apple.com/account/subscriptions", "_blank"); return; } if (me.proSource==="google"){ window.open("https://play.google.com/store/account/subscriptions", "_blank"); return; }
@@ -4921,7 +4925,7 @@ function wireBioUI(){
 function wireDeleteUI(){
   $("#privClose").onclick = ()=> $("#privWrap").classList.remove("open");
   $("#privWrap").addEventListener("click", e=>{ if(e.target.id==="privWrap") $("#privWrap").classList.remove("open"); });
-  document.addEventListener("click", e=>{ if (e.target.closest("[data-privacy]")){ e.preventDefault(); closeSettings(); $("#privWrap").classList.add("open"); } });
+  document.addEventListener("click", e=>{ if (e.target.closest("[data-privacy]")){ e.preventDefault(); closeSettings(); $("#proWrap").classList.remove("open"); $("#privWrap").classList.add("open"); } });
   $("#delCancel").onclick = ()=> $("#delWrap").classList.remove("open");
   $("#delWrap").addEventListener("click", e=>{ if(e.target.id==="delWrap") $("#delWrap").classList.remove("open"); });
   $("#delGo").onclick = async ()=>{
@@ -4973,7 +4977,7 @@ function wireSettingsUI(){
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
   $("#proPlans").querySelectorAll("[data-plan]").forEach(b=> b.onclick = ()=> startProPurchase(b.dataset.plan));
   $("#proManage").onclick = ()=>{ $("#proWrap").classList.remove("open"); openProPortal(); };
-  $("#proRestore").onclick = async ()=>{ if (window.Purchases){ try { await rcReady(); await window.Purchases.restorePurchases(); await refreshPro(); toast(isPro(me) ? "Pro restored" : "No Pro purchase found for this Apple ID"); } catch(e){ toast("Couldn't restore"); } } else toast("Restore is available in the app"); };
+  $("#proRestore").onclick = async ()=>{ if (rcPlugin()){ try { await rcReady(); await rcPlugin().restorePurchases(); await refreshPro(); toast(isPro(me) ? "Pro restored" : "No Pro purchase found for this Apple ID"); } catch(e){ toast("Couldn't restore"); } } else toast("Restore is available in the app"); };
   // Admin: gift Pro by username (also how you give yourself Pro for testing)
   $("#setGrantPro").onclick = async ()=>{ closeSettings(); if (!me?.isAdmin) return;
     const who = prompt("Username to grant Pro to:"); if (!who) return;
