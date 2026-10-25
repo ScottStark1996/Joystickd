@@ -4014,8 +4014,9 @@ async function saveReviewCinematic(g, saved, who){
   const subsH = rated.length ? 40 + Math.ceil(rated.length/2)*34 : 0;
   // fixed page size: shrink the body text until it fits (down to 12px), then trim with an ellipsis
   { const pageH = revTargetH(W), revMax = pageH ? pageH - (46 + heroH + metaH + subsH + 30 + 46 + 46) : Infinity;
-    while (pageH && lines.length*CLH > revMax && CF > 12){ CF -= 1; CLH = Math.round(CF*29/19); CBODY = `400 ${CF}px Manrope, sans-serif`; lines = wrapBody(); }
-    if (pageH && lines.length*CLH > revMax){ const keep = Math.max(1, Math.floor(revMax/CLH)); lines = lines.slice(0, keep); lines[keep-1] = lines[keep-1].replace(/[\s.,;:]*$/, "") + "\u2026"; } }
+    while (pageH && lines.length*CLH > revMax && CF > 12){ CF -= 0.5; CLH = CF*29/19; CBODY = `400 ${CF}px Manrope, sans-serif`; lines = wrapBody(); }
+    if (pageH && lines.length*CLH > revMax){ const keep = Math.max(1, Math.floor(revMax/CLH)); lines = lines.slice(0, keep); lines[keep-1] = lines[keep-1].replace(/[\s.,;:]*$/, "") + "\u2026"; }
+    if (pageH && lines.length) CLH = Math.min(revMax/lines.length, CF*1.9); }
   const revH = lines.length ? lines.length*CLH + 30 : 0;
   const H = Math.max(46 + heroH + metaH + subsH + revH + 46 + 46, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -4113,8 +4114,9 @@ async function saveReviewMagazine(g, saved, who){
   const revY = infoY + infoH + 22;
   // fixed page size: shrink the body text until the review fits (down to 12px), then trim with an ellipsis
   const pageH = revTargetH(W), revMax = pageH ? pageH - 40 - 46 - revY - 48 : Infinity;
-  while (pageH && lines.length*BLH > revMax && BF > 12){ BF -= 1; BLH = Math.round(BF*26/17); BODY = `400 ${BF}px Manrope, sans-serif`; lines = wrapBody(); }
+  while (pageH && lines.length*BLH > revMax && BF > 12){ BF -= 0.5; BLH = BF*26/17; BODY = `400 ${BF}px Manrope, sans-serif`; lines = wrapBody(); }
   if (pageH && lines.length*BLH > revMax){ const keep = Math.max(1, Math.floor(revMax/BLH)); lines = lines.slice(0, keep); lines[keep-1] = lines[keep-1].replace(/[\s.,;:]*$/, "") + "\u2026"; }
+  if (pageH && lines.length) BLH = Math.min(revMax/lines.length, BF*1.9);        // then let the lines breathe into the room that's left
   const revH = lines.length ? lines.length*BLH + 48 : 0;
   const leftBottom = revH ? revY + revH : infoY + infoH;
   // right column plan
