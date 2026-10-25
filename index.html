@@ -800,6 +800,10 @@
       <button class="set-row" id="revStyleMag">Magazine <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Two columns — art, title and boxed review left; score, trophy and sub-ratings right</small></button>
     </div>
     <button class="set-row" id="revStyleEdit" style="margin-top:10px">Image style… <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Card color, background, pattern and highlight color for everything you save</small></button>
+    <div class="set-sub" style="padding-top:14px">Banner art focus <span style="font-weight:500;letter-spacing:0;text-transform:none">(Cinematic &amp; Magazine)</span></div>
+    <div class="chips" id="revHeroFocus" style="padding:0 2px">
+      <button class="chip" data-rhf="top">Top</button><button class="chip" data-rhf="middle">Middle</button><button class="chip" data-rhf="bottom">Bottom</button>
+    </div>
     <div class="set-sub" style="padding-top:14px">Image size</div>
     <div class="chips" id="revFormat" style="padding:0 2px">
       <button class="chip" data-rfmt="auto">Adaptive</button><button class="chip" data-rfmt="letter">8.5 × 11</button><button class="chip" data-rfmt="square">IG square</button><button class="chip" data-rfmt="portrait">IG portrait</button>
@@ -2849,6 +2853,7 @@ function wireSnapUI(){
   $("#shareProfWrap").addEventListener("click", e=>{ if(e.target.id==="shareProfWrap") $("#shareProfWrap").classList.remove("open"); });
   $("#spLink").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); if (me) shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(me.username), `${me.username} on Joystickd`, "Profile link copied"); };
   $("#spSnap").onclick = ()=>{ $("#shareProfWrap").classList.remove("open"); $("#snapBtn").click(); };
+  $("#revHeroFocus").querySelectorAll("[data-rhf]").forEach(b=> b.onclick = ()=>{ revHeroFocus = b.dataset.rhf; try { localStorage.setItem("jd_revHeroFocus", revHeroFocus); } catch(e){} paintRevHeroFocus(); });
   $("#revFormat").querySelectorAll("[data-rfmt]").forEach(b=> b.onclick = ()=>{ revFormat = b.dataset.rfmt; try { localStorage.setItem("jd_revFormat", revFormat); } catch(e){} paintRevFormat(); });
   $("#revTextSize").querySelectorAll("[data-rts]").forEach(b=> b.onclick = ()=>{ revTextSize = b.dataset.rts; try { localStorage.setItem("jd_revTextSize", revTextSize); } catch(e){} paintRevTextSize(); });
   $("#revStyleEdit").onclick = ()=>{ $("#revStyleWrap").classList.remove("open"); openCardStyle(); };
@@ -3920,6 +3925,11 @@ function paintRevFormat(){ $("#revFormat").querySelectorAll("[data-rfmt]").forEa
 // bottom with the card color + pattern, taller ones are scaled down to fit the height and centered.
 // Height a fixed format wants for a given width (null when adaptive). Wide layouts draw their backdrop at this
 // height so the extra space matches instead of being padded afterwards.
+// Which part of the cover art the Cinematic / Magazine banner shows (the art is taller than the banner).
+let revHeroFocus = (()=>{ try { return localStorage.getItem("jd_revHeroFocus") || "top"; } catch(e){ return "top"; } })();
+const HERO_FOCUS = { top: 0.22, middle: 0.5, bottom: 0.8 };
+const heroFocus = ()=> HERO_FOCUS[revHeroFocus] ?? 0.22;
+function paintRevHeroFocus(){ $("#revHeroFocus").querySelectorAll("[data-rhf]").forEach(b=> b.classList.toggle("on", b.dataset.rhf===revHeroFocus)); }
 const revTargetH = W => { const A = REV_FORMATS[revFormat]; return A ? Math.round(W / A) : null; };
 function fitCanvasToFormat(c, W, H, S, ct){
   const A = REV_FORMATS[revFormat]; if (!A) return c;
@@ -3936,7 +3946,7 @@ function paintRevTextSize(){ $("#revTextSize").querySelectorAll("[data-rts]").fo
 function chooseReviewImage(g, saved, who){
   if (!g) return;
   revStyleCtx = { g, saved, who };
-  paintRevTextSize(); paintRevFormat();
+  paintRevTextSize(); paintRevFormat(); paintRevHeroFocus();
   $("#revStyleWrap").classList.add("open");
 }
 // Poster: big cover art, the score (with trophy), awards, and the reviewer — no review text.
@@ -4024,7 +4034,7 @@ async function saveReviewCinematic(g, saved, who){
   // hero banner: widescreen crop of the cover (full size, not blurred), fading into the card at the bottom
   const art = hero || cover;
   if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
-    const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.25, dw, dh);
+    const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*heroFocus(), dw, dh);
 
     const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
@@ -4130,7 +4140,7 @@ async function saveReviewMagazine(g, saved, who){
   // hero art, left-heavy: fades to the card color at the bottom and towards the right column
   const art = hero || cover;
   if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
-    const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*0.2, dw, dh);
+    const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*heroFocus(), dw, dh);
 
     const fade = x.createLinearGradient(0, 46+heroH*0.45, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,1)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
     const side = x.createLinearGradient(rightX-360, 0, W, 0); side.addColorStop(0, rgba(ct.bg,0)); side.addColorStop(0.45, rgba(ct.bg,.55)); side.addColorStop(0.75, rgba(ct.bg,.85)); side.addColorStop(1, rgba(ct.bg,.92)); x.fillStyle=side; x.fillRect(0,0,W,46+heroH);
