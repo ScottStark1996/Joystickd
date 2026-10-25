@@ -4002,14 +4002,20 @@ async function saveReviewCinematic(g, saved, who){
   const dparts=[l.datePlayed?`Played ${fmtDate(l.datePlayed)}`:null, l.dateTrophy?`First trophy ${fmtDate(l.dateTrophy)}`:null, l.datePlat?`Platinum ${fmtDate(l.datePlat)}`:null].filter(Boolean);
   const showPlatLine = l.platinum && (platNumText(l) || (l.showPlatStats && (l.platDiff!=null || l.platHours!=null)));
   // measure the review first so the canvas is exactly tall enough
-  const RT = revText(), CF = Math.round(19*RT.font/16), CLH = Math.round(29*RT.font/16), CBODY = `400 ${CF}px Manrope, sans-serif`;
-  const m = document.createElement("canvas").getContext("2d"); m.font = CBODY;
-  const paras = (l.review||"").trim().split(/\n+/).filter(Boolean); const lines = []; paras.forEach((p,i)=>{ if (i) lines.push(""); wrapText(m, p, W-pad*2-26).forEach(ln=> lines.push(ln)); });
+  const RT = revText(); let CF = Math.round(19*RT.font/16), CLH = Math.round(29*RT.font/16), CBODY = `400 ${CF}px Manrope, sans-serif`;
+  const m = document.createElement("canvas").getContext("2d");
+  const paras = (l.review||"").trim().split(/\n+/).filter(Boolean);
+  const wrapBody = ()=>{ m.font = CBODY; const out = []; paras.forEach((p,i)=>{ if (i) out.push(""); wrapText(m, p, W-pad*2-26).forEach(ln=> out.push(ln)); }); return out; };
+  let lines = wrapBody();
   m.font = "700 15px Outfit, sans-serif"; const pillLabel = t => `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
   const pillW = tags.map(t=> m.measureText(pillLabel(t)).width + 28);
   let pillRows = 0; { let px = pad; pillW.forEach(w=>{ if (px + w > W-pad && px > pad){ pillRows++; px = pad; } px += w + 10; }); if (tags.length) pillRows++; }
   const metaH = 110 + (dparts.length ? 30 : 0) + (showPlatLine ? 34 : 0) + (pillRows ? pillRows*44 + 6 : 0);
   const subsH = rated.length ? 40 + Math.ceil(rated.length/2)*34 : 0;
+  // fixed page size: shrink the body text until it fits (down to 12px), then trim with an ellipsis
+  { const pageH = revTargetH(W), revMax = pageH ? pageH - (46 + heroH + metaH + subsH + 30 + 46 + 46) : Infinity;
+    while (pageH && lines.length*CLH > revMax && CF > 12){ CF -= 1; CLH = Math.round(CF*29/19); CBODY = `400 ${CF}px Manrope, sans-serif`; lines = wrapBody(); }
+    if (pageH && lines.length*CLH > revMax){ const keep = Math.max(1, Math.floor(revMax/CLH)); lines = lines.slice(0, keep); lines[keep-1] = lines[keep-1].replace(/[\s.,;:]*$/, "") + "\u2026"; } }
   const revH = lines.length ? lines.length*CLH + 30 : 0;
   const H = Math.max(46 + heroH + metaH + subsH + revH + 46 + 46, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -4093,16 +4099,23 @@ async function saveReviewMagazine(g, saved, who){
   const avatar = author.id && avatars[author.id] ? await loadImg(avatars[author.id], true) : null;
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const rated = SUBS.filter(sc=> l.subs?.[sc.key]!=null);
-  const RT = revText(), BF = Math.round(17*RT.font/16), BLH = Math.round(26*RT.font/16), BODY = `400 ${BF}px Manrope, sans-serif`;
+  const RT = revText(); let BF = Math.round(17*RT.font/16), BLH = Math.round(26*RT.font/16), BODY = `400 ${BF}px Manrope, sans-serif`;
   const pills = [l.dateTrophy ? `First trophy: ${fmtDate(l.dateTrophy)}` : null, l.datePlat ? `Platinum date: ${fmtDate(l.datePlat)}` : null, l.datePlayed && !l.dateTrophy ? `Played: ${fmtDate(l.datePlayed)}` : null,
     (l.platinum && l.showPlatStats && l.platDiff!=null) ? `Platinum difficulty: ${l.platDiff}/10` : null, (l.platinum && l.showPlatStats && l.platHours!=null) ? `Time to platinum: ${l.platHours} hours` : null].filter(Boolean).slice(0,4);
   // measure
   const m = document.createElement("canvas").getContext("2d");
   m.font = "800 44px Outfit, sans-serif"; let tl = wrapText(m, g.title.toUpperCase(), leftW); let tf = 44; if (tl.length > 2){ tf = 36; m.font = "800 36px Outfit, sans-serif"; tl = wrapText(m, g.title.toUpperCase(), leftW).slice(0,2); }
-  m.font = BODY; const paras = (l.review||"").trim().split(/\n+/).filter(Boolean); const lines = []; paras.forEach((p,i)=>{ if (i) lines.push(""); wrapText(m, p, leftW-52).forEach(ln=> lines.push(ln)); });
+  const paras = (l.review||"").trim().split(/\n+/).filter(Boolean);
+  const wrapBody = ()=>{ m.font = BODY; const out = []; paras.forEach((p,i)=>{ if (i) out.push(""); wrapText(m, p, leftW-52).forEach(ln=> out.push(ln)); }); return out; };
+  let lines = wrapBody();
   const titleTop = 46 + heroH - 10, byY = titleTop + tl.length*(tf+6) + 8;
   const infoY = byY + 26, infoH = Math.max(200, pills.length ? pills.length*48 : 0);
-  const revY = infoY + infoH + 22, revH = lines.length ? lines.length*BLH + 48 : 0;
+  const revY = infoY + infoH + 22;
+  // fixed page size: shrink the body text until the review fits (down to 12px), then trim with an ellipsis
+  const pageH = revTargetH(W), revMax = pageH ? pageH - 40 - 46 - revY - 48 : Infinity;
+  while (pageH && lines.length*BLH > revMax && BF > 12){ BF -= 1; BLH = Math.round(BF*26/17); BODY = `400 ${BF}px Manrope, sans-serif`; lines = wrapBody(); }
+  if (pageH && lines.length*BLH > revMax){ const keep = Math.max(1, Math.floor(revMax/BLH)); lines = lines.slice(0, keep); lines[keep-1] = lines[keep-1].replace(/[\s.,;:]*$/, "") + "\u2026"; }
+  const revH = lines.length ? lines.length*BLH + 48 : 0;
   const leftBottom = revH ? revY + revH : infoY + infoH;
   // right column plan
   const avY = 46 + 30, avD = 170, nameY = avY + avD + 42, scoreY = nameY + 120, trophyY = scoreY + 70, trophyH = l.platinum ? 190 : 0;
