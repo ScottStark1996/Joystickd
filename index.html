@@ -1535,8 +1535,25 @@ async function textOk(surface, txt){
   try { const { data, error } = await sb.rpc("check_text", { surface, txt }); if (error) return true; return data !== false; } catch(e){ return true; }
 }
 
-// ---- IGDB via the Supabase edge function ---------------------------------
+// ---- IGDB: local games table first (straight from the database), edge function as fallback -----
+// igdb-sync keeps a full copy of IGDB in Postgres, so search / popular / lookups are answered by SQL
+// functions directly from the browser (no edge-function hop or cold start). The edge function remains
+// for what the table can't answer (brand-new games, thin searches), where it merges the live IGDB API in.
+async function igdbLocal(action, p){
+  try {
+    if (action === "search"){ const q = String(p.q||"").trim().slice(0,80); if (!q) return null;
+      const { data, error } = await sb.rpc("search_games", { q, lim: 45 }); return (!error && Array.isArray(data) && data.length >= 3) ? data : null; }
+    if (action === "popular"){ const { data, error } = await sb.rpc("popular_games", { y: Number(p.year||0), lim: 40 }); return (!error && Array.isArray(data) && data.length) ? data : null; }
+    if (action === "game" || action === "games"){
+      const ids = action === "game" ? [Number(p.id)] : (p.ids||[]).map(Number).filter(Boolean).slice(0,100);
+      if (!ids.length) return [];
+      const { data, error } = await sb.rpc("games_json", { ids }); return (!error && Array.isArray(data) && data.length === ids.length) ? data : null; }
+  } catch(e){ /* fall through to the edge function */ }
+  return null;
+}
 async function igdb(action, params={}){
+  const local = await igdbLocal(action, params);
+  if (local){ local.forEach(cacheGame); return local; }
   const r = await fetch(`${SUPABASE_URL}/functions/v1/igdb`, {
     method:"POST",
     headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${SUPABASE_ANON_KEY}`, "apikey":SUPABASE_ANON_KEY },
@@ -2105,40 +2122,44 @@ async function loadHome(){
       home.friendLogs = []; home.friendPopular = [];
     } else {
       const ids = me ? followingIds() : [];
-      const [top, fl] = await Promise.all([
+      // One round trip for everything that depends on nothing else; the enrichments (award tags, hearts,
+      // comment counts) come after a first paint, so the screen fills as soon as the lists land.
+      const [top, fl, lrRes] = await Promise.all([
         igdb("popular",{year:YEAR}).catch(e=>{ home.error=String(e.message||e); return []; }),
         ids.length ? sb.from("logs").select("*").in("user_id", ids).order("created_at",{ascending:false, nullsFirst:false}).limit(200) : Promise.resolve({data:[]}),
+        sb.rpc("latest_reviews", { lim: 10 }).then(r=>r, e=>({ data:null, error:e })),
       ]);
       home.topYear = top.slice(0,20);
       const rows = fl.data || [];
       rows.forEach(r=>cacheGame(r.game));
       home.friendLogs = rows.slice(0,10).map(r=>({ user:follows.names[r.user_id]||"someone", userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot:{} }));
-      // awards those people gave these games, so the opened log shows their award tags
-      if (home.friendLogs.length){
-        const { data: bl } = await sb.from("ballots").select("user_id,game_id,year,category").in("user_id", [...new Set(home.friendLogs.map(f=>f.userId))]).in("game_id", [...new Set(home.friendLogs.map(f=>f.gameId))]);
-        (bl||[]).forEach(b=> home.friendLogs.filter(f=> f.userId===b.user_id && f.gameId===b.game_id).forEach(f=> ((f.ballot[b.year] ||= {})[b.category] = b.game_id)));
-      }
       // Latest written reviews across the whole site (server filters blocked users)
       try {
-        const { data: lr, error: lrErr } = await sb.rpc("latest_reviews", { lim: 10 });
+        const { data: lr, error: lrErr } = lrRes;
         home.latest = lrErr ? [] : (lr||[]).map(r=>{ cacheGame(r.game); revNames[r.user_id]=r.username; avatars[r.user_id]=r.avatar_url||null;
           const ballot={}; (r.awards||[]).forEach(a=> ((ballot[a.year] ||= {})[a.category] = r.game_id));
           likesCache[r.game_id] = [...(likesCache[r.game_id]||[]).filter(k=>k.review_user!==r.user_id), ...Array.from({length:r.like_count||0},(_,i)=>({ user_id:(r.liked_by_me && i===0 && me) ? me.id : "·"+i, review_user:r.user_id }))];
           return { user:r.username, userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot }; });
       } catch(e){ home.latest = []; }
-      // Likes for the feed's written reviews, so the hearts have data on first paint
-      loadFeedCommentCounts([...home.friendLogs, ...(home.latest||[])]);
-      const revRows = home.friendLogs.filter(f=> (f.log.review||"").trim());
-      if (revRows.length){
-        const { data: lks } = await sb.from("review_likes").select("user_id,review_user,game_id")
-          .in("review_user", [...new Set(revRows.map(f=>f.userId))])
-          .in("game_id", [...new Set(revRows.map(f=>f.gameId))]);
-        const byGid = {}; const uidSet = new Set(revRows.map(f=>f.userId));
-        (lks||[]).forEach(k=> (byGid[k.game_id] ||= []).push({ user_id:k.user_id, review_user:k.review_user }));
-        revRows.forEach(f=>{ likesCache[f.gameId] = [...(likesCache[f.gameId]||[]).filter(k=>!uidSet.has(k.review_user)), ...(byGid[f.gameId]||[]).filter(k=>uidSet.has(k.review_user))]; });
-      }
       const counts = {}; rows.forEach(r=>{ const c=(counts[r.game_id] ||= {id:r.game_id, n:0, rated:0, sum:0}); c.n++; if (r.rating!=null){ c.rated++; c.sum+=+r.rating; } });
       home.friendPopular = Object.values(counts).sort((a,b)=> b.n-a.n || (b.sum/(b.rated||1))-(a.sum/(a.rated||1))).slice(0,20).map(c=>({ game:getGame(c.id), n:c.n, avg: c.rated ? (c.sum/c.rated).toFixed(1) : null })).filter(x=>x.game);
+      // First paint now; the rest below only adds award tags, hearts and comment counts.
+      const onHomeNow = ()=> view.tab==="games" && !view.gameId && !view.query.trim();
+      if (onHomeNow()){ home.loaded = true; home.at = Date.now(); renderHome($("#app")); }
+      loadFeedCommentCounts([...home.friendLogs, ...(home.latest||[])]);
+      // awards those people gave these games, so the opened log shows their award tags
+      const revRows = home.friendLogs.filter(f=> (f.log.review||"").trim());
+      const [blRes, lkRes] = await Promise.all([
+        home.friendLogs.length ? sb.from("ballots").select("user_id,game_id,year,category").in("user_id", [...new Set(home.friendLogs.map(f=>f.userId))]).in("game_id", [...new Set(home.friendLogs.map(f=>f.gameId))]) : Promise.resolve({data:[]}),
+        revRows.length ? sb.from("review_likes").select("user_id,review_user,game_id").in("review_user", [...new Set(revRows.map(f=>f.userId))]).in("game_id", [...new Set(revRows.map(f=>f.gameId))]) : Promise.resolve({data:[]}),
+      ]);
+      (blRes.data||[]).forEach(b=> home.friendLogs.filter(f=> f.userId===b.user_id && f.gameId===b.game_id).forEach(f=> ((f.ballot[b.year] ||= {})[b.category] = b.game_id)));
+      // Likes for the feed's written reviews, so the hearts have data
+      if (revRows.length){
+        const byGid = {}; const uidSet = new Set(revRows.map(f=>f.userId));
+        (lkRes.data||[]).forEach(k=> (byGid[k.game_id] ||= []).push({ user_id:k.user_id, review_user:k.review_user }));
+        revRows.forEach(f=>{ likesCache[f.gameId] = [...(likesCache[f.gameId]||[]).filter(k=>!uidSet.has(k.review_user)), ...(byGid[f.gameId]||[]).filter(k=>uidSet.has(k.review_user))]; });
+      }
     }
   } finally { home.loading=false; home.loaded=true; home.at=Date.now(); if (view.tab==="games" && !view.gameId && !view.query.trim()) renderHome($("#app")); }
 }
