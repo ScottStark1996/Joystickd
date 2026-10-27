@@ -900,13 +900,13 @@
 <div class="sheet-wrap" id="cardWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
     <h2 id="cardTitle">Image style</h2>
-    <div class="g">How every image you save looks — review cards, posters, comparison cards and profile snapshots — and how your score numbers look across Joystickd. Pro only.</div>
+    <div class="g">How every image you save looks — review cards, posters, comparison cards and profile snapshots. Pro only.</div>
     <div class="look-prev" id="cardPrev" style="padding:0;overflow:hidden"></div>
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
     <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
     <div class="look-sec"><h3>Pattern</h3><div class="chips" id="cardPattern"></div></div>
     <div class="look-sec"><h3>Highlight color</h3><div class="swatches" id="cardAccent"></div></div>
-    <div class="look-sec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">Your rating numbers, on screen and on saved images.</div><div class="chips" id="cardScore"></div></div>
+    <div class="look-sec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">How your rating number looks on saved images.</div><div class="chips" id="cardScore"></div></div>
     <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
   </div>
 </div>
@@ -1976,8 +1976,9 @@ function ratingColors(v){
   return lo===hi ? [SCALE[lo],SCALE[lo]] : [SCALE[hi],SCALE[lo]];
 }
 const ratingGradient = v => { const c=ratingColors(v); return c ? `linear-gradient(135deg,${c.join(",")})` : "var(--gold)"; };
-// Inline style for a rating number. Pass the reviewer's id (or profile) and their Pro score style applies.
-function ratingText(v, uid, P){ return ratingTextStyled(v, uid ? scoreStyleFor(uid, P) : "gradient"); }
+// Inline style for a rating number on screen — always the classic gradient, so the site stays cohesive.
+// (Pro score styles apply to saved images only; ratingTextStyled() is used by the style picker's preview.)
+function ratingText(v){ return ratingTextStyled(v, "gradient"); }
 function ratingTextStyled(v, st){
   const c=ratingColors(v); if(!c) return "";
   const clip = "-webkit-background-clip:text;background-clip:text;color:transparent;", base = ratingGradient(v);
@@ -4463,8 +4464,10 @@ function bigScore(x, v, cx, baseY, size, st, txt){ x.textAlign="center"; x.font=
   const sp = scoreSprite(txt, +v, size, st), left = cx - w/2 - sp.pad, top = baseY - sp.base;
   x.save();
   if (st==="neon"){
-    x.shadowColor = cols[0]; x.shadowBlur = size*0.35; x.drawImage(sp.canvas, left, top); x.drawImage(sp.canvas, left, top);
-    x.shadowBlur = 0; x.shadowColor = "transparent"; x.lineJoin = "round"; x.lineWidth = Math.max(1, size*0.02); x.strokeStyle = rgba(cols[0], .9); x.strokeText(txt, cx, baseY);
+    // thin bright edge underneath, then the glowing fill on top (the fill hides the font's internal contours)
+    x.lineJoin = "round"; x.lineWidth = Math.max(1.5, size*0.04); x.strokeStyle = rgba(cols[0], .95);
+    x.shadowColor = cols[0]; x.shadowBlur = size*0.35; x.strokeText(txt, cx, baseY);
+    x.drawImage(sp.canvas, left, top); x.drawImage(sp.canvas, left, top);
   } else {
     // white outline underneath (half of it shows outside the glyphs), then the styled fill on top
     x.lineJoin = "round"; x.lineWidth = Math.max(1.5, size*(st==="chrome" ? 0.055 : 0.07)); x.strokeStyle = st==="chrome" ? "rgba(255,255,255,.8)" : "rgba(255,255,255,.93)";
