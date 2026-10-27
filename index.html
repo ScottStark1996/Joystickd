@@ -900,12 +900,13 @@
 <div class="sheet-wrap" id="cardWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
     <h2 id="cardTitle">Image style</h2>
-    <div class="g">How every image you save looks — review cards, posters, comparison cards and profile snapshots. Pro only.</div>
+    <div class="g">How every image you save looks — review cards, posters, comparison cards and profile snapshots — and how your score numbers look across Joystickd. Pro only.</div>
     <div class="look-prev" id="cardPrev" style="padding:0;overflow:hidden"></div>
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
     <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
     <div class="look-sec"><h3>Pattern</h3><div class="chips" id="cardPattern"></div></div>
     <div class="look-sec"><h3>Highlight color</h3><div class="swatches" id="cardAccent"></div></div>
+    <div class="look-sec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">Your rating numbers, on screen and on saved images.</div><div class="chips" id="cardScore"></div></div>
     <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
   </div>
 </div>
@@ -1342,6 +1343,22 @@ const PAGE_BGS = {
   slate:   { name:"Slate",          bg:"#0f1419", panel:"#171e26", panel2:"#1f2934", line:"#2c3a48" },
 };
 const DEFAULT_THEME = { accent:"#f0b429", pattern:"none", tint:"soft", nameColor:true, frame:"none" };
+// Score styles (Pro): how the big rating numbers look, on screen and on every saved image.
+const SCORE_STYLES = { gradient:"Classic", outline:"Outlined", paper:"Textured", chrome:"Chrome", neon:"Neon" };
+// A small "crumpled paper" texture, generated once: cloudy value noise plus creases. Mid-grey is neutral under
+// an overlay blend, so lighter/darker specks and creases show through whatever rating colour sits underneath.
+const NOISE = (()=>{
+  const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d");
+  x.fillStyle = "#808080"; x.fillRect(0, 0, 128, 128);
+  [[8,.55],[16,.35],[48,.25]].forEach(([n,a])=>{ const t = document.createElement("canvas"); t.width = t.height = n; const tx = t.getContext("2d"); const im = tx.createImageData(n, n);
+    for (let i=0; i<im.data.length; i+=4){ const v = 45 + Math.random()*170 | 0; im.data[i]=im.data[i+1]=im.data[i+2]=v; im.data[i+3]=255; } tx.putImageData(im, 0, 0);
+    x.globalAlpha = a; x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(t, 0, 0, 128, 128); });
+  x.globalAlpha = 1; x.lineCap = "round";
+  for (let i=0; i<64; i++){ x.strokeStyle = i%2 ? "rgba(255,255,255,.55)" : "rgba(0,0,0,.45)"; x.lineWidth = 0.7 + Math.random()*1.2; x.beginPath();
+    let px = Math.random()*128, py = Math.random()*128; x.moveTo(px, py); for (let k=0; k<3; k++){ px += (Math.random()-.5)*70; py += (Math.random()-.5)*70; x.lineTo(px, py); } x.stroke(); }
+  let url = ""; try { url = c.toDataURL("image/png"); } catch(e){}
+  return { canvas: c, url };
+})();
 // Whole-page background while a themed profile is on screen; reset on every render elsewhere.
 function applyPageBg(key){
   const b = PAGE_BGS[key] || PAGE_BGS.navy, st = document.documentElement.style;
@@ -1356,6 +1373,7 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
   badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
   bg: PAGE_BGS[t.bg] ? t.bg : "navy",
+  score: SCORE_STYLES[t.score] ? t.score : "gradient",
   card: { bg: PAGE_BGS[t.card?.bg] ? t.card.bg : "navy",
           // the card's highlight color is its own hex (older saves used "gold" / "theme" — mapped here)
           accent: /^#[0-9a-f]{6}$/i.test(t.card?.accent||"") ? t.card.accent.toLowerCase() : t.card?.accent==="theme" ? (/^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent) : "#f0b429",
@@ -1364,7 +1382,7 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
 const CARD_STYLES = { solid:"Solid", cover:"Blurred cover", glow:"Accent glow" };
 function cardThemeFor(uid, P){
   const t = themeFor(uid, P); const b = PAGE_BGS[t?.card?.bg] || PAGE_BGS.navy;
-  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", pattern: t ? (t.card.pattern||"none") : "none", isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
+  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", score: t ? (t.score||"gradient") : "gradient", pattern: t ? (t.card.pattern||"none") : "none", isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
 }
 // Canvas twin of patternCss(): the same five header patterns, drawn in the accent color at low alpha.
 function paintPattern(x, W, H, pattern, accent){
@@ -1443,6 +1461,7 @@ function patternCss(t){ const c = a => rgba(t.accent, a);
 function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
   return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
 const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? nameFxStyle(t) : ""; };
+const scoreStyleFor = (uid, P) => { const t = uid ? themeFor(uid, P) : null; return t && SCORE_STYLES[t.score] ? t.score : "gradient"; };
 const frameKeyFor = uid => { const t = themeFor(uid); return t && FRAMES[t.frame]?.stops ? t.frame : null; };
 // Canvas: ring around an avatar on exported images
 function drawFrameRing(x, cx, cy, r, uid, scale=1){ const k = frameKeyFor(uid); const f = k && FRAMES[k]; if (!f) return;
@@ -1497,13 +1516,15 @@ function paintCardStyle(){
   $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px;font-size:12px;position:relative;overflow:hidden;isolation:isolate"><div style="position:absolute;inset:0;z-index:-1;${patCss}pointer-events:none"></div>
       <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Outfit;font-size:16px">${esc(getGame(Object.keys(logs)[0]||1)?.title || "Game title")}</b><span style="font-family:Outfit;font-weight:800">JOYSTICK<span style="color:${acc}">D</span></span></div>
       <div style="color:var(--muted);margin-top:2px">2026 \u00b7 Developer</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px"><span style="color:${acc};font-weight:700">\uD83C\uDFC6 Platinum #12 \u00b7 difficulty 6/10</span><span style="font-family:Outfit;font-weight:800;font-size:28px;${ratingText(9.5)}">9.5</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px"><span style="color:${acc};font-weight:700">\uD83C\uDFC6 Platinum #12 \u00b7 difficulty 6/10</span><span style="font-family:Outfit;font-weight:800;font-size:28px;${ratingTextStyled(9.5, t.score)}">9.5</span></div>
       <div style="margin-top:10px;display:flex;gap:6px"><span style="background:${rgba(acc,.3)};color:${acc};padding:3px 8px;border-radius:999px;font-weight:700">my 2026 Game of the Year</span><span style="background:${b.panel2};border:1px solid ${b.line};padding:3px 8px;border-radius:999px;font-weight:700">my 2026 best RPG</span></div>
       <div style="margin-top:10px;color:#d7deea;line-height:1.5">A vast, broken world that rewards curiosity and punishes impatience\u2026</div></div></div>`;
   $("#cardBg").innerHTML = Object.entries(PAGE_BGS).map(([k,v])=> `<button class="chip ${t.card.bg===k?"on":""}" data-cbg="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:${v.panel};border:2px solid ${v.line};flex:none"></span>${v.name}</button>`).join("");
   $("#cardStyle").innerHTML = Object.entries(CARD_STYLES).map(([k,v])=> `<button class="chip ${t.card.style===k?"on":""}" data-cstyle="${k}">${v}</button>`).join("");
   $("#cardPattern").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${(t.card.pattern||"none")===k?"on":""}" data-cpat="${k}">${v}</button>`).join("");
   $("#cardPattern").querySelectorAll("[data-cpat]").forEach(b=> b.onclick = ()=>{ cardDraft.card.pattern=b.dataset.cpat; paintCardStyle(); });
+  $("#cardScore").innerHTML = Object.entries(SCORE_STYLES).map(([k,v])=> `<button class="chip ${(t.score||"gradient")===k?"on":""}" data-cscore="${k}" style="display:flex;align-items:center;gap:8px"><span style="font-family:Outfit;font-weight:800;font-size:20px;line-height:1;${ratingTextStyled(9, k)}">9</span>${v}</button>`).join("");
+  $("#cardScore").querySelectorAll("[data-cscore]").forEach(b=> b.onclick = ()=>{ cardDraft.score=b.dataset.cscore; paintCardStyle(); });
   $("#cardAccent").innerHTML = ACCENTS.map(c=> `<button class="swatch ${acc===c?"on":""}" data-cacc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
     + `<label class="swatch custom ${ACCENTS.includes(acc)?"":"on"}">Custom <input type="color" id="cardCustom" value="${acc}"></label>`;
   $("#cardBg").querySelectorAll("[data-cbg]").forEach(b=> b.onclick = ()=>{ cardDraft.card.bg=b.dataset.cbg; paintCardStyle(); });
@@ -1955,10 +1976,20 @@ function ratingColors(v){
   return lo===hi ? [SCALE[lo],SCALE[lo]] : [SCALE[hi],SCALE[lo]];
 }
 const ratingGradient = v => { const c=ratingColors(v); return c ? `linear-gradient(135deg,${c.join(",")})` : "var(--gold)"; };
-function ratingText(v){
+// Inline style for a rating number. Pass the reviewer's id (or profile) and their Pro score style applies.
+function ratingText(v, uid, P){ return ratingTextStyled(v, uid ? scoreStyleFor(uid, P) : "gradient"); }
+function ratingTextStyled(v, st){
   const c=ratingColors(v); if(!c) return "";
+  const clip = "-webkit-background-clip:text;background-clip:text;color:transparent;", base = ratingGradient(v);
+  const shadow = "filter:drop-shadow(0 .06em .08em rgba(0,0,0,.6));";
+  switch (st){
+    case "outline": return `background:${base};${clip}-webkit-text-stroke:.035em rgba(255,255,255,.92);${shadow}`;
+    case "paper":   return `background:${NOISE.url ? `url(${NOISE.url}) 0 0/.9em .9em,` : ""}${base};background-blend-mode:overlay,normal;${clip}-webkit-text-stroke:.035em rgba(255,255,255,.92);${shadow}`;
+    case "chrome":  return `background:linear-gradient(180deg,rgba(255,255,255,.9) 0%,rgba(255,255,255,.25) 36%,rgba(0,0,0,.55) 50%,rgba(255,255,255,.08) 58%,rgba(255,255,255,.6) 100%),${base};background-blend-mode:overlay,normal;${clip}-webkit-text-stroke:.03em rgba(255,255,255,.75);${shadow}`;
+    case "neon":    return `background:${base};${clip}-webkit-text-stroke:.02em ${rgba(c[0],.9)};filter:drop-shadow(0 0 .08em ${rgba(c[0],.95)}) drop-shadow(0 0 .3em ${rgba(c[c.length-1],.7)});`;
+  }
   const glow = v<=1.5 ? "filter:drop-shadow(0 0 1px rgba(255,255,255,.35)) drop-shadow(0 0 4px rgba(255,255,255,.12));" : v===10 ? "filter:drop-shadow(0 0 6px rgba(255,216,77,.55));" : "";
-  return `background:${ratingGradient(v)};-webkit-background-clip:text;background-clip:text;color:transparent;${glow}`;
+  return `background:${base};${clip}${glow}`;
 }
 const ratingInk = v => (v>=9.5 || (v>=5 && v<8)) ? "#1a1200" : "#fff";
 // Badges run the 10's gold dark→light so the silver trophy on the left isn't washed out.
@@ -2082,7 +2113,7 @@ function feedCard(f, idx, kind){
           <div class="rev-body">
             <div class="rev-top">
               <div class="rev-title"><button class="rev-tbtn" data-open="${g.id}">${esc(g.title)}</button><small><button class="ulink" data-user="${esc(f.user)}"${nameStyle(f.userId)}>${avatarEl(f.userId, f.user)} ${esc(f.user)}${proTag(f.userId)}</button> · ${fmtDate((f.when||"").slice(0,10))}</small></div>
-              <button class="rev-open" ${open} title="Open this log">${l.rating!=null ? `<span class="rev-score" style="${ratingText(l.rating)}">${l.rating}</span>` : `<span class="rev-score played">Played</span>`}${l.platinum ? PLAT_IMG(l.rating,"inrev") : ""}</button>
+              <button class="rev-open" ${open} title="Open this log">${l.rating!=null ? `<span class="rev-score" style="${ratingText(l.rating, f.userId)}">${l.rating}</span>` : `<span class="rev-score played">Played</span>`}${l.platinum ? PLAT_IMG(l.rating,"inrev") : ""}</button>
             </div>
             ${l.review ? (()=>{ const key=`${kind}:${idx}`, long = l.review.length > 420 || (l.review.match(/\n/g)||[]).length > 5, exp = feedExpanded.has(key);
               return `<div class="review rev-text${(long && !exp) ? " clamp" : ""}" role="button" tabindex="0" ${open}>${esc(l.review)}</div>${long ? `<button class="linklike rev-more" data-fexpand="${key}">${exp ? "Show less" : "Read more"}</button>` : ""}`; })() : ""}
@@ -2539,7 +2570,7 @@ function renderLogs(app, P, isMe){
             ${isMe ? `<span class="revfull-acts"><button class="cta ghost sm" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Image</button><button class="cta ghost sm" data-editlog="${g.id}">Edit log</button></span>`
                    : (l.review ? `<button class="cta ghost sm" data-osave="${g.id}" title="Save a shareable picture of this review">⤓ Image</button>` : "")}
           </div>
-          ${logCard(l, g, P.ballot, isMe)}
+          ${logCard(l, g, P.ballot, isMe, P.id)}
           ${(LIVE && P.id) ? (()=>{ const lk=likesFor(g.id, P.id), liked=!!lk.find(k=>k.user_id===me?.id);
             return `<div class="crev-foot"><button class="likebtn ${liked?"on":""}" data-plike="${g.id}" ${isMe?"disabled":""} aria-label="Like this review">${liked?"\u2665":"\u2661"} ${lk.length||""}</button>${(me && !isMe) ? `<button class="cmt-toggle" data-prreport="${g.id}" title="Report review">\u2691 Report</button>` : ""}</div>`; })() : ""}
           ${P.id ? commentsBlock(g.id, P.id) : ""}
@@ -3216,7 +3247,7 @@ function openT5(gid, P, isMe){
   const t5HeartHtml = ()=>{ const lk=likesFor(gid, P.id), liked=!!lk.find(k=>k.user_id===me.id);
     return `<button class="likebtn ${liked?"on":""}" id="t5Like" aria-label="Like this review">${liked?"\u2665":"\u2661"} ${lk.length||""}</button><button class="cmt-toggle" id="t5Report" title="Report review">\u2691 Report</button>`; };
   const hasReview = !!(l.review||"").trim();
-  $("#t5Body").innerHTML = logCard(l, g, P.ballot, isMe)
+  $("#t5Body").innerHTML = logCard(l, g, P.ballot, isMe, P.id)
     + (canLike ? `<div class="crev-foot" id="t5Foot">${t5HeartHtml()}</div>` : "")
     + (myL ? `<div class="yours">Your rating: ${myL.rating!=null ? `<b style="${ratingText(myL.rating)}">${myL.rating}</b>/10` : "played"}${myL.platinum ? " · platinumed" : ""}</div>` : "")
     + (LIVE && hasReview && P.id ? `<div id="t5Cmts"></div>` : "");
@@ -3442,11 +3473,11 @@ function distChart(ratings){            // ratings: array of values, or a {value
 
 // ---- shared log card (game page + profile reviews) ---------------------------
 const dateLine = l => [l.date && "Played " + fmtDate(l.date), l.firstTrophy && "First trophy " + fmtDate(l.firstTrophy), l.platDate && "Platinum " + fmtDate(l.platDate), hasPlat2(l) && l.plat2On && `${l.plat2Label || "2nd"} platinum ` + fmtDate(l.plat2On), hasPlat3(l) && l.plat3On && `${l.plat3Label || "3rd"} platinum ` + fmtDate(l.plat3On)].filter(Boolean).join(" · ");
-function logCard(l, g, ballot, isMe){
+function logCard(l, g, ballot, isMe, uid){
   const w = l.showAwards ? awardsFor(ballot, g.id) : [];
   const rated = SUBS.filter(s=>l.subs?.[s.key]!=null);
   return `<div class="yourlog">
-    <div class="top">${l.rating!=null ? `<div class="score"><span style="${ratingText(l.rating)}">${l.rating}</span><small> / 10</small></div>` : `<div class="score played">Played</div>`}${l.platinum ? PLAT_IMG(l.rating,"inlog") : ""}<div class="when">${dateLine(l)}</div></div>
+    <div class="top">${l.rating!=null ? `<div class="score"><span style="${ratingText(l.rating, uid)}">${l.rating}</span><small> / 10</small></div>` : `<div class="score played">Played</div>`}${l.platinum ? PLAT_IMG(l.rating,"inlog") : ""}<div class="when">${dateLine(l)}</div></div>
     ${w.length ? `<div class="award-tags">${w.map(x=>awardTag(x, isMe)).join("")}</div>` : ""}
     ${l.review ? `<div class="review">${esc(l.review)}</div>` : `<div class="review" style="color:var(--muted)">No review written.</div>`}
     ${l.platinum && platNumText(l) ? `<div class="platnum">Platinum ${platNumText(l)}</div>` : ""}
@@ -3555,7 +3586,7 @@ function gameReviews(g){
         <div class="crev-top">
           <button class="uname" data-user="${esc(name)}"${nameStyle(uid)}>${avatarEl(uid, name)}${esc(name)}${isMine?" (you)":""}${proTag(uid)}</button>
         </div>
-        ${logCard(rowToLog(r), g, ballotFor(g.id, uid), isMine)}
+        ${logCard(rowToLog(r), g, ballotFor(g.id, uid), isMine, uid)}
         <div class="crev-foot">
           <button class="likebtn ${liked?"on":""}" data-like="${uid}" ${isMine?"disabled":""} aria-label="Like this review">${liked?"♥":"♡"} ${likes.length||""}</button>
           ${(me && !isMine) ? `<button class="cmt-toggle" data-rreport="${uid}" title="Report review">⚑ Report</button>` : ""}
@@ -3621,7 +3652,7 @@ async function renderGame(app){
         ${g.blurb ? `<p class="desc">${esc(g.blurb)}</p>` : ""}
         ${l ? `
           <button class="cta ghost" id="logBtn">Edit your log</button>${(l.review||"").trim() ? `<button class="cta ghost" data-saveimg="${g.id}" title="Save a shareable picture of this review">⤓ Save as image</button>` : ""}
-          ${logCard(l, g, ballots.me, true)}`
+          ${logCard(l, g, ballots.me, true, me?.id)}`
         : `<button class="cta" id="logBtn">Log this game</button>`}${LIVE ? `<button class="cta ghost ${wishlist[g.id]?"wished":""}" id="wishBtn">${wishlist[g.id] ? "★ On your wishlist" : "☆ Wishlist"}</button>` : ""}<button class="cta ghost" id="shareGameBtn" title="Share this game's page">Share</button>${(LIVE && me && logs[g.id] && (friendLogs[g.id]||[]).length) ? `<button class="cta ghost" id="cmpGameBtn" title="Side-by-side with people you follow">Compare <span class="protag" style="margin-left:4px">Pro</span></button>` : ""}${userAverage(g.id) ? `<button class="cta ghost" id="commImgBtn" title="Save a picture of the community's ratings for this game">Save community image</button>` : ""}
         ${(()=>{ if (!LIVE || !me) return "";
           const fids = followingIds(); if (!fids.length) return "";
@@ -3635,7 +3666,7 @@ async function renderGame(app){
                 ${avatarEl(r.user_id, name)}
                 <span class="fname">${esc(name)}${(r.review||"").trim() ? `<small>wrote a review</small>` : `<small>rating only</small>`}</span>
                 ${r.platinum ? PLAT_IMG(r.rating==null ? null : +r.rating,"infollow") : ""}
-                ${r.rating!=null ? `<span class="fscore" style="${ratingText(+r.rating)}">${+r.rating}</span>` : `<span class="fscore played">Played</span>`}
+                ${r.rating!=null ? `<span class="fscore" style="${ratingText(+r.rating, r.user_id)}">${+r.rating}</span>` : `<span class="fscore played">Played</span>`}
               </button>`; }).join("")}</div>${all.length > FSHOW && !showAll ? `<button class="linklike" id="friendsMore" style="margin-top:8px">Show all ${all.length}</button>` : ""}`
             : `<div class="hint">None of the people you follow have logged this yet.</div>`}
           </section>`; })()}
@@ -4003,7 +4034,7 @@ async function saveReviewPoster(g, saved, who){
   let scx = W/2;
   if (l.platinum){ const th = 170, tw = (trophy && trophy.width) ? th*trophy.width/trophy.height : th*0.9, total = tw + 24 + sw, left = W/2 - total/2;
     x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=18; x.shadowOffsetY=6; drawTrophy(x, trophy, left+tw, sy - size*0.36, th); x.restore(); scx = left + tw + 24 + sw/2; }
-  x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=18; x.shadowOffsetY=6; bigScore(x, l.rating, scx, sy, size); x.restore();
+  x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=18; x.shadowOffsetY=6; bigScore(x, l.rating, scx, sy, size, ct.score); x.restore();
   x.textAlign="center"; x.font="700 20px Outfit, sans-serif"; x.fillStyle="#8b98b5"; if (l.rating!=null) x.fillText("/ 10", scx, sy+34);
   if (l.platinum){ x.font="700 18px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`\uD83C\uDFC6 Platinum${platNumText(l)?" "+platNumText(l):""}`, W/2, sy+72); }
   y = sy + 100;
@@ -4082,7 +4113,7 @@ async function saveReviewCinematic(g, saved, who){
   // score + trophy, bottom right of the banner
   { const sy = cy + ch - 30, right = W - pad;
     x.save(); x.shadowColor="rgba(0,0,0,.65)"; x.shadowBlur=24; x.shadowOffsetY=6;
-    bigScore(x, l.rating, right - sw/2, sy, size);
+    bigScore(x, l.rating, right - sw/2, sy, size, ct.score);
     if (l.platinum) drawTrophy(x, trophy, right - sw - 18, sy - size*0.36, th);
     x.restore();
     x.textAlign="center"; x.font="700 18px Outfit, sans-serif"; x.fillStyle=mut; if (l.rating!=null) x.fillText("/ 10", right - sw/2, sy + 30); x.textAlign="left"; }
@@ -4199,8 +4230,7 @@ async function saveReviewMagazine(g, saved, who){
   x.font="600 14px Manrope, sans-serif"; x.fillStyle=mut; x.fillText(isMine ? "my review" : "review", rcx, nameY+22);
   // big score "9/10" in rating colors
   if (l.rating!=null){ const txt = `${l.rating}/10`; let big = 100; x.font=`800 ${big}px Outfit, sans-serif`; let total = x.measureText(txt).width; if (total > rightW){ big = Math.floor(big*rightW/total); x.font=`800 ${big}px Outfit, sans-serif`; total = x.measureText(txt).width; }
-    const left = rcx - total/2; const cols = ratingColors(snapHalf(+l.rating)); const gr = x.createLinearGradient(left, scoreY-big, left+total, scoreY); cols.forEach((cc,i)=> gr.addColorStop(cols.length===1?0:i/(cols.length-1), cc));
-    x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=18; x.shadowOffsetY=6; x.textAlign="left"; x.fillStyle=gr; x.fillText(txt, left, scoreY); x.restore(); }
+    x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=18; x.shadowOffsetY=6; bigScore(x, l.rating, rcx, scoreY, big, ct.score, txt); x.restore(); }
   else { x.font="800 64px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("Played", rcx, scoreY); }
   if (l.platinum){ const tw = (trophy && trophy.width) ? trophyH*trophy.width/trophy.height : trophyH*0.9; x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=24; x.shadowOffsetY=8; drawTrophy(x, trophy, rcx+tw/2, trophyY+trophyH/2, trophyH); x.restore(); }
   x.textAlign="left";
@@ -4300,9 +4330,8 @@ async function saveReviewImage(g, saved, who){
       const bx = b.corner==="right" ? ax+ad-bd+6 : ax-6, by = b.corner==="bl" ? ay+ad-bd+5 : ay-5;
       x.save(); x.shadowColor="rgba(0,0,0,.55)"; x.shadowBlur=5; x.shadowOffsetY=1; x.drawImage(im, bx, by, bd, bd); x.restore(); }); }
   x.textAlign="right"; x.font=`800 ${big}px Outfit, sans-serif`;
-  if (l.rating!=null){ const cols=ratingColors(snapHalf(l.rating)); const grd=x.createLinearGradient(scRight-sw, scY-big*0.7, scRight, scY); cols.forEach((cc,i)=>grd.addColorStop(cols.length===1?0:i/(cols.length-1), cc)); x.fillStyle=grd; }
-  else x.fillStyle="#c9d3e0";
-  x.save(); x.shadowColor="rgba(0,0,0,.35)"; x.shadowBlur=10; x.shadowOffsetY=3; x.fillText(sc, scRight, scY); x.restore();
+  if (l.rating!=null){ x.save(); x.shadowColor="rgba(0,0,0,.35)"; x.shadowBlur=10; x.shadowOffsetY=3; bigScore(x, l.rating, scRight - sw/2, scY, big, ct.score); x.restore(); x.textAlign="right"; }
+  else { x.fillStyle="#c9d3e0"; x.save(); x.shadowColor="rgba(0,0,0,.35)"; x.shadowBlur=10; x.shadowOffsetY=3; x.fillText(sc, scRight, scY); x.restore(); }
   if (l.rating!=null){ x.font="700 15px Outfit, sans-serif"; x.fillStyle=mut; x.fillText("/ 10", scRight, scY+20); }
   if (troph){ x.save(); x.shadowColor="rgba(0,0,0,.45)"; x.shadowBlur=8; x.shadowOffsetY=3; x.drawImage(troph, scLeft, scY - big*0.36 - th/2, tw, th); x.restore(); }
   x.textAlign="left";
@@ -4422,10 +4451,45 @@ async function drawPerson(x, uid, name, cx, cy, ad, nameSize=17){      // avatar
   x.textAlign="center"; x.font=`800 ${nameSize}px Outfit, sans-serif`; const t = themeFor(uid); const nw = x.measureText(name).width;
   x.fillStyle = (t && t.nameColor && nameFillCtx(x, t, cx-nw/2, ny-nameSize, cx+nw/2, ny)) || "#e6ebf4"; x.fillText(name, cx, ny); x.textAlign="left";
 }
-function bigScore(x, v, cx, baseY, size){ x.textAlign="center"; x.font=`800 ${size}px Outfit, sans-serif`;
+// Big rating number, centred on cx with its baseline at baseY. `st` is a SCORE_STYLES key (the reviewer's Pro
+// choice); `txt` overrides the drawn text (the magazine layout draws "9.5/10" as one piece).
+function bigScore(x, v, cx, baseY, size, st, txt){ x.textAlign="center"; x.font=`800 ${size}px Outfit, sans-serif`;
   if (v==null){ x.fillStyle="#8b98b5"; x.font=`800 ${Math.round(size*0.5)}px Outfit, sans-serif`; x.fillText("Played", cx, baseY); x.textAlign="left"; return; }
-  const cols=ratingColors(snapHalf(+v)); const w=x.measureText(String(v)).width; const g=x.createLinearGradient(cx-w/2, baseY-size, cx+w/2, baseY); cols.forEach((c,i)=>g.addColorStop(cols.length===1?0:i/(cols.length-1), c));
-  x.fillStyle=g; x.fillText(String(v), cx, baseY); x.textAlign="left"; }
+  txt = txt || String(v);
+  const cols=ratingColors(snapHalf(+v)); const w=x.measureText(txt).width;
+  if (!st || st==="gradient" || !SCORE_STYLES[st]){
+    const g=x.createLinearGradient(cx-w/2, baseY-size, cx+w/2, baseY); cols.forEach((c,i)=>g.addColorStop(cols.length===1?0:i/(cols.length-1), c));
+    x.fillStyle=g; x.fillText(txt, cx, baseY); x.textAlign="left"; return; }
+  const sp = scoreSprite(txt, +v, size, st), left = cx - w/2 - sp.pad, top = baseY - sp.base;
+  x.save();
+  if (st==="neon"){
+    x.shadowColor = cols[0]; x.shadowBlur = size*0.35; x.drawImage(sp.canvas, left, top); x.drawImage(sp.canvas, left, top);
+    x.shadowBlur = 0; x.shadowColor = "transparent"; x.lineJoin = "round"; x.lineWidth = Math.max(1, size*0.02); x.strokeStyle = rgba(cols[0], .9); x.strokeText(txt, cx, baseY);
+  } else {
+    // white outline underneath (half of it shows outside the glyphs), then the styled fill on top
+    x.lineJoin = "round"; x.lineWidth = Math.max(1.5, size*(st==="chrome" ? 0.055 : 0.07)); x.strokeStyle = st==="chrome" ? "rgba(255,255,255,.8)" : "rgba(255,255,255,.93)";
+    x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = size*0.14; x.shadowOffsetY = size*0.06; x.strokeText(txt, cx, baseY);
+    x.shadowColor = "transparent"; x.shadowBlur = 0; x.shadowOffsetY = 0; x.drawImage(sp.canvas, left, top);
+  }
+  x.restore(); x.textAlign="left"; }
+// Off-screen glyphs for bigScore: rating gradient, then the texture / chrome bands blended onto the glyph pixels only.
+function scoreSprite(txt, v, size, st){
+  const pad = Math.ceil(size*0.4), base = pad + Math.round(size*0.82);
+  const c = document.createElement("canvas"), mx = c.getContext("2d");
+  mx.font = `800 ${size}px Outfit, sans-serif`; const w = Math.ceil(mx.measureText(txt).width);
+  c.width = w + pad*2; c.height = Math.round(size*0.82) + pad*2;
+  mx.font = `800 ${size}px Outfit, sans-serif`; mx.textBaseline = "alphabetic"; mx.textAlign = "left";
+  const cols = ratingColors(snapHalf(+v)); const g = mx.createLinearGradient(pad, base-size, pad+w, base); cols.forEach((cc,i)=> g.addColorStop(cols.length===1?0:i/(cols.length-1), cc));
+  mx.fillStyle = g; mx.fillText(txt, pad, base);
+  if (st==="paper" || st==="chrome"){
+    mx.globalCompositeOperation = "overlay";
+    if (st==="paper"){ const sc = size*0.9/128; mx.save(); mx.scale(sc, sc); mx.fillStyle = mx.createPattern(NOISE.canvas, "repeat"); mx.fillRect(0, 0, c.width/sc, c.height/sc); mx.restore(); }
+    else { const b = mx.createLinearGradient(0, base-size*0.78, 0, base); [[0,"rgba(255,255,255,.9)"],[.36,"rgba(255,255,255,.25)"],[.5,"rgba(0,0,0,.55)"],[.58,"rgba(255,255,255,.08)"],[1,"rgba(255,255,255,.6)"]].forEach(([o,cc])=> b.addColorStop(o, cc)); mx.fillStyle = b; mx.fillRect(0, 0, c.width, c.height); }
+    mx.globalCompositeOperation = "destination-in"; mx.fillStyle = "#000"; mx.fillText(txt, pad, base);   // keep glyph pixels only
+    mx.globalCompositeOperation = "source-over";
+  }
+  return { canvas: c, pad, base };
+}
 // Sub-category labels at three lengths; the comparison card uses the longest one that fits its column
 // (2 people → the full label, 3 → the medium one, 4 → the short one; drops a length if it still would not fit).
 const SUB_LABELS = {
@@ -4475,7 +4539,7 @@ async function saveCompareGameImage(g, ids, opts){
       x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=10; x.shadowOffsetY=3; drawTrophy(x, im, left+tw, tcy, th); x.restore();
       scx = left + tw + 12 + sw/2;
     }
-    bigScore(x, p.l.rating, scx, y, 56); x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; if (p.l.rating!=null) x.fillText("/ 10", scx, y+18); x.textAlign="left"; y += scoreH - 50;
+    bigScore(x, p.l.rating, scx, y, 56, scoreStyleFor(p.id)); x.font="700 13px Outfit, sans-serif"; x.fillStyle="#8b98b5"; x.textAlign="center"; if (p.l.rating!=null) x.fillText("/ 10", scx, y+18); x.textAlign="left"; y += scoreH - 50;
     if (platH){ x.textAlign="center"; x.font="700 13px Outfit, sans-serif"; x.fillStyle = p.l.platinum ? "#f0b429" : "#55607a"; x.fillText(p.l.platinum ? `Platinum${platNumText(p.l)?" "+platNumText(p.l):""}` : "no platinum", cx, y+18); x.textAlign="left"; y += platH; }
     if (rated.length){ y += 22; rated.forEach(sc=>{ const v=p.l.subs?.[sc.key]; x.font="600 12px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; const lab = subLabelFit(x, sc, colW - 70, n - 2); x.fillText(lab, px+16, y);
         x.textAlign="right"; x.font="800 14px Outfit, sans-serif"; x.fillStyle = v!=null ? ratingFillCtx(x, +v, px+colW-30, y-12, px+colW-16, y) : "#55607a";
@@ -4517,7 +4581,7 @@ async function saveCompareGamePoster(g, people, opts){
   for (let i=0;i<n;i++){ const p=people[i], cx=60+colW*(i+0.5);
     await drawPerson(x, p.id, p.name, cx, ay, ad, n>=4 ? 22 : 26);
     const scoreY = ay + ad/2 + 150;
-    bigScore(x, p.l.rating, cx, scoreY, n>=4 ? 88 : 110);
+    bigScore(x, p.l.rating, cx, scoreY, n>=4 ? 88 : 110, scoreStyleFor(p.id));
     if (opts.plat && p.l.platinum){ const im=trophies[i], th = n>=4 ? 80 : 96, tw2 = (im && im.width) ? th*im.width/im.height : th*0.9;
       x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=12; x.shadowOffsetY=4; drawTrophy(x, im, cx+tw2/2, scoreY+40+th/2, th); x.restore();
       x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}`, cx, scoreY+40+th+26); x.textAlign="left"; }
@@ -4992,7 +5056,7 @@ function wireSettingsUI(){
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
-  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none" }; saveLook(t); };
+  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none" }; t.score="gradient"; saveLook(t); };
   $("#lookReset").onclick = ()=> saveLook(null);
   $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
