@@ -4093,8 +4093,8 @@ async function saveReviewCinematic(g, saved, who){
   if (art){ x.save(); x.beginPath(); x.rect(0,0,W,46+heroH); x.clip(); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
     const hh = 46+heroH, sc = Math.max(W/art.width, hh/art.height), dw=art.width*sc, dh=art.height*sc; x.drawImage(art, (W-dw)/2, (hh-dh)*heroFocus(), dw, dh);
 
-    const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,46,W,heroH);
-    const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,46,W,heroH);
+    const fade = x.createLinearGradient(0, 46+heroH*0.35, 0, 46+heroH); fade.addColorStop(0, rgba(ct.bg,0)); fade.addColorStop(1, rgba(ct.bg,.97)); x.fillStyle=fade; x.fillRect(0,0,W,46+heroH);
+    const side = x.createLinearGradient(0,0,W,0); side.addColorStop(0, rgba(ct.bg,.55)); side.addColorStop(0.35, rgba(ct.bg,0)); side.addColorStop(1, rgba(ct.bg,.25)); x.fillStyle=side; x.fillRect(0,0,W,46+heroH);
     x.restore(); }
   paintWordmark(x, W, ct);
   // small cover + title, sitting on the fade
@@ -4264,15 +4264,10 @@ async function saveReviewImage(g, saved, who){
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const troph = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating ?? 10}.png`) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
-  const RT = revText(), BODY = `400 ${RT.font}px Manrope, sans-serif`, LH = RT.lh;
+  const RT = revText(); let F = RT.font, BODY = `400 ${F}px Manrope, sans-serif`, LH = RT.lh;
   const measure=document.createElement("canvas").getContext("2d"); measure.font=BODY;
-  // Long reviews become a series: part 1 is the full card, later parts are continuation cards.
-  const allLines = l.review ? wrapText(measure, l.review, W-64-32) : [];
-  const PART1 = Math.round(34*25/LH), PARTN = Math.round(46*25/LH), MAXPARTS = 4;
-  const parts = [allLines.slice(0, PART1)];
-  for (let i = PART1; i < allLines.length && parts.length < MAXPARTS; i += PARTN) parts.push(allLines.slice(i, i+PARTN));
-  if (allLines.length > PART1 + PARTN*(MAXPARTS-1)){ const last = parts[parts.length-1]; last[last.length-1] = last[last.length-1].replace(/\s*$/, "") + " \u2026"; }
-  const revLines = parts[0], nParts = parts.length;
+  const wrapAll = ()=>{ measure.font = BODY; return l.review ? wrapText(measure, l.review, W-64-32) : []; };
+  let allLines = wrapAll();
   const rated = SUBS.filter(sc=> l.subs[sc.key]!=null);
   const tags = (!saved || saved.showAwards!==false) ? awardsFor(author.ballot || {}, g.id) : [];
   const cvW=110, cvH=147;
@@ -4297,6 +4292,18 @@ async function saveReviewImage(g, saved, who){
       pills.push({ label, x:px, y:py, w, goty: t.key==="goty" }); px += w + PILL_GAP; });
     H += (pills.length ? pills[pills.length-1].y + PILL_H : 0) + 14; }
   const tagLines = pills;
+  // Long reviews become a series: part 1 is the full card, later parts are continuation cards.
+  // On a fixed page size (8.5×11 / square / portrait) the card keeps its full width: the text shrinks (to 12px)
+  // until the review fits the page, and only then spills into continuation cards.
+  let PART1 = Math.round(34*25/LH), PARTN = Math.round(46*25/LH); const MAXPARTS = 4;
+  { const fixedH = revTargetH(W);
+    if (fixedH){ const revMax = fixedH - (H + 70) - 18;
+      while (allLines.length*LH > revMax && F > 12){ F -= 0.5; LH = F*RT.lh/RT.font; BODY = `400 ${F}px Manrope, sans-serif`; allLines = wrapAll(); }
+      PART1 = Math.max(1, Math.floor(revMax/LH)); PARTN = Math.max(1, Math.floor((fixedH - 56 - 40 - 26 - 18 - 70)/LH)); } }
+  const parts = [allLines.slice(0, PART1)];
+  for (let i = PART1; i < allLines.length && parts.length < MAXPARTS; i += PARTN) parts.push(allLines.slice(i, i+PARTN));
+  if (allLines.length > PART1 + PARTN*(MAXPARTS-1)){ const last = parts[parts.length-1]; last[last.length-1] = last[last.length-1].replace(/\s*$/, "") + " \u2026"; }
+  const revLines = parts[0], nParts = parts.length;
   if (revLines.length) H += 18 + revLines.length*LH;
   H += 70;
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
@@ -4359,8 +4366,8 @@ async function saveReviewImage(g, saved, who){
     const top = y - 14;
     pills.forEach(pl=>{
       x.beginPath(); x.roundRect(pl.x, top + pl.y, pl.w, PILL_H, 13);
-      x.fillStyle = pl.goty ? rgba(gold, .3) : ct.panel2; x.fill();
-      if (!pl.goty){ x.strokeStyle = ct.line; x.lineWidth = 1; x.stroke(); }
+      x.fillStyle = pl.goty ? mixHex(ct.panel2, gold, 0.32) : ct.panel2; x.fill();   // GOTY: solid, tinted with the highlight colour
+      x.strokeStyle = pl.goty ? rgba(gold, .55) : ct.line; x.lineWidth = 1; x.stroke();
       x.font="600 12px Outfit, sans-serif"; x.fillStyle = pl.goty ? gold : "#c9d3e0"; x.textBaseline="middle";
       x.fillText(pl.label, pl.x + PILL_PAD, top + pl.y + PILL_H/2 + 1); x.textBaseline="alphabetic"; });
     y += pills[pills.length-1].y + PILL_H + 14; }
@@ -4499,7 +4506,7 @@ const SUB_LABELS = {
   visuals:   ["Visuals, aesthetics, art direction & atmosphere", "Visuals & art direction", "Visuals"],
   sound:     ["Soundtrack & score", "Soundtrack & score", "Soundtrack"],
   gameplay:  ["Gameplay & mechanics", "Gameplay & mechanics", "Gameplay"],
-  animation: ["Choreography, animations & cinematic flair", "Animations & cinematics", "Choreography"],
+  animation: ["Choreography, animations & cinematic flair", "Animations & cinematics", "Cinematic flair"],
   levels:    ["Level design, pacing & progression", "Level design & pacing", "Pacing"],
   narrative: ["Narrative & writing", "Narrative & writing", "Narrative"],
   fun:       ["Fun factor", "Fun factor", "Fun factor"],
@@ -5499,7 +5506,8 @@ wirePushListeners();
     if (session) { me = { id:session.user.id, username: session.user.user_metadata?.username || "you" }; await loadMyData(); pushOnSignIn(); rcReady().catch(()=>{}); }
     const proBack = params.get("pro");
     if (proBack){ history.replaceState(null, "", location.pathname + (u ? "?u="+encodeURIComponent(u) : g ? "?g="+g : "")); 
-      if (proBack==="success" && me){ waitForPro().then(()=> render()); } else if (proBack==="cancel"){ toast("Checkout cancelled \u2014 no charge"); } }
+      if (proBack==="success" && me){ waitForPro().then(()=> render()); } else if (proBack==="cancel"){ toast("Checkout cancelled \u2014 no charge"); }
+      else if (proBack==="1" || proBack==="open"){ setTimeout(()=> openPro().catch(()=>{}), 400); } }   // joystickd.com/?pro=1 (announcement links) opens the Pro sheet
     paintAuthBtn();
     sb.auth.onAuthStateChange((evt, s)=>{ if (evt==="PASSWORD_RECOVERY"){ onAuth(s); openPw(); return; } if (evt==="SIGNED_IN"||evt==="SIGNED_OUT"||evt==="USER_UPDATED") onAuth(s); });
     if (AUTH_LINK.error){
