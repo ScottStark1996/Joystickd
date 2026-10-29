@@ -821,6 +821,7 @@
     <h2 id="snapTitle">Profile snapshot</h2>
     <div class="g">A clean shareable card of your profile.</div>
     <button class="plat-toggle" id="snapChart" role="switch" style="margin-top:14px"><span class="pt-text">Include rating distribution<small>Your bar chart of 1–10 ratings</small></span><span class="switch"><i></i></span></button>
+    <button class="plat-toggle" id="snapBio" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include bio<small>Your profile bio, under your name</small></span><span class="switch"><i></i></span></button>
     <button class="plat-toggle" id="snapBadges" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include badges<small>Founding member and other badges on the avatar</small></span><span class="switch"><i></i></span></button>
     <button class="plat-toggle" id="snapShelves" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include my shelves<small>Your extra titled Top 5s, under the main Top 5</small></span><span class="switch"><i></i></span></button>
     <div class="actions"><button class="cta ghost" id="snapCancel">Cancel</button><button class="cta" id="snapGo">Save image</button></div>
@@ -917,9 +918,16 @@
     <div class="g" id="cmpSub">Pick up to 3 people you follow.</div>
     <div class="ulist" id="cmpList" style="margin-top:10px"></div>
     <div id="cmpOpts">
-      <button class="plat-toggle" id="cmpSubs" role="switch" style="margin-top:14px"><span class="pt-text">Include sub-ratings<small>Visuals, soundtrack, gameplay… side by side</small></span><span class="switch"><i></i></span></button>
+      <div class="set-sub" style="padding-top:14px">Layout</div>
+      <div class="chips" id="cmpLayout" style="padding:0 2px"><button class="chip" data-clay="card">Comparison card</button><button class="chip" data-clay="poster">Poster</button></div>
+      <div class="g" id="cmpLayoutHint" style="margin-top:6px"></div>
+      <button class="plat-toggle" id="cmpSubs" role="switch" style="margin-top:12px"><span class="pt-text">Include sub-ratings<small>Visuals, soundtrack, gameplay… side by side</small></span><span class="switch"><i></i></span></button>
+      <button class="plat-toggle" id="cmpReviews" role="switch" style="margin-top:10px"><span class="pt-text">Include written reviews<small>An excerpt of each person's review under their rating</small></span><span class="switch"><i></i></span></button>
       <button class="plat-toggle" id="cmpPlat" role="switch" style="margin-top:10px"><span class="pt-text">Big platinum trophy<small>Next to the rating, for anyone who platinumed it</small></span><span class="switch"><i></i></span></button>
-      <button class="plat-toggle" id="cmpReviews" role="switch" style="margin-top:10px"><span class="pt-text">Include written reviews<small>Off with sub-ratings off = a poster: cover art, combined score, everyone's rating</small></span><span class="switch"><i></i></span></button>
+    </div>
+    <div class="set-sub" style="padding-top:14px">Image size</div>
+    <div class="chips" id="cmpFormat" style="padding:0 2px">
+      <button class="chip" data-cfmt="auto">Adaptive</button><button class="chip" data-cfmt="letter">8.5 × 11</button><button class="chip" data-cfmt="square">IG square</button><button class="chip" data-cfmt="portrait">IG portrait</button>
     </div>
     <div class="actions"><button class="cta ghost" id="cmpCancel">Cancel</button><button class="cta" id="cmpGo" disabled>Make the card</button></div>
   </div>
@@ -2784,7 +2792,7 @@ function paintListEditor(){
   $("#listGames").querySelectorAll("[data-ldown]").forEach(b=> b.onclick = ()=>{ const i=+b.dataset.ldown; [listDraft.games[i+1],listDraft.games[i]]=[listDraft.games[i],listDraft.games[i+1]]; paintListEditor(); });
   $("#listGames").querySelectorAll("[data-lrm]").forEach(b=> b.onclick = ()=>{ listDraft.games.splice(+b.dataset.lrm,1); paintListEditor(); });
 }
-let snapTarget=null, snapChartOn=true, snapBadgesOn=true, snapShelvesOn=true;
+let snapTarget=null, snapChartOn=true, snapBadgesOn=true, snapShelvesOn=true, snapBioOn=true;
 // ---- platinum wall ------------------------------------------------------------
 let wallOpts = { sort:"num", badge:true, num:true, diff:false, hours:false, fun:false, highlights:false }, wallTarget=null;
 function openWall(P){
@@ -2925,7 +2933,8 @@ function wireSnapUI(){
   $("#snapChart").onclick = ()=>{ snapChartOn=!snapChartOn; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn); };
   $("#snapShelves").onclick = ()=>{ snapShelvesOn=!snapShelvesOn; $("#snapShelves").classList.toggle("on", snapShelvesOn); $("#snapShelves").setAttribute("aria-checked", snapShelvesOn); };
   $("#snapBadges").onclick = ()=>{ snapBadgesOn=!snapBadgesOn; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); };
-  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn, shelves: snapShelvesOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
+  $("#snapBio").onclick = ()=>{ snapBioOn=!snapBioOn; $("#snapBio").classList.toggle("on", snapBioOn); $("#snapBio").setAttribute("aria-checked", snapBioOn); };
+  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn, shelves: snapShelvesOn, bio: snapBioOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
 }
 function wireListEditor(){
   $("#listCancel").onclick = ()=> $("#listWrap").classList.remove("open");
@@ -3987,9 +3996,9 @@ let revHeroFocus = (()=>{ try { return localStorage.getItem("jd_revHeroFocus") |
 const HERO_FOCUS = { top: 0.22, middle: 0.5, bottom: 0.8 };
 const heroFocus = ()=> HERO_FOCUS[revHeroFocus] ?? 0.22;
 function paintRevHeroFocus(){ $("#revHeroFocus").querySelectorAll("[data-rhf]").forEach(b=> b.classList.toggle("on", b.dataset.rhf===revHeroFocus)); }
-const revTargetH = W => { const A = REV_FORMATS[revFormat]; return A ? Math.round(W / A) : null; };
-function fitCanvasToFormat(c, W, H, S, ct){
-  const A = REV_FORMATS[revFormat]; if (!A) return c;
+const revTargetH = (W, fmt) => { const A = REV_FORMATS[fmt || revFormat]; return A ? Math.round(W / A) : null; };
+function fitCanvasToFormat(c, W, H, S, ct, fmt){
+  const A = REV_FORMATS[fmt || revFormat]; if (!A) return c;
   const OW = W, OH = Math.round(W / A);
   const out = document.createElement("canvas"); out.width = Math.round(OW*S); out.height = Math.round(OH*S); const x = out.getContext("2d"); x.scale(S, S);
   ct = ct || cardThemeFor(me?.id, me);
@@ -4017,7 +4026,7 @@ async function saveReviewPoster(g, saved, who){
   const tags = [];                                         // posters stay clean: no award pills
   const H = Math.max(1350, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  const ct = cardThemeFor(author.id);
+  const ct = cardThemeFor(me?.id, me);                                          // saver's Image style
   paintCinematic(x, W, H, cover, ct);
   // cover, centered
   const cw = 390, ch = 520, cx0 = (W-cw)/2, cy0 = 90;
@@ -4060,7 +4069,7 @@ async function saveReviewCinematic(g, saved, who){
   const l = saved ? logForExport(saved) : sheetLog();
   const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
   const isMine = !who || (me && who.id===me.id);
-  const ct = cardThemeFor(author.id), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";
+  const ct = cardThemeFor(me?.id, me), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";   // saver's Image style
   const W = 1080, heroH = 560, pad = 64;
   const [cover, hero] = g.cover ? await Promise.all([loadImg(coverHi(g.cover), true), loadCoverMax(g.cover)]) : [null, null];
   const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
@@ -4160,7 +4169,7 @@ async function saveReviewMagazine(g, saved, who){
   const l = saved ? logForExport(saved) : sheetLog();
   const author = who || { id: me?.id, username: me?.username || "a Joystickd player", ballot: ballots.me };
   const isMine = !who || (me && who.id===me.id);
-  const ct = cardThemeFor(author.id), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";
+  const ct = cardThemeFor(me?.id, me), accent = ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#b7c2d8";   // saver's Image style
   const W = 1080, pad = 48, gutter = 28, leftW = 610, rightX = pad + leftW + gutter, rightW = W - pad - rightX, heroH = 400;
   const [cover, hero] = g.cover ? await Promise.all([loadImg(coverHi(g.cover), true), loadCoverMax(g.cover)]) : [null, null];
   const trophy = l.platinum ? await loadImg(`${TROPHY_BASE}${l.rating!=null && l.rating>=1 ? l.rating : 10}.png`, true) : null;
@@ -4307,7 +4316,7 @@ async function saveReviewImage(g, saved, who){
   if (revLines.length) H += 18 + revLines.length*LH;
   H += 70;
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  const ct = cardThemeFor(author.id);
+  const ct = cardThemeFor(me?.id, me);                                          // the person saving picks the look (their Image style), whoever wrote the review
   const gold=ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#c4cddd";
   paintCardBg(x, W, H, ct, cover);
   let y=56;
@@ -4403,7 +4412,15 @@ async function saveReviewImage(g, saved, who){
 
 // ---- comparison cards (Pro) ---------------------------------------------------
 let cmpCtx = null;   // { kind:"game"|"profile", g, picked:Set }
-let cmpSubsOn = true, cmpPlatOn = true, cmpReviewsOn = true;   // game comparison options (remembered for the session)
+let cmpSubsOn = true, cmpPlatOn = true, cmpReviewsOn = true, cmpLayout = "card";   // game comparison options (remembered for the session)
+let cmpFormat = (()=>{ try { return localStorage.getItem("jd_cmpFormat") || "auto"; } catch(e){ return "auto"; } })();
+const CMP_LAYOUT_HINT = { card: "Everyone in their own column: rating, trophy, sub-ratings and a review excerpt.", poster: "Cover art and the combined score up top, then a row of everyone's rating — no sub-ratings or review text." };
+function paintCmpOpts(){
+  $("#cmpLayout").querySelectorAll("[data-clay]").forEach(b=> b.classList.toggle("on", b.dataset.clay===cmpLayout));
+  $("#cmpLayoutHint").textContent = CMP_LAYOUT_HINT[cmpLayout];
+  ["#cmpSubs", "#cmpReviews"].forEach(id=> $(id).style.display = cmpLayout==="poster" ? "none" : "");   // poster has no sub-ratings / excerpts
+  $("#cmpFormat").querySelectorAll("[data-cfmt]").forEach(b=> b.classList.toggle("on", b.dataset.cfmt===cmpFormat));
+}
 function openCompare(kind, g){
   if (!requirePro("compare")) return;
   const fids = followingIds();
@@ -4413,6 +4430,7 @@ function openCompare(kind, g){
   cmpCtx = { kind, g, picked:new Set() };
   $("#cmpOpts").hidden = kind!=="game";
   [["#cmpSubs", cmpSubsOn], ["#cmpPlat", cmpPlatOn], ["#cmpReviews", cmpReviewsOn]].forEach(([id,on])=>{ $(id).classList.toggle("on", on); $(id).setAttribute("aria-checked", on); });
+  paintCmpOpts();
   $("#cmpTitle").textContent = kind==="game" ? `Compare: ${g.title}` : "Compare profiles";
   $("#cmpSub").textContent = kind==="game" ? "Up to 3 people you follow who logged it \u2014 ratings side by side." : "Up to 3 people you follow \u2014 stats side by side.";
   const paint = ()=>{ $("#cmpList").innerHTML = people.sort((a,b)=>a.name.localeCompare(b.name)).map(p=> `<button class="cmprow ${cmpCtx.picked.has(p.id)?"on":""}" data-cmp="${p.id}">${avatarEl(p.id, p.name)}<span${nameStyle(p.id)}>${esc(p.name)}${proTag(p.id)}</span><span class="tick">${cmpCtx.picked.has(p.id)?"\u2713":""}</span></button>`).join("");
@@ -4519,20 +4537,25 @@ async function saveCompareGameImage(g, ids, opts){
   opts = Object.assign({ subs:true, plat:true, reviews:true }, opts||{});
   try { await document.fonts.ready; } catch(e){}
   const people = [{ id: me.id, name: me.username, l: logForExport(logs[g.id]) }, ...ids.map(id=>{ const r=(friendLogs[g.id]||[]).find(x=>x.user_id===id); return { id, name: follows.names[id]||revNames[id]||"\u2026", l: logForExport(rowToLog(r)) }; })];
-  if (!opts.subs && !opts.reviews) return saveCompareGamePoster(g, people, opts);     // ratings only → poster layout
-  const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n;
+  if (opts.layout==="poster") return saveCompareGamePoster(g, people, opts);
+  const n = people.length, W = 1080, colW = (W-80-(n-1)*16)/n, tH = revTargetH(W, opts.format || "auto");
   const rated = opts.subs ? SUBS.filter(sc=> people.some(p=> p.l.subs?.[sc.key]!=null)) : [];
   // rating-colored trophy PNG for each platinum (the same art as the site's rating pills)
   const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true).catch(()=>null) : null)) : people.map(()=>null);
   const measure = document.createElement("canvas").getContext("2d"); measure.font = "400 14px Manrope, sans-serif";
-  const maxLines = n===2 ? 14 : n===3 ? 11 : 9;              // excerpt length: enough to make sense, more room with fewer people
-  const excerpts = people.map(p=> (opts.reviews && p.l.review) ? wrapText(measure, p.l.review, colW-36).slice(0, maxLines) : []);
-  const exLines = Math.max(...excerpts.map(e=>e.length));
-  const headH = 150, personH = 150, scoreH = 90, platH = (opts.plat && people.some(p=>p.l.platinum)) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0, exH = exLines ? 24 + exLines*20 : 0;
-  const panelH = personH + scoreH + platH + subsH + exH + 20, H = headH + panelH + 90;
+  let maxLines = n===2 ? 14 : n===3 ? 11 : 9;                // excerpt length: enough to make sense, more room with fewer people
+  const headH = 150, personH = 150, scoreH = 90, platH = (opts.plat && people.some(p=>p.l.platinum)) ? 34 : 0, subsH = rated.length ? 30 + rated.length*26 : 0;
+  let excerpts, exLines, exH, panelH, H;
+  const build = ()=>{ excerpts = people.map(p=> (opts.reviews && p.l.review) ? wrapText(measure, p.l.review, colW-36).slice(0, maxLines) : []); exLines = Math.max(...excerpts.map(e=>e.length));
+    exH = exLines ? 24 + exLines*20 : 0; panelH = personH + scoreH + platH + subsH + exH + 20; H = headH + panelH + 90; };
+  build();
+  // fixed page size: shorten the excerpts until the card fits; taller pages get the content centred on them
+  if (tH){ while (H > tH && maxLines > 2){ maxLines--; build(); } }
+  const natural = H; if (tH && tH > H) H = tH; const oy = Math.round((H - natural)/2);
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover);
+  x.save(); x.translate(0, oy);
   // title block
   if (cover){ x.save(); x.beginPath(); x.roundRect(40,64,60,80,8); x.clip(); x.drawImage(cover,40,64,60,80); x.restore(); }
   x.fillStyle="#e6ebf4"; x.font="800 34px Outfit, sans-serif"; x.fillText(wrapText(x, g.title, W-300)[0]||"", cover?118:40, 100);
@@ -4557,18 +4580,25 @@ async function saveCompareGameImage(g, ids, opts){
         x.textAlign="left"; y += 26; }); y += 8; }
     if (exLines){ y += 14; x.font="400 14px Manrope, sans-serif"; x.fillStyle="#d7deea"; excerpts[i].forEach((ln,j)=>{ const last = j===excerpts[i].length-1 && excerpts[i].length===maxLines && p.l.review.length > excerpts[i].join(" ").length; x.fillText(last ? ln.replace(/\s*$/,"")+"\u2026" : ln, px+18, y+j*20); }); }
   }
-  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  x.restore();
+  const blob = await new Promise(res=> (natural > (tH||Infinity) ? fitCanvasToFormat(c, W, H, S, cardThemeFor(me?.id, me), opts.format) : c).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
 }
 // --- game, ratings only: a poster — cover art + combined score up top, everyone's rating in a row below
 async function saveCompareGamePoster(g, people, opts){
-  const n = people.length, W = 1080, H = (opts.plat && people.some(p=>p.l.platinum)) ? 1260 : 1130;   // shorter when there's no trophy row
+  const n = people.length, W = 1080, withTrophy = !!(opts.plat && people.some(p=>p.l.platinum)), tH = revTargetH(W, opts.format || "auto");
+  // natural layout, or a tighter one when the chosen page is shorter than it (IG square); taller pages centre the content
+  const natural = withTrophy ? 1260 : 1130, tight = !!(tH && tH < natural);
+  const ad = n>=4 ? 150 : 180, cy0 = tight ? 60 : 110, cw = 330, ch = 440, gapD = tight ? 40 : 90, gapA = tight ? 40 : 60, gapS = tight ? 120 : 150, gapT = tight ? 24 : 40;
+  const contentH = cy0 + ch + gapD + gapA + ad + gapS + (withTrophy ? gapT + (n>=4 ? 80 : 96) + 26 : 40) + 50;
+  const H = tH ? Math.max(tH, contentH) : natural, oy = tH ? Math.max(0, Math.round((H - contentH)/2)) : 0;
   const cover = g.cover ? await loadImg(coverHi(g.cover), true) : null;
   const trophies = opts.plat ? await Promise.all(people.map(p=> p.l.platinum ? loadImg(`${TROPHY_BASE}${p.l.rating!=null && p.l.rating>=1 ? p.l.rating : 10}.png`, true) : null)) : people.map(()=>null);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover);
+  x.save(); x.translate(0, oy);
   // cover, large, with a soft shadow
-  const cw = 330, ch = 440, cx0 = 70, cy0 = 110;
+  const cx0 = 70;
   if (cover){ x.save(); x.shadowColor="rgba(0,0,0,.6)"; x.shadowBlur=40; x.shadowOffsetY=16; x.fillStyle="#000"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.fill(); x.restore();
     x.save(); x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.clip(); x.drawImage(cover,cx0,cy0,cw,ch); x.restore(); }
   else { x.fillStyle="#233150"; x.beginPath(); x.roundRect(cx0,cy0,cw,ch,18); x.fill(); }
@@ -4585,22 +4615,23 @@ async function saveCompareGamePoster(g, people, opts){
   x.font="800 18px Outfit, sans-serif"; x.fillStyle="#e6ebf4"; x.fillText("COMBINED SCORE", tx, sy+36);
   x.font="600 15px Manrope, sans-serif"; x.fillStyle="#8b98b5"; x.fillText(`average of ${rs.length} rating${rs.length===1?"":"s"} \u00b7 ${n} players`, tx, sy+60);
   // divider
-  const dy = 640; const dg = x.createLinearGradient(60,0,W-60,0); dg.addColorStop(0,"rgba(255,255,255,0)"); dg.addColorStop(0.5,"rgba(255,255,255,.25)"); dg.addColorStop(1,"rgba(255,255,255,0)"); x.fillStyle=dg; x.fillRect(60, dy, W-120, 2);
+  const dy = cy0 + ch + gapD; const dg = x.createLinearGradient(60,0,W-60,0); dg.addColorStop(0,"rgba(255,255,255,0)"); dg.addColorStop(0.5,"rgba(255,255,255,.25)"); dg.addColorStop(1,"rgba(255,255,255,0)"); x.fillStyle=dg; x.fillRect(60, dy, W-120, 2);
   // the players
-  const colW = (W-120)/n, ad = n>=4 ? 150 : 180, ay = dy + 60 + ad/2;
+  const colW = (W-120)/n, ay = dy + gapA + ad/2;
   for (let i=0;i<n;i++){ const p=people[i], cx=60+colW*(i+0.5);
     await drawPerson(x, p.id, p.name, cx, ay, ad, n>=4 ? 22 : 26);
-    const scoreY = ay + ad/2 + 150;
+    const scoreY = ay + ad/2 + gapS;
     bigScore(x, p.l.rating, cx, scoreY, n>=4 ? 88 : 110, scoreStyleFor(p.id));
     if (opts.plat && p.l.platinum){ const im=trophies[i], th = n>=4 ? 80 : 96, tw2 = (im && im.width) ? th*im.width/im.height : th*0.9;
-      x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=12; x.shadowOffsetY=4; drawTrophy(x, im, cx+tw2/2, scoreY+40+th/2, th); x.restore();
-      x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}`, cx, scoreY+40+th+26); x.textAlign="left"; }
+      x.save(); x.shadowColor="rgba(0,0,0,.5)"; x.shadowBlur=12; x.shadowOffsetY=4; drawTrophy(x, im, cx+tw2/2, scoreY+gapT+th/2, th); x.restore();
+      x.textAlign="center"; x.font="700 14px Outfit, sans-serif"; x.fillStyle="#f0b429"; x.fillText(`Platinum${platNumText(p.l)?" "+platNumText(p.l):""}`, cx, scoreY+gapT+th+26); x.textAlign="left"; }
   }
-  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  x.restore();
+  const blob = await new Promise(res=> (contentH > (tH||Infinity) ? fitCanvasToFormat(c, W, H, S, cardThemeFor(me?.id, me), opts.format) : c).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-vs.png`);
 }
 // --- profiles: stats side by side
-async function saveCompareProfileImage(ids){
+async function saveCompareProfileImage(ids, opts={}){
   try { await document.fonts.ready; } catch(e){}
   toast("Loading profiles\u2026");
   const others = (await Promise.all(ids.map(id=> loadOtherProfile(follows.names[id]||revNames[id]||"")))).filter(Boolean);
@@ -4619,10 +4650,12 @@ async function saveCompareProfileImage(ids){
   const agree = [...common].sort((a,b)=> spread(a)-spread(b) || mean(people.map(P=>P.logs[b].rating))-mean(people.map(P=>P.logs[a].rating)))[0];
   const fight = [...common].sort((a,b)=> spread(b)-spread(a))[0];
   const rows = [["Games logged", s=>String(s.games)], ["Average rating", s=> s.avg!=null ? s.avg.toFixed(2) : "\u2014"], ["Perfect 10s", s=>String(s.tens)], ["Reviews", s=>String(s.reviews)], ["Platinums", s=>String(s.plats)], ["Platinum hours", s=> s.hours ? String(Math.round(s.hours)) : "\u2014"], ["Avg difficulty", s=> s.diff!=null ? s.diff.toFixed(1)+"/10" : "\u2014"]];
-  const headH = 120, personH = 150, rowsH = rows.length*34 + 10, panelH = personH + rowsH + topH + chartH + 20, commonH = common.length ? 176 : 0, H = headH + panelH + commonH + 80;
+  const headH = 120, personH = 150, rowsH = rows.length*34 + 10, panelH = personH + rowsH + topH + chartH + 20, commonH = common.length ? 176 : 0, natural = headH + panelH + commonH + 80;
+  const tH = revTargetH(W, opts.format || "auto"), H = tH ? Math.max(tH, natural) : natural, oy = tH ? Math.max(0, Math.round((H - natural)/2)) : 0;
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   const art = avatars[me.id] ? await loadImg(avatars[me.id], true) : null;
   paintCinematic(x, W, H, art);
+  x.save(); x.translate(0, oy);
   x.fillStyle="#e6ebf4"; x.font="800 34px Outfit, sans-serif"; x.fillText("Head to head", 40, 96);
   x.font="600 15px Manrope, sans-serif"; x.fillStyle="#b7c2d8"; x.fillText(`${people.map(p=>p.username).join("  \u2022  ")}`, 40, 122);
   const top = headH + 10;
@@ -4663,7 +4696,8 @@ async function saveCompareProfileImage(ids){
     if (agree!=null) line("Most agreed on", agree, y0+56);
     if (fight!=null && fight!==agree) line("Biggest disagreement", fight, y0+100);
   }
-  const blob = await new Promise(res=> c.toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
+  x.restore();
+  const blob = await new Promise(res=> (natural > (tH||Infinity) ? fitCanvasToFormat(c, W, H, S, cardThemeFor(me?.id, me), opts.format) : c).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${people.map(p=>p.username.toLowerCase()).join("-vs-").slice(0,60)}.png`);
 }
 
@@ -4760,7 +4794,12 @@ async function saveProfileImage(P, opts={}){
   const W=720, gap=14, cvW=(720-104-4*gap)/5, cvH=Math.round(cvW*4/3), chartH=150;
   const rowW = top.length ? top.length*cvW + (top.length-1)*gap : 0;
   const rowH = 14 + cvH + 40;                                   // label gap + covers + space below
-  let H = top.length ? 176 + 14 + cvH + 66 : 216;
+  // optional bio: up to 3 wrapped lines under the name and stats
+  const BIO_LH = 20; let bioLines = [];
+  if (opts.bio && (P.bio||"").trim()){ const m = document.createElement("canvas").getContext("2d"); m.font = "500 14px Manrope, sans-serif";
+    bioLines = wrapText(m, P.bio.trim().replace(/\s+/g, " "), W-104); if (bioLines.length > 3){ bioLines = bioLines.slice(0,3); bioLines[2] = bioLines[2].replace(/[\s.,;:]*$/, "") + "\u2026"; } }
+  const bioH = bioLines.length ? 6 + bioLines.length*BIO_LH : 0;
+  let H = (top.length ? 176 + 14 + cvH + 66 : 216) + bioH;
   H += shelves.length * rowH;
   if (withChart) H += chartH + 62;
   const c=document.createElement("canvas"); const x=c.getContext("2d");
@@ -4795,6 +4834,7 @@ async function saveProfileImage(P, opts={}){
     x.font="800 24px Outfit, sans-serif"; x.fillStyle=numCol; x.fillText(String(plats), nx2+tw+7, sy+10);
   } else { x.font="800 24px Outfit, sans-serif"; x.fillStyle=numCol; x.fillText(String(plats), nx2, sy+10); }
   if (!P.hidePlats){ x.font="700 10px Manrope, sans-serif"; x.fillStyle=mut; x.fillText("PLATINUMS", nx2, sy+26); }
+  if (bioLines.length){ x.font="500 14px Manrope, sans-serif"; x.fillStyle="#c4cddd"; bioLines.forEach((ln,i)=> x.fillText(ln, 52, 170 + i*BIO_LH)); }
   // top 5
   const coverRow = (label, ids, imgs, ty)=>{
     x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText(label.toUpperCase(), 52, ty);
@@ -4809,11 +4849,11 @@ async function saveProfileImage(P, opts={}){
       x.fillStyle=gold; x.font="800 12px Outfit, sans-serif"; x.textAlign="center"; x.fillText(String(i+1), bx+17, by+19); x.textAlign="left";
     });
   };
-  let nextY = 176;
+  let nextY = 176 + bioH;
   if (top.length){ coverRow("Top 5", top, covers, nextY); nextY += 14 + cvH + 40; }
   shelves.forEach((sh,i)=>{ coverRow(sh.title, sh.ids, shelfCovers[i], nextY); nextY += rowH; });
   if (withChart){
-    const cy = (top.length || shelves.length) ? nextY - 14 : 176;
+    const cy = (top.length || shelves.length) ? nextY - 14 : 176 + bioH;
     const avg = (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1);
     x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut;
     x.fillText("RATINGS", 52, cy);
@@ -5059,8 +5099,10 @@ function wireSettingsUI(){
   $("#cmpCancel").onclick = ()=> $("#cmpWrap").classList.remove("open");
   $("#cmpWrap").addEventListener("click", e=>{ if(e.target.id==="cmpWrap") $("#cmpWrap").classList.remove("open"); });
   $("#cmpGo").onclick = async ()=>{ if (!cmpCtx || !cmpCtx.picked.size) return; $("#cmpWrap").classList.remove("open"); const ids=[...cmpCtx.picked];
-    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids, { subs: cmpSubsOn, plat: cmpPlatOn, reviews: cmpReviewsOn }); else await saveCompareProfileImage(ids); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
+    try { if (cmpCtx.kind==="game") await saveCompareGameImage(cmpCtx.g, ids, { subs: cmpSubsOn, plat: cmpPlatOn, reviews: cmpReviewsOn, layout: cmpLayout, format: cmpFormat }); else await saveCompareProfileImage(ids, { format: cmpFormat }); } catch(e){ console.error(e); toast("Couldn't build the comparison"); } };
   $("#cmpSubs").onclick = ()=>{ cmpSubsOn=!cmpSubsOn; $("#cmpSubs").classList.toggle("on", cmpSubsOn); $("#cmpSubs").setAttribute("aria-checked", cmpSubsOn); };
+  $("#cmpLayout").querySelectorAll("[data-clay]").forEach(b=> b.onclick = ()=>{ cmpLayout = b.dataset.clay; paintCmpOpts(); });
+  $("#cmpFormat").querySelectorAll("[data-cfmt]").forEach(b=> b.onclick = ()=>{ cmpFormat = b.dataset.cfmt; try { localStorage.setItem("jd_cmpFormat", cmpFormat); } catch(e){} paintCmpOpts(); });
   $("#cmpPlat").onclick = ()=>{ cmpPlatOn=!cmpPlatOn; $("#cmpPlat").classList.toggle("on", cmpPlatOn); $("#cmpPlat").setAttribute("aria-checked", cmpPlatOn); };
   $("#cmpReviews").onclick = ()=>{ cmpReviewsOn=!cmpReviewsOn; $("#cmpReviews").classList.toggle("on", cmpReviewsOn); $("#cmpReviews").setAttribute("aria-checked", cmpReviewsOn); };
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
@@ -5089,6 +5131,7 @@ function wireSettingsUI(){
   $("#epBio").onclick = ()=>{ closeEditProf(); openBio(); };
   $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); snapTarget=myProfileObj(); $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
     $("#snapBadges").hidden = !profileBadges(me).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn);
+    $("#snapBio").hidden = !(me.bio||"").trim(); $("#snapBio").classList.toggle("on", snapBioOn); $("#snapBio").setAttribute("aria-checked", snapBioOn);
     const hasShelves = isPro(me) && (me.shelves||[]).some(sh=> (sh.games||[]).some(Boolean));
     $("#snapShelves").hidden = !hasShelves; $("#snapShelves").classList.toggle("on", snapShelvesOn); $("#snapShelves").setAttribute("aria-checked", snapShelvesOn); $("#snapWrap").classList.add("open"); };
   $("#cmpProfBtn").onclick = ()=>{ closeEditProf(); openCompare("profile"); };
