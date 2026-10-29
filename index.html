@@ -1306,8 +1306,17 @@ async function proPurchaseLive(){
   try { const { data } = await sb.functions.invoke("pro-checkout", { body: { action:"status" } }); proLiveCache = !!data?.live; } catch(e){ proLiveCache = false; }
   return proLiveCache;
 }
+// A signed-out visitor who taps a plan: remember it, sign them in, then carry on to checkout.
+// Kept in localStorage (1 hour) so it survives the email-confirmation round trip of a brand-new account.
+function rememberProIntent(plan){ try { localStorage.setItem("jd_proAfterAuth", JSON.stringify({ plan, t: Date.now() })); } catch(e){} }
+function takeProIntent(){ try { const v = JSON.parse(localStorage.getItem("jd_proAfterAuth")||"null"); localStorage.removeItem("jd_proAfterAuth"); return (v && Date.now()-v.t < 3600000) ? v.plan : null; } catch(e){ return null; } }
+async function resumeProPurchase(){
+  const plan = takeProIntent(); if (!plan || !me) return;
+  await openPro();
+  if (!isPro(me)) startProPurchase(plan);
+}
 async function startProPurchase(plan){
-  if (!me){ openAuth("signin"); return; }
+  if (!me){ rememberProIntent(plan); $("#proWrap").classList.remove("open"); openAuth("signin"); toast("Sign in or create an account to get Pro"); return; }
   if (!(await proPurchaseLive())){ toast(isNativeApp() ? nativeNoPurchaseMsg() : "Pro subscriptions open soon \u2014 you'll be able to subscribe right here"); return; }
   if (isNativeApp()){                                                        // RevenueCat (iOS): the native build has the plugin
     try { const RC = rcPlugin(); await rcReady(); const offerings = await RC.getOfferings(); const pkg = (offerings.current || Object.values(offerings.all||{})[0])?.availablePackages?.find(p=> (plan==="yearly" ? /annual|year/i : /month/i).test(p.identifier)); if (!pkg) throw new Error("Plans aren't available yet");
@@ -5444,7 +5453,7 @@ async function onAuth(session){
   // here used to wipe the bio so the profile showed "Add a short bio" until relaunch.
   if (session?.user && wasMe === session.user.id){ paintAuthBtn(); return; }
   me = session?.user ? { id:session.user.id, username: session.user.user_metadata?.username || "you" } : null;
-  if (me){ if (wasMe!==me.id){ await loadMyData(); toast(`Signed in as ${me.username}`); pushOnSignIn(); setTimeout(()=> maybeAskPush("signin"), 1800); } }
+  if (me){ if (wasMe!==me.id){ await loadMyData(); toast(`Signed in as ${me.username}`); pushOnSignIn(); setTimeout(()=> maybeAskPush("signin"), 1800); setTimeout(()=> resumeProPurchase().catch(()=>{}), 600); } }
   else if (wasMe){ clearMyData(); toast("Signed out"); }
   clearCommunity(); loadedYears.clear(); invalidateHome();
   if (!me){ notifs={items:[],seenAt:null,unread:0}; }
@@ -5582,7 +5591,7 @@ wirePushListeners();
   if (LIVE){
     await loadOverrides();
     const { data:{ session } } = await sb.auth.getSession();
-    if (session) { me = { id:session.user.id, username: session.user.user_metadata?.username || "you" }; await loadMyData(); pushOnSignIn(); rcReady().catch(()=>{}); }
+    if (session) { me = { id:session.user.id, username: session.user.user_metadata?.username || "you" }; await loadMyData(); pushOnSignIn(); rcReady().catch(()=>{}); setTimeout(()=> resumeProPurchase().catch(()=>{}), 800); }
     const proBack = params.get("pro");
     if (proBack){ history.replaceState(null, "", location.pathname + (u ? "?u="+encodeURIComponent(u) : g ? "?g="+g : "")); 
       if (proBack==="success" && me){ waitForPro().then(()=> render()); } else if (proBack==="cancel"){ toast("Checkout cancelled \u2014 no charge"); }
