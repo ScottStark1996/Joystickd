@@ -962,6 +962,7 @@
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
       <button class="set-row" id="setProStats" hidden>Admin: Pro members <b id="setProStatsN">…</b><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px" id="setProStatsSub"></small></button>
+      <button class="set-row" id="setContact">Contact us</button>
       <button class="set-row" data-guidelines>Community guidelines</button>
       <button class="set-row" data-privacy>Privacy</button>
       <button class="set-row danger-btn" id="setSignout">Sign out</button>
@@ -1113,6 +1114,18 @@
     <button class="set-row" id="pmBlock">Block</button>
     <button class="set-row" id="pmReport">⚑ Report profile</button>
     <div class="actions"><button class="cta ghost" id="pmCancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="contactWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="contactTitle">
+    <h2 id="contactTitle">Contact us</h2>
+    <div class="g">Questions, bugs, billing or account issues — email us and we'll get back to you.</div>
+    <div class="set-list" style="margin-top:12px">
+      <a class="set-row" id="contactMail" href="mailto:joystickdapp@gmail.com?subject=Joystickd%20support" style="text-decoration:none;display:block">Email joystickdapp@gmail.com<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Opens your mail app</small></a>
+      <button class="set-row" id="contactCopy">Copy the address</button>
+    </div>
+    <div class="actions"><button class="cta ghost" id="contactClose">Close</button></div>
   </div>
 </div>
 
@@ -5113,6 +5126,13 @@ function wireSettingsUI(){
   $("#setPassword").onclick = ()=>{ closeSettings(); openPw(); };
   $("#setPush").onclick = async ()=>{ closeSettings(); if (await enablePush()) toast("Notifications on"); else toast("Enable notifications in iOS Settings \u2192 Joystickd"); };
   $("#setBlocked").onclick = ()=>{ closeSettings(); openBlocked(); };
+  $("#setContact").onclick = ()=>{ closeSettings();
+    const who = me ? `${me.username} (${me.id})` : "not signed in", where = isNativeApp() ? "iOS app" : "website";
+    $("#contactMail").href = "mailto:joystickdapp@gmail.com?subject=" + encodeURIComponent("Joystickd support") + "&body=" + encodeURIComponent(`\n\n\u2014\nAccount: ${who}\nUsing: ${where}`);
+    $("#contactWrap").classList.add("open"); };
+  $("#contactClose").onclick = ()=> $("#contactWrap").classList.remove("open");
+  $("#contactWrap").addEventListener("click", e=>{ if (e.target.id==="contactWrap") $("#contactWrap").classList.remove("open"); });
+  $("#contactCopy").onclick = async ()=>{ try { await navigator.clipboard.writeText("joystickdapp@gmail.com"); toast("Address copied"); } catch { prompt("Email:", "joystickdapp@gmail.com"); } };
   $("#setPro").onclick = ()=>{ closeSettings(); openPro(); };
   $("#setLook").onclick = ()=>{ closeEditProf(); openLook(); };
   $("#setShelf").onclick = ()=>{ closeEditProf(); if ((me?.shelves||[]).length >= 2) { toast("You already have 2 shelves — edit them on your profile"); return; } addShelf(); };
