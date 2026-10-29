@@ -961,6 +961,7 @@
       <button class="set-row" id="setPro">Joystickd Pro: <b id="setProState">get Pro</b></button>
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
+      <div class="set-row" id="setProStats" hidden style="cursor:default">Admin: Pro members <b id="setProStatsN">…</b><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px" id="setProStatsSub"></small></div>
       <button class="set-row" data-guidelines>Community guidelines</button>
       <button class="set-row" data-privacy>Privacy</button>
       <button class="set-row danger-btn" id="setSignout">Sign out</button>
@@ -4993,6 +4994,11 @@ function openSettings(){
   $("#setPush").hidden = !pushPlugin();
   $("#setProState").textContent = isPro(me) ? `active${me.proUntil ? " until " + fmtDate(String(me.proUntil).slice(0,10)) : ""}` : "get Pro";
   $("#setGrantPro").hidden = !me.isAdmin;
+  $("#setProStats").hidden = !me.isAdmin;
+  if (me.isAdmin && LIVE){ $("#setProStatsN").textContent = "…"; $("#setProStatsSub").textContent = "";
+    sb.rpc("pro_stats").then(({ data, error })=>{ if (error || !data){ $("#setProStatsN").textContent = "?"; $("#setProStatsSub").textContent = "Run pro-stats.sql to enable"; return; }
+      $("#setProStatsN").textContent = String(data.paying ?? 0);
+      $("#setProStatsSub").textContent = `${data.web||0} web · ${data.ios||0} iOS${data.android ? ` · ${data.android} Android` : ""}${data.gifted ? ` · ${data.gifted} gifted` : ""} · ${data.new7||0} new this week · ${data.ending7||0} ending within 7 days`; }); }
   $("#setWrap").classList.add("open");
 }
 function closeSettings(){ $("#setWrap").classList.remove("open"); }
