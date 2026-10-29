@@ -961,7 +961,7 @@
       <button class="set-row" id="setPro">Joystickd Pro: <b id="setProState">get Pro</b></button>
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
-      <div class="set-row" id="setProStats" hidden style="cursor:default">Admin: Pro members <b id="setProStatsN">…</b><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px" id="setProStatsSub"></small></div>
+      <button class="set-row" id="setProStats" hidden>Admin: Pro members <b id="setProStatsN">…</b><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px" id="setProStatsSub"></small></button>
       <button class="set-row" data-guidelines>Community guidelines</button>
       <button class="set-row" data-privacy>Privacy</button>
       <button class="set-row danger-btn" id="setSignout">Sign out</button>
@@ -1113,6 +1113,15 @@
     <button class="set-row" id="pmBlock">Block</button>
     <button class="set-row" id="pmReport">⚑ Report profile</button>
     <div class="actions"><button class="cta ghost" id="pmCancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="proMembersWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="proMembersTitle">
+    <h2 id="proMembersTitle">Pro members</h2>
+    <div class="g" id="proMembersSub">Everyone with an active membership, newest expiry last. Tap a name to open their profile.</div>
+    <div id="proMembersList" style="margin-top:10px"></div>
+    <div class="actions"><button class="cta ghost" id="proMembersClose">Close</button></div>
   </div>
 </div>
 
@@ -5122,6 +5131,9 @@ function wireSettingsUI(){
   $("#proManage").onclick = ()=>{ $("#proWrap").classList.remove("open"); openProPortal(); };
   $("#proRestore").onclick = async ()=>{ if (rcPlugin()){ try { await rcReady(); await rcPlugin().restorePurchases(); await refreshPro(); toast(isPro(me) ? "Pro restored" : "No Pro purchase found for this Apple ID"); } catch(e){ toast("Couldn't restore"); } } else toast("Restore is available in the app"); };
   // Admin: gift Pro by username (also how you give yourself Pro for testing)
+  $("#setProStats").onclick = ()=> openProMembers();
+  $("#proMembersClose").onclick = ()=> $("#proMembersWrap").classList.remove("open");
+  $("#proMembersWrap").addEventListener("click", e=>{ if (e.target.id==="proMembersWrap") $("#proMembersWrap").classList.remove("open"); });
   $("#setGrantPro").onclick = async ()=>{ closeSettings(); if (!me?.isAdmin) return;
     const who = prompt("Username to grant Pro to:"); if (!who) return;
     const days = parseInt(prompt("Days of Pro (0 removes Pro):", "365")); if (isNaN(days)) return;
@@ -5299,6 +5311,24 @@ function openProfMenu(P){
   $("#profMenuWrap").classList.add("open");
 }
 
+// Admin: every active Pro member, with where they bought it and when it ends
+async function openProMembers(){
+  if (!LIVE || !me?.isAdmin) return;
+  closeSettings(); $("#proMembersList").innerHTML = `<div class="hint">Loading…</div>`; $("#proMembersWrap").classList.add("open");
+  const { data, error } = await sb.rpc("pro_members");
+  if (error || !Array.isArray(data)){ $("#proMembersList").innerHTML = `<div class="empty small">Couldn't load — run pro-stats.sql first.</div>`; return; }
+  data.forEach(p=>{ avatars[p.id] = p.avatar_url || null; revNames[p.id] = p.username; notePro({ id:p.id, pro_until:p.pro_until, theme:p.theme }); });
+  const srcName = { stripe:"Web", apple:"iOS", google:"Android", gift:"Gifted", admin:"Gifted" };
+  const paying = data.filter(p=> ["stripe","apple","google"].includes(p.pro_source)).length;
+  $("#proMembersSub").textContent = `${data.length} active · ${paying} paying · ${data.length-paying} gifted. Tap a name to open their profile.`;
+  $("#proMembersList").innerHTML = data.length ? data.map(p=>{
+    const left = Math.max(0, Math.round((new Date(p.pro_until).getTime() - Date.now())/86400000));
+    const since = p.since ? ` · member since ${fmtDate(String(p.since).slice(0,10))}` : "";
+    return `<div class="urow" style="align-items:flex-start">${avatarEl(p.id, p.username)}<div style="min-width:0"><button class="uname" data-user="${esc(p.username)}"${nameStyle(p.id)} style="padding:0">${esc(p.username)}</button>
+      <div class="hint" style="margin-top:2px">${srcName[p.pro_source] || esc(p.pro_source||"—")} · ${p.plan ? esc(p.plan) + " · " : ""}until ${fmtDate(String(p.pro_until).slice(0,10))} (${left} day${left===1?"":"s"})${since}${p.founder ? " · founder" : ""}</div></div></div>`; }).join("")
+    : `<div class="empty small">No active Pro members yet.</div>`;
+  $("#proMembersList").querySelectorAll("[data-user]").forEach(b=> b.onclick = ()=>{ $("#proMembersWrap").classList.remove("open"); view.tab="logs"; view.gameId=null; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
+}
 async function openBlocked(){
   if (!LIVE || !me) return;
   const wrap = $("#blockedWrap");
