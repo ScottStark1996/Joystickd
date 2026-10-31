@@ -4227,11 +4227,19 @@ async function saveReviewMagazine(g, saved, who){
   if (pageH && lines.length) BLH = Math.min(revMax/lines.length, BF*1.9);        // then let the lines breathe into the room that's left
   const revH = lines.length ? lines.length*BLH + 48 : 0;
   const leftBottom = revH ? revY + revH : infoY + infoH;
-  // right column plan
-  const avY = 46 + 30, avD = 170, nameY = avY + avD + 42, scoreY = nameY + 120, trophyY = scoreY + 70, trophyH = l.platinum ? 190 : 0;
-  const subsY = trophyY + trophyH + 36, subsH = rated.length ? rated.length*38 + 20 : 0;
-  const awY = subsY + subsH + (subsH ? 26 : 0), awH = tags.length ? tags.length*40 : 0;
-  const rightBottom = awY + awH;
+  // right column plan. On a fixed page the column is compacted step by step (tighter rows, smaller trophy,
+  // award pills two across) before we ever fall back to shrinking the whole card.
+  const avY = 46 + 30, avD = 170, nameY = avY + avD + 42;
+  let SUBR = 38, PILLH = 32, PILLG = 8, PILLCOLS = 1, PILLF = 14, trophyH = l.platinum ? 190 : 0, scoreGap = 120, trophyGap = 70, subsGap = 36, awGap = 26;
+  const pillLabels = tags.map(t=> `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`);
+  const pillsFitHalf = f => { m.font = `700 ${f}px Outfit, sans-serif`; return pillLabels.every(lb=> m.measureText(lb).width <= (rightW-10)/2 - 24); };
+  let scoreY, trophyY, subsY, subsH, awY, awH, rightBottom;
+  const planRight = ()=>{ scoreY = nameY + scoreGap; trophyY = scoreY + trophyGap; subsY = trophyY + trophyH + subsGap; subsH = rated.length ? rated.length*SUBR + 20 : 0;
+    awY = subsY + subsH + (subsH ? awGap : 0); awH = tags.length ? Math.ceil(tags.length/PILLCOLS)*(PILLH+PILLG) - PILLG : 0; rightBottom = awY + awH; };
+  planRight();
+  if (pageH){ const steps = [ ()=>{ SUBR = 32; PILLH = 30; PILLG = 6; subsGap = 24; awGap = 18; }, ()=>{ SUBR = 30; trophyH = l.platinum ? 150 : 0; scoreGap = 100; trophyGap = 56; subsGap = 20; awGap = 16; },
+      ()=>{ if (pillsFitHalf(14)) PILLCOLS = 2; }, ()=>{ SUBR = 28; PILLH = 28; }, ()=>{ if (PILLCOLS===1 && pillsFitHalf(12)){ PILLF = 12; PILLCOLS = 2; } }, ()=>{ trophyH = l.platinum ? 120 : 0; SUBR = 26; } ];
+    for (const st of steps){ if (rightBottom + 40 + 46 <= pageH) break; st(); planRight(); } }
   const H = Math.max(Math.max(leftBottom, rightBottom) + 40 + 46, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, ct);
@@ -4278,15 +4286,16 @@ async function saveReviewMagazine(g, saved, who){
   x.textAlign="left";
   // sub-ratings ledger
   if (subsH){ x.fillStyle = rgba(ct.panel, .72); x.strokeStyle = rgba(accent, .5); x.lineWidth = 1.5; x.beginPath(); x.roundRect(rightX, subsY, rightW, subsH, 14); x.fill(); x.stroke(); x.lineWidth = 1;
-    rated.forEach((sr,i)=>{ const ry = subsY + 14 + i*38; const lab = SUB_LABELS[sr.key] ? SUB_LABELS[sr.key][2] : sr.label;
+    rated.forEach((sr,i)=>{ const ry = subsY + 14 + i*SUBR - (38-SUBR)/2, lab = SUB_LABELS[sr.key] ? SUB_LABELS[sr.key][2] : sr.label;
       x.fillStyle = accent; x.beginPath(); x.arc(rightX+22, ry+13, 4, 0, 7); x.fill();
       x.font="600 15px Manrope, sans-serif"; x.fillStyle=soft; x.fillText(lab, rightX+36, ry+18);
       x.textAlign="right"; x.font="800 17px Outfit, sans-serif"; x.fillStyle=ratingFillCtx(x, +l.subs[sr.key], rightX+rightW-60, ry, rightX+rightW-16, ry+18); x.fillText(`${l.subs[sr.key]}/10`, rightX+rightW-16, ry+18); x.textAlign="left";
-      if (i < rated.length-1){ x.fillStyle="rgba(255,255,255,.08)"; x.fillRect(rightX+14, ry+30, rightW-28, 1); } }); }
+      if (i < rated.length-1){ x.fillStyle="rgba(255,255,255,.08)"; x.fillRect(rightX+14, ry+SUBR-8, rightW-28, 1); } }); }
   // awards
-  if (awH){ x.font="700 14px Outfit, sans-serif"; tags.forEach((t,i)=>{ const ay = awY + i*40; const goty = t.key==="goty"; const lb = `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
-      x.fillStyle = goty ? accent : rgba(ct.panel2, .95); x.beginPath(); x.roundRect(rightX, ay, rightW, 32, 16); x.fill(); if (!goty){ x.strokeStyle=ct.line; x.stroke(); }
-      x.fillStyle = goty ? (lum(accent) > 0.6 ? "#1a1200" : "#fff") : text; x.textAlign="center"; x.fillText(lb, rightX+rightW/2, ay+21); x.textAlign="left"; }); }
+  if (awH){ x.font=`700 ${PILLF}px Outfit, sans-serif`; const pw = (rightW - (PILLCOLS-1)*10)/PILLCOLS;
+    tags.forEach((t,i)=>{ const ay = awY + Math.floor(i/PILLCOLS)*(PILLH+PILLG), ax0 = rightX + (i%PILLCOLS)*(pw+10); const goty = t.key==="goty"; const lb = pillLabels[i];
+      x.fillStyle = goty ? accent : rgba(ct.panel2, .95); x.beginPath(); x.roundRect(ax0, ay, pw, PILLH, PILLH/2); x.fill(); if (!goty){ x.strokeStyle=ct.line; x.stroke(); }
+      x.fillStyle = goty ? (lum(accent) > 0.6 ? "#1a1200" : "#fff") : text; x.textAlign="center"; x.fillText(lb, ax0+pw/2, ay+PILLH/2+5); x.textAlign="left"; }); }
   const blob = await new Promise(res=> fitCanvasToFormat(c, W, H, S, ct).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-magazine.png`);
 }
