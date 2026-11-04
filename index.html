@@ -962,6 +962,7 @@
       <button class="set-row" id="setBlocked">Blocked users</button>
       <button class="set-row" id="setGrantPro" hidden>Admin: grant Pro…</button>
       <button class="set-row" id="setProStats" hidden>Admin: Pro members <b id="setProStatsN">…</b><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px" id="setProStatsSub"></small></button>
+      <a class="set-row" id="setIosApp" href="https://apps.apple.com/app/id6808438318" target="_blank" rel="noopener" style="text-decoration:none;display:block">Get the iOS app<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Same account, plus push notifications for likes, comments and follows</small></a>
       <button class="set-row" id="setContact">Contact us</button>
       <button class="set-row" data-guidelines>Community guidelines</button>
       <button class="set-row" data-privacy>Privacy</button>
@@ -2335,7 +2336,7 @@ function renderHome(app){
       <h2>Latest community reviews<span>Newest 10 across Joystickd</span><button class="hrefresh ${home.loading?"spin":""}" id="homeRefresh" title="Refresh" aria-label="Refresh the home page">↻</button></h2>
       <div class="reviews">${home.latest.map((f,i)=> feedCard(f,i,"l")).join("")}</div>
     </section>` : ""}`}
-    <div class="hint" style="text-align:center;margin:26px 0 6px">Game data from IGDB \u00b7 Critic scores from OpenCritic</div>`;
+    <div class="hint" style="text-align:center;margin:26px 0 6px">Game data from IGDB \u00b7 Critic scores from OpenCritic${isNativeApp() ? "" : ` \u00b7 <a href="https://apps.apple.com/app/id6808438318" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:none;font-weight:700">Get the iOS app</a>`}</div>`;
   $("#heroJoin") && ($("#heroJoin").onclick = ()=> openAuth("signup"));
   $("#heroIn") && ($("#heroIn").onclick = ()=> openAuth("signin"));
   $("#homeRefresh") && ($("#homeRefresh").onclick = ()=> refreshHome());
@@ -5032,6 +5033,7 @@ function paintAuthBtn(){ $("#authBtn").hidden = !!me; $("#gearBtn").hidden = !me
 function openSettings(){
   $("#setMe").innerHTML = `${avatarEl(me.id, me.username, "big")}<div><b>${esc(me.username)}</b><small>${me.isAdmin ? "Admin" : "Signed in"}</small></div>`;
   $("#setPush").hidden = !pushPlugin();
+  $("#setIosApp").style.display = isNativeApp() ? "none" : "";
   $("#setProState").textContent = isPro(me) ? `active${me.proUntil ? " until " + fmtDate(String(me.proUntil).slice(0,10)) : ""}` : "get Pro";
   $("#setGrantPro").hidden = !me.isAdmin;
   $("#setProStats").hidden = !me.isAdmin;
