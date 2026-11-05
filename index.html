@@ -2417,17 +2417,12 @@ function renderHome(app){
 function drawGrid(){
   const app = $("#app"); if (view.gameId || view.tab!=="games") return;
   if (!view.query.trim() && !view.genre) return renderHome(app);
-  const genres = [...new Set(gridList.flatMap(tagsOf))].sort();
   let list = gridList.filter(g => !view.genre || tagsOf(g).includes(view.genre));
   if (SORTS[view.sort].fn) list = [...list].sort(SORTS[view.sort].fn);
   const body = scaffold(app);
   $("#heroSlot").innerHTML = "";
   body.innerHTML = `
-    <div class="filters">
-      <div class="genres">
-        <button class="gchip ${!view.genre?"on":""}" data-genre="">All</button>
-        ${genres.map(x=>`<button class="gchip ${view.genre===x?"on":""}" data-genre="${esc(x)}">${esc(x)}</button>`).join("")}
-      </div>
+    <div class="filters" style="justify-content:flex-end">
       <label class="sortwrap">Sort
         <select id="sort">${Object.entries(SORTS).map(([k,v])=>`<option value="${k}" ${view.sort===k?"selected":""}>${v.label}</option>`).join("")}</select>
       </label>
@@ -2437,7 +2432,6 @@ function drawGrid(){
       : list.length ? `<div class="grid">${list.map(card).join("")}</div>`
       : `<div class="empty"><h2>No matches</h2>${view.query ? "Try a different title." : "Try a different genre."}</div>`}
     `;
-  app.querySelectorAll("[data-genre]").forEach(b=> b.onclick = ()=>{ view.genre=b.dataset.genre||null; drawGrid(); });
   if (!gridList.length && !gridLoading && !gridError) loadGrid();
   $("#sort").onchange = e=>{ view.sort=e.target.value; drawGrid(); };
 }
@@ -3816,7 +3810,7 @@ async function renderGame(app){
     chooseReviewImage(g, rowToLog(r), { id: uid, username: name, ballot: ballotFor(g.id, uid) }); });
   app.querySelectorAll("[data-rreport]").forEach(b=> b.onclick = ()=> openReport({type:"review", gid:g.id, targetUser:b.dataset.rreport, label:`Review of ${g.title} by ${whoName(b.dataset.rreport)}`}));
   app.querySelectorAll("[data-rdelete]").forEach(b=> b.onclick = async ()=>{ if (confirm("Delete this review? This can't be undone.")){ await adminDeleteReview(b.dataset.rdelete, g.id); await loadCommunity(g.id); render(); } });
-  app.querySelectorAll("[data-gofilter]").forEach(b=> b.onclick = ()=>{ view.tab="games"; view.gameId=null; view.genre=b.dataset.gofilter; render(); });
+  app.querySelectorAll("[data-gofilter]").forEach(b=> b.onclick = ()=>{ view.tab="games"; view.gameId=null; view.genre=null; view.query=""; searchMode="genres"; genreSels=[b.dataset.gofilter]; genreView="results"; genreShown=30; render(); window.scrollTo(0,0); });
   $("#logBtn") && ($("#logBtn").onclick = ()=>{ if (requireAuth()) openSheet(g); });
   $("#fixDate") && ($("#fixDate").onclick = async ()=>{
     const cur = g.released || "";
