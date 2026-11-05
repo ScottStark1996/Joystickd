@@ -2289,20 +2289,25 @@ const searchUsers = debounce(async ()=>{
 let genreSel = null, genreSort = "high", genreShown = 30;
 const GENRE_SORTS = { high:"Community highest", low:"Community lowest", logged:"Most logged" };
 const genreRows = ()=> LIVE ? (stats.rows || []) : SAMPLE.map(g=> ({ game_id:g.id, game:g, avg_rating: g.critic ? +(g.critic/10).toFixed(1) : null, rating_count: 3, log_count: 4 + g.id }));
-const genresOfRow = r => { const g = getGame(r.game_id) || r.game; const gs = (g?.genres||[]).length ? g.genres : tagsOf(g); return gs; };
+// IGDB keeps two lists: genres (Shooter, RPG, Platform…) and themes (Horror, Survival, Open world…). People think of
+// both as "genres", so the explorer shows both groups and a game matches either.
+const genresOfRow = r => tagsOf(getGame(r.game_id) || r.game);
+const themesOfRow = r => ((getGame(r.game_id) || r.game)?.themes || []);
 function drawGenres(){
   const app = $("#app"); if (view.gameId || view.tab!=="games") return;
   const body = scaffold(app); $("#heroSlot").innerHTML = ""; applyPageBg("navy");
   if (LIVE && !stats.rows){ loadStats(); body.innerHTML = `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`; return; }
   const rows = genreRows(), q = view.query.trim().toLowerCase();
   // every genre with at least one logged game, with how many games it holds
-  const counts = {}; rows.forEach(r=> genresOfRow(r).forEach(x=> counts[x] = (counts[x]||0) + 1));
+  const counts = {}, themeSet = new Set(); rows.forEach(r=>{ genresOfRow(r).forEach(x=> counts[x] = (counts[x]||0) + 1); themesOfRow(r).forEach(x=> themeSet.add(x)); });
   const all = Object.keys(counts).sort((a,b)=> a.localeCompare(b));
   if (genreSel && !counts[genreSel]) genreSel = null;
   if (!genreSel){
     const shown = all.filter(x=> !q || x.toLowerCase().includes(q));
-    body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>Genres</h1><div class="stats">Pick a genre to see what the community rates highest, lowest, and plays most</div></div></div>
-      ${shown.length ? `<div class="genres" style="margin-top:6px">${shown.map(x=>`<button class="gchip" data-gsel="${esc(x)}">${esc(x)} <small style="opacity:.7">${counts[x]}</small></button>`).join("")}</div>`
+    const chips = xs => `<div class="genres" style="margin-top:6px">${xs.map(x=>`<button class="gchip" data-gsel="${esc(x)}">${esc(x)} <small style="opacity:.7">${counts[x]}</small></button>`).join("")}</div>`;
+    const gList = shown.filter(x=> !themeSet.has(x)), tList = shown.filter(x=> themeSet.has(x));
+    body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>Genres</h1><div class="stats">Pick one to see what the community rates highest, lowest, and plays most</div></div></div>
+      ${shown.length ? `${gList.length ? `<div class="set-sub" style="padding-top:6px">Genres</div>${chips(gList)}` : ""}${tList.length ? `<div class="set-sub" style="padding-top:14px">Themes <span style="font-weight:500;letter-spacing:0;text-transform:none">(horror, survival, open world\u2026)</span></div>${chips(tList)}` : ""}`
                      : `<div class="empty small">${all.length ? "No genre matches that." : "Nothing here yet \u2014 it fills in as people log games."}</div>`}`;
     body.querySelectorAll("[data-gsel]").forEach(b=> b.onclick = ()=>{ genreSel = b.dataset.gsel; genreShown = 30; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); window.scrollTo(0,0); });
     return;
