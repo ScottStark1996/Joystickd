@@ -2242,7 +2242,7 @@ function row(games, extra){ return `<div class="hrow">${games.map((g,i)=>card(g,
 // home/grid repaints. Rebuilding it on every search made iOS typing laggy and
 // eat keystrokes (the keyboard was typing into an element that kept being
 // destroyed); now only the results below it repaint.
-const searchPh = ()=> searchMode==="users" ? "Search users" : searchMode==="genres" ? (genreSel ? `Filter ${genreSel}` : "Filter genres") : (LIVE ? "Search IGDB for a game" : "Search sample games");
+const searchPh = ()=> searchMode==="users" ? "Search users" : searchMode==="genres" ? (genreView==="results" && genreSels.length ? `Filter these games` : "Filter genres") : (LIVE ? "Search IGDB for a game" : "Search sample games");
 function scaffold(app){
   let s = $("#search");
   if (!s || !app.contains(s)){
@@ -2286,7 +2286,7 @@ const searchUsers = debounce(async ()=>{
   if (view.query.trim()===q) drawUsers();
 }, 350);
 // ---- Genres: explore the catalogue the community has logged, one genre at a time ---------------------------
-let genreSel = null, genreSort = "high", genreShown = 30;
+let genreSels = [], genreView = "list", genreSort = "high", genreShown = 30, genreMin = 1;
 const GENRE_SORTS = { high:"Community highest", low:"Community lowest", logged:"Most logged" };
 const genreRows = ()=> LIVE ? (stats.rows || []) : SAMPLE.map(g=> ({ game_id:g.id, game:g, avg_rating: g.critic ? +(g.critic/10).toFixed(1) : null, rating_count: 3, log_count: 4 + g.id }));
 // IGDB keeps two lists: genres (Shooter, RPG, Platform…) and themes (Horror, Survival, Open world…). People think of
@@ -2298,34 +2298,46 @@ function drawGenres(){
   const body = scaffold(app); $("#heroSlot").innerHTML = ""; applyPageBg("navy");
   if (LIVE && !stats.rows){ loadStats(); body.innerHTML = `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`; return; }
   const rows = genreRows(), q = view.query.trim().toLowerCase();
-  // every genre with at least one logged game, with how many games it holds
+  // every genre/theme with at least one logged game, with how many games it holds
   const counts = {}, themeSet = new Set(); rows.forEach(r=>{ genresOfRow(r).forEach(x=> counts[x] = (counts[x]||0) + 1); themesOfRow(r).forEach(x=> themeSet.add(x)); });
   const all = Object.keys(counts).sort((a,b)=> a.localeCompare(b));
-  if (genreSel && !counts[genreSel]) genreSel = null;
-  if (!genreSel){
+  genreSels = genreSels.filter(x=> counts[x]);
+  const matches = r => { const t = genresOfRow(r); return genreSels.every(x=> t.includes(x)); };   // mix and match = a game has ALL the picked tags
+  const pool = genreSels.length ? rows.filter(matches) : [];
+  if (genreView!=="results" || !genreSels.length){
+    genreView = "list";
     const shown = all.filter(x=> !q || x.toLowerCase().includes(q));
-    const chips = xs => `<div class="genres" style="margin-top:6px">${xs.map(x=>`<button class="gchip" data-gsel="${esc(x)}">${esc(x)} <small style="opacity:.7">${counts[x]}</small></button>`).join("")}</div>`;
+    // counts shrink to what still combines with the current picks, so dead ends are obvious
+    const comboCount = x => genreSels.length && !genreSels.includes(x) ? pool.filter(r=> genresOfRow(r).includes(x)).length : counts[x];
+    const chips = xs => `<div class="genres" style="margin-top:6px">${xs.map(x=>{ const on = genreSels.includes(x), n = comboCount(x); return `<button class="gchip ${on?"on":""}" data-gsel="${esc(x)}" ${(!on && !n) ? "style=\"opacity:.35\"" : ""}>${esc(x)} <small style="opacity:.7">${n}</small></button>`; }).join("")}</div>`;
     const gList = shown.filter(x=> !themeSet.has(x)), tList = shown.filter(x=> themeSet.has(x));
-    body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>Genres</h1><div class="stats">Pick one to see what the community rates highest, lowest, and plays most</div></div></div>
+    body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>Genres</h1><div class="stats">Pick one or combine a few to see what the community rates highest, lowest, and plays most</div></div></div>
+      ${genreSels.length ? `<div class="filters" style="align-items:center;gap:10px;flex-wrap:wrap"><div class="genres">${genreSels.map(x=>`<button class="gchip on" data-gdel="${esc(x)}">${esc(x)} \u00d7</button>`).join("")}</div><button class="cta" id="genreGo" ${pool.length ? "" : "disabled"}>Show ${pool.length} game${pool.length===1?"":"s"}</button></div>` : ""}
       ${shown.length ? `${gList.length ? `<div class="set-sub" style="padding-top:6px">Genres</div>${chips(gList)}` : ""}${tList.length ? `<div class="set-sub" style="padding-top:14px">Themes <span style="font-weight:500;letter-spacing:0;text-transform:none">(horror, survival, open world\u2026)</span></div>${chips(tList)}` : ""}`
                      : `<div class="empty small">${all.length ? "No genre matches that." : "Nothing here yet \u2014 it fills in as people log games."}</div>`}`;
-    body.querySelectorAll("[data-gsel]").forEach(b=> b.onclick = ()=>{ genreSel = b.dataset.gsel; genreShown = 30; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); window.scrollTo(0,0); });
+    body.querySelectorAll("[data-gsel]").forEach(b=> b.onclick = ()=>{ const x = b.dataset.gsel; genreSels = genreSels.includes(x) ? genreSels.filter(y=> y!==x) : [...genreSels, x]; genreShown = 30; drawGenres(); });
+    body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); drawGenres(); });
+    $("#genreGo") && ($("#genreGo").onclick = ()=>{ genreView = "results"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); window.scrollTo(0,0); });
     return;
   }
-  let list = rows.filter(r=> genresOfRow(r).includes(genreSel));
+  let list = pool;
   if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
-  if (genreSort!=="logged") list = list.filter(r=> r.avg_rating!=null && r.rating_count>0);
+  if (genreSort!=="logged") list = list.filter(r=> r.avg_rating!=null && r.rating_count >= genreMin);
   const total = list.length;
   list = [...list].sort(genreSort==="high" ? ((a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count)
                      : genreSort==="low" ? ((a,b)=> (a.avg_rating??99)-(b.avg_rating??99) || b.rating_count-a.rating_count)
                      : ((a,b)=> b.log_count-a.log_count || (b.avg_rating??-1)-(a.avg_rating??-1))).slice(0, genreShown);
   const cap = r => genreSort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}` : `${r.rating_count} rating${r.rating_count===1?"":"s"}`;
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${esc(genreSel)}</h1><div class="stats">${counts[genreSel]} game${counts[genreSel]===1?"":"s"} logged by the community</div></div>
-      <button class="cta ghost sm" id="genreBack">\u2190 All genres</button></div>
-    <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div></div>
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}</div></div>
+      <button class="cta ghost sm" id="genreBack">\u2190 Change genres</button></div>
+    ${genreSels.length>1 ? `<div class="genres" style="margin:2px 0 10px">${genreSels.map(x=>`<button class="gchip on" data-gdel="${esc(x)}" title="Remove">${esc(x)} \u00d7</button>`).join("")}</div>` : ""}
+    <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div>
+      ${genreSort!=="logged" ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${list.length ? `<div class="grid">${list.map(r=> commCard(getGame(r.game_id)||r.game, r, cap(r))).join("")}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
-                  : `<div class="empty small">${q ? "No games in this genre match that." : "No rated games in this genre yet."}</div>`}`;
-  $("#genreBack").onclick = ()=>{ genreSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
+                  : `<div class="empty small">${q ? "No games here match that." : genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : "No rated games here yet."}</div>`}`;
+  $("#genreMin") && ($("#genreMin").onchange = e=>{ genreMin = +e.target.value; genreShown = 30; drawGenres(); });
+  $("#genreBack").onclick = ()=>{ genreView = "list"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
+  body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); genreShown = 30; drawGenres(); });
   body.querySelectorAll("[data-gsort]").forEach(b=> b.onclick = ()=>{ genreSort = b.dataset.gsort; genreShown = 30; drawGenres(); });
   $("#genreMore") && ($("#genreMore").onclick = ()=>{ genreShown += 30; drawGenres(); });
 }
