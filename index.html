@@ -1184,7 +1184,7 @@
     <label for="reviewText">Review</label>
     <textarea id="reviewText" placeholder="What stuck with you? What didn't land?"></textarea>
 
-    <label>Dates <span class="lbl-note">fill in at least one</span></label>
+    <label>Dates</label>
     <div class="dates">
       <div class="drow"><span>Date played</span><input type="date" id="playedDate"></div>
       <div class="drow"><span>First trophy date</span><input type="date" id="firstTrophyDate"></div>
@@ -1203,7 +1203,7 @@
         <div class="subctl"><div class="pips small" id="diffPips"></div><div class="readout small none" id="diffReadout">—</div></div>
       </div>
       <div class="subrow">
-        <div class="sublabel">Platinum enjoyability <span class="hint">optional — how fun was the grind?</span></div>
+        <div class="sublabel">Platinum enjoyability <span class="hint">how fun was the grind?</span></div>
         <div class="subctl"><div class="pips small" id="funPips"></div><div class="readout small none" id="funReadout">—</div></div>
       </div>
       <div class="subrow">
@@ -3936,7 +3936,6 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeSheet(); cl
 $("#saveLog").onclick = async ()=>{
   if (draft.rating==null && !draft.playedOnly){ toast("Pick a rating, or mark it as played"); return; }
   const dPlayed=$("#playedDate").value, dTrophy=$("#firstTrophyDate").value, dPlat=$("#platDate").value;
-  if (!dPlayed && !dTrophy && !dPlat){ toast("Add at least one date"); return; }
   if (!(await textOk("review", $("#reviewText").value))){ toast(BLOCKED_MSG); return; }
   const hrs = parseFloat($("#platHours").value), pnum = parseInt($("#platNum").value);
   logs[draft.gameId] = { game:getGame(draft.gameId), rating: draft.playedOnly && draft.rating==null ? null : draft.rating, review:$("#reviewText").value.trim(), date:dPlayed, firstTrophy:dTrophy, platDate:dPlat, subs:{...draft.subs},
