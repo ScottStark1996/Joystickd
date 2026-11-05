@@ -2130,6 +2130,7 @@ const loadGrid = debounce(async ()=>{
 }, LIVE ? 350 : 0);
 
 function renderGrid(app){
+  if (searchMode==="genres") return drawGenres();
   if (!view.query.trim() && !view.genre) return renderHome(app);
   if (searchMode==="users" && view.query.trim()) return drawUsers();
   if (!gridList.length && !gridLoading) loadGrid();
@@ -2241,22 +2242,23 @@ function row(games, extra){ return `<div class="hrow">${games.map((g,i)=>card(g,
 // home/grid repaints. Rebuilding it on every search made iOS typing laggy and
 // eat keystrokes (the keyboard was typing into an element that kept being
 // destroyed); now only the results below it repaint.
-const searchPh = ()=> searchMode==="users" ? "Search users" : (LIVE ? "Search IGDB for a game" : "Search sample games");
+const searchPh = ()=> searchMode==="users" ? "Search users" : searchMode==="genres" ? (genreSel ? `Filter ${genreSel}` : "Filter genres") : (LIVE ? "Search IGDB for a game" : "Search sample games");
 function scaffold(app){
   let s = $("#search");
   if (!s || !app.contains(s)){
     app.innerHTML = `
     <div id="heroSlot"></div>
     <input class="search" id="search" placeholder="${searchPh()}" value="${esc(view.query)}">
-    <div class="smode" id="searchMode" ${view.query.trim() ? "" : "hidden"}>
+    <div class="smode" id="searchMode">
       <button class="gchip ${searchMode==="games"?"on":""}" data-smode="games">Games</button>
       <button class="gchip ${searchMode==="users"?"on":""}" data-smode="users">Users</button>
+      <button class="gchip ${searchMode==="genres"?"on":""}" data-smode="genres">Genres</button>
     </div>
     <div id="pageBody"></div>`;
     s = $("#search");
     s.addEventListener("input", e=>{
       view.query=e.target.value; view.genre=null;
-      $("#searchMode").hidden = !view.query.trim();
+      if (searchMode==="genres"){ drawGenres(); return; }                  // the box filters the genre list
       if (!view.query.trim()){ userResults=null; render(); return; }
       searchMode==="games" ? loadGrid() : searchUsers();
     });
@@ -2264,10 +2266,11 @@ function scaffold(app){
       searchMode = b.dataset.smode;
       $("#searchMode").querySelectorAll("[data-smode]").forEach(x=> x.classList.toggle("on", x===b));
       s.placeholder = searchPh();
-      if (view.query.trim()) (searchMode==="games" ? loadGrid() : searchUsers());
-      s.focus();
+      if (searchMode==="genres"){ drawGenres(); return; }
+      if (view.query.trim()) (searchMode==="games" ? loadGrid() : searchUsers()); else render();
+      if (view.query.trim()) s.focus();
     });
-  } else if (document.activeElement!==s && s.value!==view.query){ s.value = view.query; const sm=$("#searchMode"); if (sm) sm.hidden = !view.query.trim(); }
+  } else if (document.activeElement!==s && s.value!==view.query){ s.value = view.query; }
   return $("#pageBody");
 }
 
@@ -2282,6 +2285,45 @@ const searchUsers = debounce(async ()=>{
   userResults = data||[]; userLoading = false;
   if (view.query.trim()===q) drawUsers();
 }, 350);
+// ---- Genres: explore the catalogue the community has logged, one genre at a time ---------------------------
+let genreSel = null, genreSort = "high", genreShown = 30;
+const GENRE_SORTS = { high:"Community highest", low:"Community lowest", logged:"Most logged" };
+const genreRows = ()=> LIVE ? (stats.rows || []) : SAMPLE.map(g=> ({ game_id:g.id, game:g, avg_rating: g.critic ? +(g.critic/10).toFixed(1) : null, rating_count: 3, log_count: 4 + g.id }));
+const genresOfRow = r => { const g = getGame(r.game_id) || r.game; const gs = (g?.genres||[]).length ? g.genres : tagsOf(g); return gs; };
+function drawGenres(){
+  const app = $("#app"); if (view.gameId || view.tab!=="games") return;
+  const body = scaffold(app); $("#heroSlot").innerHTML = ""; applyPageBg("navy");
+  if (LIVE && !stats.rows){ loadStats(); body.innerHTML = `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`; return; }
+  const rows = genreRows(), q = view.query.trim().toLowerCase();
+  // every genre with at least one logged game, with how many games it holds
+  const counts = {}; rows.forEach(r=> genresOfRow(r).forEach(x=> counts[x] = (counts[x]||0) + 1));
+  const all = Object.keys(counts).sort((a,b)=> a.localeCompare(b));
+  if (genreSel && !counts[genreSel]) genreSel = null;
+  if (!genreSel){
+    const shown = all.filter(x=> !q || x.toLowerCase().includes(q));
+    body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>Genres</h1><div class="stats">Pick a genre to see what the community rates highest, lowest, and plays most</div></div></div>
+      ${shown.length ? `<div class="genres" style="margin-top:6px">${shown.map(x=>`<button class="gchip" data-gsel="${esc(x)}">${esc(x)} <small style="opacity:.7">${counts[x]}</small></button>`).join("")}</div>`
+                     : `<div class="empty small">${all.length ? "No genre matches that." : "Nothing here yet \u2014 it fills in as people log games."}</div>`}`;
+    body.querySelectorAll("[data-gsel]").forEach(b=> b.onclick = ()=>{ genreSel = b.dataset.gsel; genreShown = 30; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); window.scrollTo(0,0); });
+    return;
+  }
+  let list = rows.filter(r=> genresOfRow(r).includes(genreSel));
+  if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
+  if (genreSort!=="logged") list = list.filter(r=> r.avg_rating!=null && r.rating_count>0);
+  const total = list.length;
+  list = [...list].sort(genreSort==="high" ? ((a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count)
+                     : genreSort==="low" ? ((a,b)=> (a.avg_rating??99)-(b.avg_rating??99) || b.rating_count-a.rating_count)
+                     : ((a,b)=> b.log_count-a.log_count || (b.avg_rating??-1)-(a.avg_rating??-1))).slice(0, genreShown);
+  const cap = r => genreSort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}` : `${r.rating_count} rating${r.rating_count===1?"":"s"}`;
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${esc(genreSel)}</h1><div class="stats">${counts[genreSel]} game${counts[genreSel]===1?"":"s"} logged by the community</div></div>
+      <button class="cta ghost sm" id="genreBack">\u2190 All genres</button></div>
+    <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div></div>
+    ${list.length ? `<div class="grid">${list.map(r=> commCard(getGame(r.game_id)||r.game, r, cap(r))).join("")}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
+                  : `<div class="empty small">${q ? "No games in this genre match that." : "No rated games in this genre yet."}</div>`}`;
+  $("#genreBack").onclick = ()=>{ genreSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
+  body.querySelectorAll("[data-gsort]").forEach(b=> b.onclick = ()=>{ genreSort = b.dataset.gsort; genreShown = 30; drawGenres(); });
+  $("#genreMore") && ($("#genreMore").onclick = ()=>{ genreShown += 30; drawGenres(); });
+}
 function drawUsers(){
   const app = $("#app"); if (view.gameId || view.tab!=="games") return;
   const body = scaffold(app);
@@ -3541,7 +3583,7 @@ async function loadStats(){
   const { data, error } = await fetchAll(()=> sb.from("game_stats").select("*").order("game_id"));
   stats.rows = error && !data.length ? [] : (data||[]); stats.loading = false; stats.at = Date.now();
   stats.rows.forEach(r=>cacheGame(r.game));
-  if (view.tab==="community") render();
+  if (view.tab==="community" || (view.tab==="games" && searchMode==="genres" && !view.gameId)) render();
 }
 const COMM_SORTS = {
   high: {label:"Highest rated",    fn:(a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count},
@@ -3585,10 +3627,10 @@ function renderCommunity(app){
   $("#commMore") && ($("#commMore").onclick = ()=>{ commShown+=30; render(); });
 }
 // Card variant with the community average in the badge (colour-scaled) instead of your own rating.
-function commCard(g, r){
+function commCard(g, r, capOverride){
   const avg = r.avg_rating!=null ? +r.avg_rating : null;
   const badge = avg!=null ? `<span class="badge" style="${ratingBadge(snapHalf(avg))}">${avg.toFixed(1)}</span>` : "";
-  const cap = commSort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}`
+  const cap = capOverride ? capOverride : commSort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}`
     : commSort==="plat" ? `${r.platinum_count} platinum${r.platinum_count===1?"":"s"}`
     : commSort==="reviewed" ? `${r.review_count} review${r.review_count===1?"":"s"}`
     : (commSort==="hardest"||commSort==="easiest") ? `Difficulty ${(+r.avg_plat_diff).toFixed(1)}/10 · ${r.plat_diff_count} report${r.plat_diff_count===1?"":"s"}`
