@@ -70,6 +70,7 @@
   .card:hover,.card:focus-visible{transform:translateY(-3px);border-color:var(--line);outline:none}
   .cover{aspect-ratio:3/4;display:flex;align-items:flex-end;padding:10px;position:relative;background-color:var(--panel2)}
   .cover .t{font-family:Outfit;font-weight:800;font-size:20px;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+  .cover .cv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
   .badge{position:absolute;top:8px;right:8px;background:var(--gold);color:#1a1200;font-family:Outfit;font-weight:800;font-size:13px;padding:3px 7px;border-radius:7px}
   .meta{padding:10px 12px 12px}
   .meta .n{font-weight:600;font-size:14px;line-height:1.2}
@@ -1997,6 +1998,15 @@ const esc = s => String(s??"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",
 const fmtDate = d => d ? new Date(d+"T00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}) : "";
 const hueOf = g => (g.id*47)%360;
 const coverStyle = g => g.cover ? `background:url('${g.cover}') center/cover` : `background:linear-gradient(160deg,hsl(${hueOf(g)} 55% 45%),hsl(${hueOf(g)+30} 60% 18%))`;
+// Cards load covers as real <img>s: lazy (only what's on screen), one automatic retry if IGDB's image server
+// drops the request, and the initials fallback if it still fails — a CSS background just stays blank.
+const coverFallback = g => `background:linear-gradient(160deg,hsl(${hueOf(g)} 55% 45%),hsl(${hueOf(g)+30} 60% 18%))`;
+const coverImg = g => g.cover ? `<img class="cv" src="${esc(g.cover)}" alt="" loading="lazy" decoding="async" onerror="coverErr(this)">` : "";
+function coverErr(img){
+  if (!img.dataset.r){ img.dataset.r = "1"; const src = img.getAttribute("src").split("?")[0]; setTimeout(()=>{ img.src = `${src}?r=${Date.now()}`; }, 800); return; }
+  const box = img.closest(".cover"), title = box?.closest(".card")?.querySelector(".n")?.textContent || "";
+  img.remove(); if (box && !box.querySelector(".t")) box.insertAdjacentHTML("beforeend", `<span class="t">${esc(initials(title))}</span>`);
+}
 const coverText = g => g.cover ? "" : `<span class="t">${initials(g.title)}</span>`;
 const initials = t => t.replace(/[^A-Za-z0-9 ]/g,"").split(" ").filter(Boolean).slice(0,3).map(w=>w[0]).join("").toUpperCase();
 const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
@@ -2100,7 +2110,8 @@ function card(g, caption, editable, viewLog, theirLog){
   const mine = theirLog ? logs[g.id] : null;      // your own log, for the comparison chip
   const badgeFor = x => x.rating!=null ? `<span class="badge" style="${ratingBadge(x.rating)}">${x.platinum ? PLAT_IMG(x.rating,"inbadge") : ""}${x.rating}</span>` : `<span class="badge played">${x.platinum ? PLAT_IMG(null,"inbadge") : ""}✓</span>`;
   return `<button class="card" ${viewLog ? `data-plog="${g.id}"` : `data-open="${g.id}"`}>
-    <div class="cover" style="${coverStyle(g)}">
+    <div class="cover" style="${coverFallback(g)}">
+      ${coverImg(g)}
       ${l ? badgeFor(l) : ""}
       ${mine ? `<span class="mybadge" style="${ratingBadge(mine.rating ?? 5)}${mine.rating==null?"background:var(--panel2);color:var(--plat);":""}" title="Your rating">You: ${mine.platinum ? PLAT_IMG(mine.rating,"inbadge") : ""}${mine.rating ?? "✓"}</span>` : ""}
       ${editable ? `<span class="editchip" data-editlog="${g.id}" role="button" aria-label="Edit log" title="Edit log">✎</span>` : ""}
@@ -3589,6 +3600,7 @@ function logCard(l, g, ballot, isMe, uid){
 
 // ---- community tab -----------------------------------------------------------
 let stats = { rows:null, loading:false }, commSort = "high", commMin = 1, commShown = 30;
+let commCaps = (()=>{ try { return localStorage.getItem("jd_commCaps") !== "0"; } catch(e){ return true; } })();   // show "7 ratings" under community cards
 async function loadStats(){
   if (!LIVE || stats.loading) return; stats.loading = true;
   const { data, error } = await fetchAll(()=> sb.from("game_stats").select("*").order("game_id"));
@@ -3628,13 +3640,17 @@ function renderCommunity(app){
     </div>
     <div class="filters">
       <div class="genres">${Object.entries(COMM_SORTS).map(([k,v])=>`<button class="gchip ${commSort===k?"on":""}" data-csort="${k}">${v.label}</button>`).join("")}</div>
-      ${(()=>{ const ratingSort = commSort==="high"||commSort==="low", platSort = ["hardest","easiest","longest","shortest"].includes(commSort);
-        return (ratingSort || platSort) ? `<label class="sortwrap">${ratingSort ? "Min ratings" : "Min reports"} <select id="commMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${commMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""; })()}
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end;flex:1">
+        <button class="gchip ${commCaps?"on":""}" id="commCaps" title="Show or hide the counts under each game">${commCaps ? "Counts on" : "Counts off"}</button>
+        ${(()=>{ const ratingSort = commSort==="high"||commSort==="low", platSort = ["hardest","easiest","longest","shortest"].includes(commSort);
+          return (ratingSort || platSort) ? `<label class="sortwrap">${ratingSort ? "Min ratings" : "Min reports"} <select id="commMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${commMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""; })()}
+      </div>
     </div>
     ${list.length ? `<div class="grid">${list.map(r=>{ const g=getGame(r.game_id)||r.game; return commCard(g, r); }).join("")}</div>${commShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="commMore">Show more (${total-commShown} left)</button></div>` : ""}`
       : `<div class="empty small">Nothing here yet — it fills in as people log games.</div>`}`;
   app.querySelectorAll("[data-csort]").forEach(b=> b.onclick = ()=>{ commSort=b.dataset.csort; commShown=30; render(); });
   $("#commMin") && ($("#commMin").onchange = e=>{ commMin=+e.target.value; commShown=30; render(); });
+  $("#commCaps").onclick = ()=>{ commCaps = !commCaps; try { localStorage.setItem("jd_commCaps", commCaps ? "1" : "0"); } catch(e){} render(); };
   $("#commMore") && ($("#commMore").onclick = ()=>{ commShown+=30; render(); });
 }
 // Card variant with the community average in the badge (colour-scaled) instead of your own rating.
@@ -3648,8 +3664,8 @@ function commCard(g, r, capOverride){
     : (commSort==="longest"||commSort==="shortest") ? `${(+r.avg_plat_hours).toFixed(0)} hrs · ${r.plat_hours_count} report${r.plat_hours_count===1?"":"s"}`
     : `${r.rating_count} rating${r.rating_count===1?"":"s"}`;
   return `<button class="card" data-open="${g.id}">
-    <div class="cover" style="${coverStyle(g)}">${badge}${coverText(g)}</div>
-    <div class="meta"><div class="n">${esc(g.title)}</div><div class="y">${cap}</div></div>
+    <div class="cover" style="${coverFallback(g)}">${coverImg(g)}${badge}${coverText(g)}</div>
+    <div class="meta"><div class="n">${esc(g.title)}</div><div class="y">${commCaps ? cap : (g.year ?? "")}</div></div>
   </button>`;
 }
 
