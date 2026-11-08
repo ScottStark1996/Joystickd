@@ -470,6 +470,7 @@
   .scol em{position:absolute;top:-16px;font-style:normal;font-size:10px;font-weight:700;color:var(--muted)}
   .scol small{margin-top:6px;font-size:10px;color:var(--muted);white-space:nowrap;min-height:14px;line-height:14px}
   .scols.dense .scol small{font-size:9px}
+  .scols.dense{padding-left:12px;padding-right:12px}
   .slist{display:flex;flex-wrap:wrap;gap:8px}
   .slist button{text-align:left;display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;color:var(--text);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
   .slist .mini{width:22px;height:30px;border-radius:4px;background-size:cover;background-position:center;background-color:var(--panel)}
@@ -2531,6 +2532,11 @@ function profileStats(P, isMe){
   const byGenre = by("genre", id=> tagsOf(getGame(id)));
   const byDev = by("dev", id=> getGame(id)?.dev);
   const byRel = by("rel", id=> { const y=getGame(id)?.year; return y ? String(Math.floor(y/10)*10)+"s" : null; });
+  // release years: one column per year from the oldest to the newest game logged (gaps included), so the shape reads honestly
+  const byRelYear = by("relyear", id=> { const y=getGame(id)?.year; return y ? String(y) : null; });
+  const relYears = Object.keys(byRelYear).map(Number).sort((a,b)=>a-b);
+  const relRange = relYears.length ? Array.from({length: relYears[relYears.length-1]-relYears[0]+1}, (_,i)=> String(relYears[0]+i)) : [];
+  const relPeak = relRange.reduce((best,y)=> (byRelYear[y]?.n||0) > (byRelYear[best]?.n||0) ? y : best, relRange[0]);
   const top = (m, k=8) => Object.entries(m).sort((a,b)=> b[1].n-a[1].n || (mean(b[1].r||[0])-mean(a[1].r||[0]))).slice(0,k);
   // months: last 12
   const now = new Date(), months = []; for (let i=11;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); months.push(d.toISOString().slice(0,7)); }
@@ -2579,6 +2585,8 @@ function profileStats(P, isMe){
       ${bars(best, v=>mean(v.r), v=>`<b>${mean(v.r).toFixed(1)}</b> \u00b7 ${v.r.length} game${v.r.length===1?"":"s"}`, v=>`background:${ratingGradient(snapHalf(mean(v.r)))}`)}</section>` : ""; })()}
     ${Object.keys(byDev).length ? `<section class="ssec"><h2>Developers</h2><div class="g">Studios ${isMe?"you":"they"} keep coming back to</div>
       ${bars(top(byDev,6), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
+    ${relRange.length ? `<section class="ssec"><h2>Games by release year</h2><div class="g">How many games ${isMe?"you've":"they've"} played from each year${relPeak ? ` \u00b7 most from <b>${relPeak}</b> (${byRelYear[relPeak].n})` : ""}</div>
+      ${cols(relRange, relRange.map(y=> byRelYear[y]?.n || 0))}</section>` : ""}
     ${Object.keys(byRel).length ? `<section class="ssec"><h2>Release eras</h2><div class="g">When the games ${isMe?"you":"they"} play came out</div>
       ${bars(Object.entries(byRel).sort((a,b)=>a[0].localeCompare(b[0])), v=>v.n, v=>`<b>${v.n}</b>${v.r.length?` \u00b7 avg ${mean(v.r).toFixed(1)}`:""}`)}</section>` : ""}
     ${plats.length ? `<section class="ssec"><h2>Platinums</h2><div class="g">${platN} platinum${platN===1?"":"s"}${diffArr.length?` \u00b7 avg difficulty ${mean(diffArr).toFixed(1)}/10`:""}${funArr.length?` \u00b7 avg enjoyability ${mean(funArr).toFixed(1)}/10`:""}${hoursArr.length?` \u00b7 avg ${Math.round(mean(hoursArr))} hrs`:""}</div>
