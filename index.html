@@ -1362,7 +1362,8 @@ const FRAMES = {
   gold:    { name:"Gold",     stops:["#fff0b3","#d9a21b","#8a5a10","#f6d36b","#b8820f","#ffe9a3"], glow:"rgba(240,180,41,.35)" },
   platinum:{ name:"Platinum", stops:["#ffffff","#b9c4d6","#6f7d96","#e6ecf5","#8c9bb5","#ffffff"], glow:"rgba(200,212,230,.25)" },
   bronze:  { name:"Bronze",   stops:["#f0c39a","#b06a2a","#5c3312","#d9924e","#8a4a1c","#f0c39a"] },
-  onyx:    { name:"Onyx",     stops:["#4b5670","#1c2233","#0a0d16","#3a4458","#141927","#4b5670"] },
+  onyx:    { name:"Onyx",     stops:["#4b5670","#1c2233","#0a0d16","#3a4458","#141927","#4b5670"], textStops:["#c3ccdd","#5d6a85","#8c98b0","#3f4a62","#aeb8cc","#c3ccdd"] },   // textStops: a readable steel version for usernames
+  gothic:  { name:"Gothic",   stops:["#5a0b16","#c2283a","#1a0407","#7a1020","#2a0a12","#5a0b16"], glow:"rgba(194,40,58,.35)", textStops:["#f06a76","#a51a2c","#d83a4b","#7a1020","#e0515f","#f06a76"] },
   neon:    { name:"Neon",     stops:["#00f0ff","#2bd6ff","#ff2bd6","#ff5ab0","#00f0ff"], glow:"rgba(0,240,255,.45)" },
   ember:   { name:"Ember",    stops:["#ffd27a","#ff8a1f","#c0202a","#ff6a3d","#ffd27a"], glow:"rgba(255,138,31,.35)" },
   emerald: { name:"Emerald",  stops:["#b8ffd9","#2fd37a","#0f6f44","#5ff0a0","#b8ffd9"], glow:"rgba(47,211,122,.3)" },
@@ -1413,7 +1414,7 @@ const rgba = (h,a) => { const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a
 function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   accent: /^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent,
   pattern: PATTERNS[t.pattern] ? t.pattern : "none", tint: TINTS[t.tint] ? t.tint : "soft",
-  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops && t.nameFx!=="onyx" ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
+  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
   badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
   bg: PAGE_BGS[t.bg] ? t.bg : "navy",
   score: SCORE_STYLES[t.score] ? t.score : "gradient",
@@ -1477,7 +1478,7 @@ const badgeStyle = (uid, P) => { const t = themeFor(uid, P); const c = badgeCss(
 // coloring but without the near-white / near-black extremes that make a gradient hard to read.
 const mixHex = (a, b, k) => { const A=hexRgb(a), B=hexRgb(b); return "#" + A.map((v,i)=> Math.round(v + (B[i]-v)*k).toString(16).padStart(2,"0")).join(""); };
 const softStops = stops => { const mid = [...stops].sort((a,b)=> Math.abs(lum(a)-0.55) - Math.abs(lum(b)-0.55))[0]; return stops.map(c=> { let m = mixHex(c, mid, 0.55); if (lum(m) < 0.42) m = mixHex(m, "#ffffff", (0.42-lum(m))*1.6); return m; }); };
-const nameStops = t => { const f = FRAMES[t.nameFx]; if (!f?.stops) return null; return t.nameSoft ? softStops(f.stops) : f.stops; };
+const nameStops = t => { const f = FRAMES[t.nameFx]; if (!f?.stops) return null; const st = f.textStops || f.stops; return t.nameSoft ? softStops(st) : st; };
 const nameFxCss = t => t.nameFx !== "accent" && FRAMES[t.nameFx]?.stops
   ? `background:linear-gradient(100deg, ${nameStops(t).join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent`
   : `color:${t.accent}`;
@@ -1531,7 +1532,7 @@ function paintLook(){
   $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
   $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
   $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.stops ? k : null)}<span>${f.name}</span></button>`).join("");
-  $("#lookNameFx").innerHTML = [["accent","Accent color"], ...Object.entries(FRAMES).filter(([k,f])=>f.stops && k!=="onyx").map(([k,f])=>[k,f.name])].map(([k,label])=> `<button class="chip ${t.nameFx===k?"on":""}" data-namefx="${k}"><span style="${nameFxCss({...t, nameFx:k})};font-weight:800">${esc(me.username)}</span><span style="margin-left:6px;font-weight:500;font-size:11px">${label}</span></button>`).join("");
+  $("#lookNameFx").innerHTML = [["accent","Accent color"], ...Object.entries(FRAMES).filter(([k,f])=>f.stops).map(([k,f])=>[k,f.name])].map(([k,label])=> `<button class="chip ${t.nameFx===k?"on":""}" data-namefx="${k}"><span style="${nameFxCss({...t, nameFx:k})};font-weight:800">${esc(me.username)}</span><span style="margin-left:6px;font-weight:500;font-size:11px">${label}</span></button>`).join("");
   $("#lookNameFx").querySelectorAll("[data-namefx]").forEach(b=> b.onclick = ()=>{ lookDraft.nameFx=b.dataset.namefx; paintLook(); });
   $("#lookNameStrength").innerHTML = [["bold","Bold gradient"],["soft","Soft gradient"]].map(([k,l])=> `<button class="chip ${(t.nameSoft?"soft":"bold")===k?"on":""}" data-namestr="${k}">${l}</button>`).join("");
   $("#lookNameStrength").querySelectorAll("[data-namestr]").forEach(b=> b.onclick = ()=>{ lookDraft.nameSoft = b.dataset.namestr==="soft"; paintLook(); });
@@ -2318,6 +2319,22 @@ function explorerList(rows, sort, minRatings){
           : ((a,b)=> b.log_count-a.log_count || (b.avg_rating??-1)-(a.avg_rating??-1));
   return [...list].sort(cmp);
 }
+// Critic sorts look at the WHOLE IGDB catalogue (not just what the community has logged) via explore_games().
+// Results are cached per query; the community row (if any) still supplies the badge.
+const exploreCache = {};
+const isCriticSort = k => k==="chigh" || k==="clow";
+function exploreFetch(key, params, redraw){
+  if (exploreCache[key]) return exploreCache[key];
+  if (!LIVE){ const rows = genreRows().filter(r=> (params.y ? (getGame(r.game_id)||r.game)?.year===params.y : true) && (params.tags||[]).every(t=> genresOfRow(r).includes(t)) && (getGame(r.game_id)||r.game)?.critic!=null);
+    exploreCache[key] = rows.map(r=> getGame(r.game_id)||r.game).sort((a,b)=> params.ord==="clow" ? a.critic-b.critic : b.critic-a.critic); return exploreCache[key]; }
+  exploreCache[key] = "loading";
+  sb.rpc("explore_games", { y: params.y || null, tags: params.tags && params.tags.length ? params.tags : null, ord: params.ord, lim: 60, min_reviews: 3 })
+    .then(({ data, error })=>{ exploreCache[key] = (!error && Array.isArray(data)) ? data : []; (data||[]).forEach(cacheGame); redraw(); }, ()=>{ exploreCache[key] = []; redraw(); });
+  return "loading";
+}
+const criticCap = g => `Critic ${g.critic}${g.criticCount ? ` \u00b7 ${g.criticCount} review${g.criticCount===1?"":"s"}` : ""}`;
+// grid of catalogue games for a critic sort; community stats row attached when one exists (for the badge)
+function criticGrid(games, rowsById, shown){ return games.slice(0, shown).map(g=> commCard(g, rowsById[g.id] || { avg_rating:null, rating_count:0, log_count:0 }, criticCap(g))).join(""); }
 const explorerCap = (r, sort) => sort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}`
   : (sort==="chigh" || sort==="clow") ? `Critic ${(getGame(r.game_id)||r.game)?.critic}${r.rating_count ? ` \u00b7 ${r.rating_count} rating${r.rating_count===1?"":"s"}` : ""}`
   : `${r.rating_count} rating${r.rating_count===1?"":"s"}`;
@@ -2353,17 +2370,23 @@ function drawGenres(){
     $("#genreGo") && ($("#genreGo").onclick = ()=>{ genreView = "results"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); window.scrollTo(0,0); });
     return;
   }
-  let list = pool;
-  if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
-  list = explorerList(list, genreSort, genreMin); const total = list.length; list = list.slice(0, genreShown);
-  const cap = r => explorerCap(r, genreSort);
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}</div></div>
+  let list = pool, total = 0, gridHtml = "", critic = isCriticSort(genreSort), catalogue = null;
+  if (critic){
+    catalogue = exploreFetch(`g:${genreSels.join("|")}:${genreSort}`, { tags: genreSels, ord: genreSort }, drawGenres);
+    if (catalogue !== "loading"){ let gs = catalogue; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, genreShown); }
+  } else {
+    if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
+    list = explorerList(list, genreSort, genreMin); total = list.length; list = list.slice(0, genreShown);
+    gridHtml = list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, genreSort))).join("");
+  }
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${critic ? `Every game in the IGDB catalogue with ${genreSels.length>1 ? "all of these" : "this tag"} and at least 3 critic reviews` : `${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}`}</div></div>
       <button class="cta ghost sm" id="genreBack">\u2190 Change genres</button></div>
     ${genreSels.length>1 ? `<div class="genres" style="margin:2px 0 10px">${genreSels.map(x=>`<button class="gchip on" data-gdel="${esc(x)}" title="Remove">${esc(x)} \u00d7</button>`).join("")}</div>` : ""}
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(genreSort) ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
-    ${list.length ? `<div class="grid">${list.map(r=> commCard(getGame(r.game_id)||r.game, r, cap(r))).join("")}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
-                  : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : (genreSort==="chigh"||genreSort==="clow") ? "No critic scores for these games yet." : "No rated games here yet."}</div>`}`;
+    ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
+      : gridHtml ? `<div class="grid">${gridHtml}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
+                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>`}`;
   $("#genreMin") && ($("#genreMin").onchange = e=>{ genreMin = +e.target.value; genreShown = 30; drawGenres(); });
   $("#genreBack").onclick = ()=>{ genreView = "list"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
   body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); genreShown = 30; drawGenres(); });
@@ -2391,15 +2414,22 @@ function drawYears(){
     body.querySelectorAll("[data-ysel]").forEach(b=> b.onclick = ()=>{ yearSel = +b.dataset.ysel; yearShown = 30; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); window.scrollTo(0,0); });
     return;
   }
-  let list = rows.filter(r=> yearOfRow(r)===yearSel);
-  if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
-  list = explorerList(list, yearSort, yearMin); const total = list.length; list = list.slice(0, yearShown);
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community</div></div>
+  let list = rows.filter(r=> yearOfRow(r)===yearSel), total = 0, gridHtml = "", critic = isCriticSort(yearSort), catalogue = null;
+  if (critic){
+    catalogue = exploreFetch(`y:${yearSel}:${yearSort}`, { y: yearSel, ord: yearSort }, drawYears);
+    if (catalogue !== "loading"){ let gs = catalogue; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, yearShown); }
+  } else {
+    if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
+    list = explorerList(list, yearSort, yearMin); total = list.length; list = list.slice(0, yearShown);
+    gridHtml = list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, yearSort))).join("");
+  }
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${critic ? `Every ${yearSel} game in the IGDB catalogue with at least 3 critic reviews` : `${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community`}</div></div>
       <button class="cta ghost sm" id="yearBack">\u2190 All years</button></div>
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${yearSort===k?"on":""}" data-ysort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(yearSort) ? `<label class="sortwrap">Min ratings <select id="yearMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${yearMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
-    ${list.length ? `<div class="grid">${list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, yearSort))).join("")}</div>${yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
-                  : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : (yearSort==="chigh"||yearSort==="clow") ? "No critic scores for these games yet." : "No rated games here yet."}</div>`}`;
+    ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
+      : gridHtml ? `<div class="grid">${gridHtml}</div>${yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
+                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>`}`;
   $("#yearMin") && ($("#yearMin").onchange = e=>{ yearMin = +e.target.value; yearShown = 30; drawYears(); });
   $("#yearBack").onclick = ()=>{ yearSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); };
   body.querySelectorAll("[data-ysort]").forEach(b=> b.onclick = ()=>{ yearSort = b.dataset.ysort; yearShown = 30; drawYears(); });
