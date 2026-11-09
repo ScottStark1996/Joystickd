@@ -1363,7 +1363,7 @@ const FRAMES = {
   platinum:{ name:"Platinum", stops:["#ffffff","#b9c4d6","#6f7d96","#e6ecf5","#8c9bb5","#ffffff"], glow:"rgba(200,212,230,.25)" },
   bronze:  { name:"Bronze",   stops:["#f0c39a","#b06a2a","#5c3312","#d9924e","#8a4a1c","#f0c39a"] },
   onyx:    { name:"Onyx",     stops:["#4b5670","#1c2233","#0a0d16","#3a4458","#141927","#4b5670"], textStops:["#c3ccdd","#5d6a85","#8c98b0","#3f4a62","#aeb8cc","#c3ccdd"] },   // textStops: a readable steel version for usernames
-  gothic:  { name:"Gothic",   stops:["#5a0b16","#c2283a","#1a0407","#7a1020","#2a0a12","#5a0b16"], glow:"rgba(194,40,58,.35)", textStops:["#f06a76","#a51a2c","#d83a4b","#7a1020","#e0515f","#f06a76"] },
+  gothic:  { name:"Gothic",   stops:["#5a0b16","#c2283a","#1a0407","#7a1020","#2a0a12","#5a0b16"], glow:"rgba(194,40,58,.35)", textStops:["#d83a4b","#4a0c18","#a51a2c","#2a0609","#c2283a","#5a0b16"], textGlow:"rgba(194,40,58,.55)" },   // red-and-black name; the glow keeps the dark bands legible
   neon:    { name:"Neon",     stops:["#00f0ff","#2bd6ff","#ff2bd6","#ff5ab0","#00f0ff"], glow:"rgba(0,240,255,.45)" },
   ember:   { name:"Ember",    stops:["#ffd27a","#ff8a1f","#c0202a","#ff6a3d","#ffd27a"], glow:"rgba(255,138,31,.35)" },
   emerald: { name:"Emerald",  stops:["#b8ffd9","#2fd37a","#0f6f44","#5ff0a0","#b8ffd9"], glow:"rgba(47,211,122,.3)" },
@@ -1480,7 +1480,7 @@ const mixHex = (a, b, k) => { const A=hexRgb(a), B=hexRgb(b); return "#" + A.map
 const softStops = stops => { const mid = [...stops].sort((a,b)=> Math.abs(lum(a)-0.55) - Math.abs(lum(b)-0.55))[0]; return stops.map(c=> { let m = mixHex(c, mid, 0.55); if (lum(m) < 0.42) m = mixHex(m, "#ffffff", (0.42-lum(m))*1.6); return m; }); };
 const nameStops = t => { const f = FRAMES[t.nameFx]; if (!f?.stops) return null; const st = f.textStops || f.stops; return t.nameSoft ? softStops(st) : st; };
 const nameFxCss = t => t.nameFx !== "accent" && FRAMES[t.nameFx]?.stops
-  ? `background:linear-gradient(100deg, ${nameStops(t).join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent`
+  ? `background:linear-gradient(100deg, ${nameStops(t).join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent${FRAMES[t.nameFx].textGlow && !t.nameSoft ? `;filter:drop-shadow(0 0 .18em ${FRAMES[t.nameFx].textGlow})` : ""}`
   : `color:${t.accent}`;
 const nameFxStyle = t => t ? ` style="${nameFxCss(t)}"` : "";
 // Canvas fill for a username drawn with the same style (x0..x1 = text extent)
