@@ -2143,6 +2143,7 @@ const loadGrid = debounce(async ()=>{
 
 function renderGrid(app){
   if (searchMode==="genres") return drawGenres();
+  if (searchMode==="years") return drawYears();
   if (!view.query.trim() && !view.genre) return renderHome(app);
   if (searchMode==="users" && view.query.trim()) return drawUsers();
   if (!gridList.length && !gridLoading) loadGrid();
@@ -2213,7 +2214,7 @@ async function loadHome(){
       const [top, fl, lrRes] = await Promise.all([
         igdb("popular",{year:YEAR}).catch(e=>{ home.error=String(e.message||e); return []; }),
         ids.length ? sb.from("logs").select("*").in("user_id", ids).order("created_at",{ascending:false, nullsFirst:false}).limit(200) : Promise.resolve({data:[]}),
-        sb.rpc("latest_reviews", { lim: 10 }).then(r=>r, e=>({ data:null, error:e })),
+        sb.rpc("latest_reviews", { lim: 15 }).then(r=>r, e=>({ data:null, error:e })),
       ]);
       home.topYear = top.slice(0,20);
       const rows = fl.data || [];
@@ -2254,7 +2255,7 @@ function row(games, extra){ return `<div class="hrow">${games.map((g,i)=>card(g,
 // home/grid repaints. Rebuilding it on every search made iOS typing laggy and
 // eat keystrokes (the keyboard was typing into an element that kept being
 // destroyed); now only the results below it repaint.
-const searchPh = ()=> searchMode==="users" ? "Search users" : searchMode==="genres" ? (genreView==="results" && genreSels.length ? `Filter these games` : "Filter genres") : (LIVE ? "Search IGDB for a game" : "Search sample games");
+const searchPh = ()=> searchMode==="users" ? "Search users" : searchMode==="genres" ? (genreView==="results" && genreSels.length ? `Filter these games` : "Filter genres") : searchMode==="years" ? (yearSel ? `Filter ${yearSel}` : "Jump to a year") : (LIVE ? "Search IGDB for a game" : "Search sample games");
 function scaffold(app){
   let s = $("#search");
   if (!s || !app.contains(s)){
@@ -2265,12 +2266,14 @@ function scaffold(app){
       <button class="gchip ${searchMode==="games"?"on":""}" data-smode="games">Games</button>
       <button class="gchip ${searchMode==="users"?"on":""}" data-smode="users">Users</button>
       <button class="gchip ${searchMode==="genres"?"on":""}" data-smode="genres">Genres</button>
+      <button class="gchip ${searchMode==="years"?"on":""}" data-smode="years">Years</button>
     </div>
     <div id="pageBody"></div>`;
     s = $("#search");
     s.addEventListener("input", e=>{
       view.query=e.target.value; view.genre=null;
       if (searchMode==="genres"){ drawGenres(); return; }                  // the box filters the genre list
+      if (searchMode==="years"){ drawYears(); return; }
       if (!view.query.trim()){ userResults=null; render(); return; }
       searchMode==="games" ? loadGrid() : searchUsers();
     });
@@ -2279,6 +2282,7 @@ function scaffold(app){
       $("#searchMode").querySelectorAll("[data-smode]").forEach(x=> x.classList.toggle("on", x===b));
       s.placeholder = searchPh();
       if (searchMode==="genres"){ drawGenres(); return; }
+      if (searchMode==="years"){ drawYears(); return; }
       if (view.query.trim()) (searchMode==="games" ? loadGrid() : searchUsers()); else render();
       if (view.query.trim()) s.focus();
     });
@@ -2299,7 +2303,24 @@ const searchUsers = debounce(async ()=>{
 }, 350);
 // ---- Genres: explore the catalogue the community has logged, one genre at a time ---------------------------
 let genreSels = [], genreView = "list", genreSort = "high", genreShown = 30, genreMin = 1;
-const GENRE_SORTS = { high:"Community highest", low:"Community lowest", logged:"Most logged" };
+const GENRE_SORTS = { high:"Community highest", low:"Community lowest", logged:"Most logged", chigh:"Critic highest", clow:"Critic lowest" };
+const isCommunitySort = k => k==="high" || k==="low";
+// Sort + caption shared by the Genres and Years explorers. Critic sorts use IGDB's aggregated critic score.
+function explorerList(rows, sort, minRatings){
+  const crit = r => { const g = getGame(r.game_id) || r.game; return g?.critic ?? null; };
+  let list = rows;
+  if (isCommunitySort(sort)) list = list.filter(r=> r.avg_rating!=null && r.rating_count >= minRatings);
+  if (sort==="chigh" || sort==="clow") list = list.filter(r=> crit(r)!=null);
+  const cmp = sort==="high" ? ((a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count)
+          : sort==="low" ? ((a,b)=> (a.avg_rating??99)-(b.avg_rating??99) || b.rating_count-a.rating_count)
+          : sort==="chigh" ? ((a,b)=> crit(b)-crit(a) || b.log_count-a.log_count)
+          : sort==="clow" ? ((a,b)=> crit(a)-crit(b) || b.log_count-a.log_count)
+          : ((a,b)=> b.log_count-a.log_count || (b.avg_rating??-1)-(a.avg_rating??-1));
+  return [...list].sort(cmp);
+}
+const explorerCap = (r, sort) => sort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}`
+  : (sort==="chigh" || sort==="clow") ? `Critic ${(getGame(r.game_id)||r.game)?.critic}${r.rating_count ? ` \u00b7 ${r.rating_count} rating${r.rating_count===1?"":"s"}` : ""}`
+  : `${r.rating_count} rating${r.rating_count===1?"":"s"}`;
 const genreRows = ()=> LIVE ? (stats.rows || []) : SAMPLE.map(g=> ({ game_id:g.id, game:g, avg_rating: g.critic ? +(g.critic/10).toFixed(1) : null, rating_count: 3, log_count: 4 + g.id }));
 // IGDB keeps two lists: genres (Shooter, RPG, Platform…) and themes (Horror, Survival, Open world…). People think of
 // both as "genres", so the explorer shows both groups and a game matches either.
@@ -2334,24 +2355,55 @@ function drawGenres(){
   }
   let list = pool;
   if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
-  if (genreSort!=="logged") list = list.filter(r=> r.avg_rating!=null && r.rating_count >= genreMin);
-  const total = list.length;
-  list = [...list].sort(genreSort==="high" ? ((a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count)
-                     : genreSort==="low" ? ((a,b)=> (a.avg_rating??99)-(b.avg_rating??99) || b.rating_count-a.rating_count)
-                     : ((a,b)=> b.log_count-a.log_count || (b.avg_rating??-1)-(a.avg_rating??-1))).slice(0, genreShown);
-  const cap = r => genreSort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}` : `${r.rating_count} rating${r.rating_count===1?"":"s"}`;
+  list = explorerList(list, genreSort, genreMin); const total = list.length; list = list.slice(0, genreShown);
+  const cap = r => explorerCap(r, genreSort);
   body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}</div></div>
       <button class="cta ghost sm" id="genreBack">\u2190 Change genres</button></div>
     ${genreSels.length>1 ? `<div class="genres" style="margin:2px 0 10px">${genreSels.map(x=>`<button class="gchip on" data-gdel="${esc(x)}" title="Remove">${esc(x)} \u00d7</button>`).join("")}</div>` : ""}
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div>
-      ${genreSort!=="logged" ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
+      ${isCommunitySort(genreSort) ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${list.length ? `<div class="grid">${list.map(r=> commCard(getGame(r.game_id)||r.game, r, cap(r))).join("")}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
-                  : `<div class="empty small">${q ? "No games here match that." : genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : "No rated games here yet."}</div>`}`;
+                  : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : (genreSort==="chigh"||genreSort==="clow") ? "No critic scores for these games yet." : "No rated games here yet."}</div>`}`;
   $("#genreMin") && ($("#genreMin").onchange = e=>{ genreMin = +e.target.value; genreShown = 30; drawGenres(); });
   $("#genreBack").onclick = ()=>{ genreView = "list"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
   body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); genreShown = 30; drawGenres(); });
   body.querySelectorAll("[data-gsort]").forEach(b=> b.onclick = ()=>{ genreSort = b.dataset.gsort; genreShown = 30; drawGenres(); });
   $("#genreMore") && ($("#genreMore").onclick = ()=>{ genreShown += 30; drawGenres(); });
+}
+// ---- Years: the same explorer, by release year -------------------------------------------------------------
+let yearSel = null, yearSort = "high", yearShown = 30, yearMin = 1;
+function drawYears(){
+  const app = $("#app"); if (view.gameId || view.tab!=="games") return;
+  const body = scaffold(app); $("#heroSlot").innerHTML = ""; applyPageBg("navy");
+  if (LIVE && !stats.rows){ loadStats(); body.innerHTML = `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`; return; }
+  const rows = genreRows(), q = view.query.trim().toLowerCase();
+  const yearOfRow = r => (getGame(r.game_id) || r.game)?.year || null;
+  const counts = {}; rows.forEach(r=>{ const y = yearOfRow(r); if (y) counts[y] = (counts[y]||0) + 1; });
+  const years = Object.keys(counts).map(Number).sort((a,b)=> b-a);
+  if (yearSel && !counts[yearSel]) yearSel = null;
+  if (!yearSel){
+    const shown = years.filter(y=> !q || String(y).includes(q));
+    // decades as headings, newest first, so a long list stays scannable
+    const decades = [...new Set(shown.map(y=> Math.floor(y/10)*10))];
+    body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>Years</h1><div class="stats">Pick a release year to see what the community rates highest, lowest, and plays most</div></div></div>
+      ${shown.length ? decades.map(d=> `<div class="set-sub" style="padding-top:${d===decades[0]?6:14}px">${d}s</div><div class="genres" style="margin-top:6px">${shown.filter(y=> Math.floor(y/10)*10===d).map(y=>`<button class="gchip" data-ysel="${y}">${y} <small style="opacity:.7">${counts[y]}</small></button>`).join("")}</div>`).join("")
+                     : `<div class="empty small">${years.length ? "No year matches that." : "Nothing here yet \u2014 it fills in as people log games."}</div>`}`;
+    body.querySelectorAll("[data-ysel]").forEach(b=> b.onclick = ()=>{ yearSel = +b.dataset.ysel; yearShown = 30; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); window.scrollTo(0,0); });
+    return;
+  }
+  let list = rows.filter(r=> yearOfRow(r)===yearSel);
+  if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
+  list = explorerList(list, yearSort, yearMin); const total = list.length; list = list.slice(0, yearShown);
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community</div></div>
+      <button class="cta ghost sm" id="yearBack">\u2190 All years</button></div>
+    <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${yearSort===k?"on":""}" data-ysort="${k}">${v}</button>`).join("")}</div>
+      ${isCommunitySort(yearSort) ? `<label class="sortwrap">Min ratings <select id="yearMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${yearMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
+    ${list.length ? `<div class="grid">${list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, yearSort))).join("")}</div>${yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
+                  : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : (yearSort==="chigh"||yearSort==="clow") ? "No critic scores for these games yet." : "No rated games here yet."}</div>`}`;
+  $("#yearMin") && ($("#yearMin").onchange = e=>{ yearMin = +e.target.value; yearShown = 30; drawYears(); });
+  $("#yearBack").onclick = ()=>{ yearSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); };
+  body.querySelectorAll("[data-ysort]").forEach(b=> b.onclick = ()=>{ yearSort = b.dataset.ysort; yearShown = 30; drawYears(); });
+  $("#yearMore") && ($("#yearMore").onclick = ()=>{ yearShown += 30; drawYears(); });
 }
 function drawUsers(){
   const app = $("#app"); if (view.gameId || view.tab!=="games") return;
@@ -2404,7 +2456,7 @@ function renderHome(app){
     </section>
     ${LIVE && home.latest.length ? `
     <section class="hsec">
-      <h2>Latest community reviews<span>Newest 10 across Joystickd</span><button class="hrefresh ${home.loading?"spin":""}" id="homeRefresh" title="Refresh" aria-label="Refresh the home page">↻</button></h2>
+      <h2>Latest community reviews<span>Newest 15 across Joystickd</span><button class="hrefresh ${home.loading?"spin":""}" id="homeRefresh" title="Refresh" aria-label="Refresh the home page">↻</button></h2>
       <div class="reviews">${home.latest.map((f,i)=> feedCard(f,i,"l")).join("")}</div>
     </section>` : ""}`}
     <div class="hint" style="text-align:center;margin:26px 0 6px">Game data from IGDB \u00b7 Critic scores from OpenCritic${isNativeApp() ? "" : ` \u00b7 <a href="https://apps.apple.com/app/id6808438318" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:none;font-weight:700">Get the iOS app</a>`}</div>`;
@@ -3614,7 +3666,7 @@ async function loadStats(){
   const { data, error } = await fetchAll(()=> sb.from("game_stats").select("*").order("game_id"));
   stats.rows = error && !data.length ? [] : (data||[]); stats.loading = false; stats.at = Date.now();
   stats.rows.forEach(r=>cacheGame(r.game));
-  if (view.tab==="community" || (view.tab==="games" && searchMode==="genres" && !view.gameId)) render();
+  if (view.tab==="community" || (view.tab==="games" && (searchMode==="genres" || searchMode==="years") && !view.gameId)) render();
 }
 const COMM_SORTS = {
   high: {label:"Highest rated",    fn:(a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count},
