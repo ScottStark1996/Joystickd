@@ -1942,6 +1942,8 @@ const summaryOf = id => communityCache[id]?.summary || null;
 const criticCache = {};                 // gameId -> {score, tier, review_count, url} | {score:null} | {error}
 async function loadCritic(g){
   if (!LIVE || criticCache[g.id]) return;
+  // the nightly OpenCritic sync puts the score on the game itself — no API call needed
+  if (g.oc && g.oc.score!=null){ criticCache[g.id] = { score:g.oc.score, tier:g.oc.tier, review_count:g.oc.count, url:g.oc.url }; return; }
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/opencritic`, { method:"POST",
       headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${SUPABASE_ANON_KEY}`, "apikey":SUPABASE_ANON_KEY },
@@ -2330,10 +2332,11 @@ function exploreFetch(key, params, redraw){
     exploreCache[key] = rows.map(r=> getGame(r.game_id)||r.game).sort((a,b)=> params.ord==="clow" ? a.critic-b.critic : b.critic-a.critic); return exploreCache[key]; }
   exploreCache[key] = "loading";
   sb.rpc("explore_games", { y: params.y || null, tags: params.tags && params.tags.length ? params.tags : null, ord: params.ord, lim: 60, min_reviews: 3 })
-    .then(({ data, error })=>{ exploreCache[key] = (!error && Array.isArray(data)) ? data : []; (data||[]).forEach(cacheGame); redraw(); }, ()=>{ exploreCache[key] = []; redraw(); });
+    .then(({ data, error })=>{ if (error) console.warn("explore_games", error); exploreCache[key] = (!error && Array.isArray(data)) ? data : "error"; (Array.isArray(data) ? data : []).forEach(cacheGame); redraw(); }, e=>{ console.warn("explore_games", e); exploreCache[key] = "error"; redraw(); });
   return "loading";
 }
-const criticCap = g => `Critic ${g.critic}${g.criticCount ? ` \u00b7 ${g.criticCount} review${g.criticCount===1?"":"s"}` : ""}`;
+const criticCap = g => g.oc?.score!=null ? `OpenCritic ${g.oc.score}${g.oc.count ? ` \u00b7 ${g.oc.count} review${g.oc.count===1?"":"s"}` : ""}`
+  : `Critic ${g.critic}${g.criticCount ? ` \u00b7 ${g.criticCount} review${g.criticCount===1?"":"s"}` : ""} \u00b7 IGDB`;
 // grid of catalogue games for a critic sort; community stats row attached when one exists (for the badge)
 function criticGrid(games, rowsById, shown){ return games.slice(0, shown).map(g=> commCard(g, rowsById[g.id] || { avg_rating:null, rating_count:0, log_count:0 }, criticCap(g))).join(""); }
 const explorerCap = (r, sort) => sort==="logged" ? `${r.log_count} log${r.log_count===1?"":"s"}`
@@ -2374,20 +2377,20 @@ function drawGenres(){
   let list = pool, total = 0, gridHtml = "", critic = isCriticSort(genreSort), catalogue = null;
   if (critic){
     catalogue = exploreFetch(`g:${genreSels.join("|")}:${genreSort}`, { tags: genreSels, ord: genreSort }, drawGenres);
-    if (catalogue !== "loading"){ let gs = catalogue; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, genreShown); }
+    if (catalogue !== "loading"){ let gs = Array.isArray(catalogue) ? catalogue : []; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, genreShown); }
   } else {
     if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
     list = explorerList(list, genreSort, genreMin); total = list.length; list = list.slice(0, genreShown);
     gridHtml = list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, genreSort))).join("");
   }
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${critic ? `Every game in the IGDB catalogue with ${genreSels.length>1 ? "all of these" : "this tag"} and at least 3 critic reviews` : `${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}`}</div></div>
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${critic ? `Every game with ${genreSels.length>1 ? "all of these" : "this tag"} and at least 3 critic reviews \u00b7 OpenCritic scores, IGDB\u2019s where a game isn\u2019t on OpenCritic` : `${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}`}</div></div>
       <button class="cta ghost sm" id="genreBack">\u2190 Change genres</button></div>
     ${genreSels.length>1 ? `<div class="genres" style="margin:2px 0 10px">${genreSels.map(x=>`<button class="gchip on" data-gdel="${esc(x)}" title="Remove">${esc(x)} \u00d7</button>`).join("")}</div>` : ""}
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(genreSort) ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
       : gridHtml ? `<div class="grid">${gridHtml}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
-                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>`}`;
+                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : catalogue === "error" ? "Couldn\u2019t load critic rankings right now. Please try again in a moment." : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>`}`;
   $("#genreMin") && ($("#genreMin").onchange = e=>{ genreMin = +e.target.value; genreShown = 30; drawGenres(); });
   $("#genreBack").onclick = ()=>{ genreView = "list"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
   body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); genreShown = 30; drawGenres(); });
@@ -2418,19 +2421,19 @@ function drawYears(){
   let list = rows.filter(r=> yearOfRow(r)===yearSel), total = 0, gridHtml = "", critic = isCriticSort(yearSort), catalogue = null;
   if (critic){
     catalogue = exploreFetch(`y:${yearSel}:${yearSort}`, { y: yearSel, ord: yearSort }, drawYears);
-    if (catalogue !== "loading"){ let gs = catalogue; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, yearShown); }
+    if (catalogue !== "loading"){ let gs = Array.isArray(catalogue) ? catalogue : []; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, yearShown); }
   } else {
     if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
     list = explorerList(list, yearSort, yearMin); total = list.length; list = list.slice(0, yearShown);
     gridHtml = list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, yearSort))).join("");
   }
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${critic ? `Every ${yearSel} game in the IGDB catalogue with at least 3 critic reviews` : `${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community`}</div></div>
+  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${critic ? `Every ${yearSel} game with at least 3 critic reviews \u00b7 OpenCritic scores, IGDB\u2019s where a game isn\u2019t on OpenCritic` : `${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community`}</div></div>
       <button class="cta ghost sm" id="yearBack">\u2190 All years</button></div>
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${yearSort===k?"on":""}" data-ysort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(yearSort) ? `<label class="sortwrap">Min ratings <select id="yearMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${yearMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
       : gridHtml ? `<div class="grid">${gridHtml}</div>${yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
-                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>`}`;
+                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : catalogue === "error" ? "Couldn\u2019t load critic rankings right now. Please try again in a moment." : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>`}`;
   $("#yearMin") && ($("#yearMin").onchange = e=>{ yearMin = +e.target.value; yearShown = 30; drawYears(); });
   $("#yearBack").onclick = ()=>{ yearSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); };
   body.querySelectorAll("[data-ysort]").forEach(b=> b.onclick = ()=>{ yearSort = b.dataset.ysort; yearShown = 30; drawYears(); });
