@@ -908,6 +908,7 @@
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
     <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
     <div class="look-sec"><h3>Pattern</h3><div class="chips" id="cardPattern"></div></div>
+    <div class="look-sec"><h3>Review text</h3><div class="g" style="margin:-2px 0 8px">Boxed puts a panel behind the writing on review cards, so it stays easy to read over a pattern or cover art.</div><div class="chips" id="cardText"></div></div>
     <div class="look-sec"><h3>Highlight color</h3><div class="swatches" id="cardAccent"></div></div>
     <div class="look-sec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">How your rating number looks on saved images.</div><div class="chips" id="cardScore"></div></div>
     <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
@@ -1428,12 +1429,13 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   card: { bg: PAGE_BGS[t.card?.bg] ? t.card.bg : "navy",
           // the card's highlight color is its own hex (older saves used "gold" / "theme" — mapped here)
           accent: /^#[0-9a-f]{6}$/i.test(t.card?.accent||"") ? t.card.accent.toLowerCase() : t.card?.accent==="theme" ? (/^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent) : "#f0b429",
-          style: ["solid","cover","glow"].includes(t.card?.style) ? t.card.style : "solid", pattern: PATTERNS[t.card?.pattern] ? t.card.pattern : "none" } }; }
+          style: ["solid","cover","glow"].includes(t.card?.style) ? t.card.style : "solid", pattern: PATTERNS[t.card?.pattern] ? t.card.pattern : "none",
+          textBox: t.card?.textBox !== false } }; }                             // panel behind the review text on review cards (on unless switched off)
 // Colors for the images a Pro user saves (review cards, continuation cards, profile snapshot).
 const CARD_STYLES = { solid:"Solid", cover:"Blurred cover", glow:"Accent glow" };
 function cardThemeFor(uid, P){
   const t = themeFor(uid, P); const b = PAGE_BGS[t?.card?.bg] || PAGE_BGS.navy;
-  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", score: t ? (t.score||"gradient") : "gradient", pattern: t ? (t.card.pattern||"none") : "none", isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
+  return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", score: t ? (t.score||"gradient") : "gradient", pattern: t ? (t.card.pattern||"none") : "none", textBox: t ? t.card.textBox !== false : true, isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
 }
 // Canvas twin of patternCss(): the same five header patterns, drawn in the accent color at low alpha.
 function paintPattern(x, W, H, pattern, accent){
@@ -1613,11 +1615,13 @@ function paintCardStyle(){
       <div style="color:var(--muted);margin-top:2px">2026 \u00b7 Developer</div>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px"><span style="color:${acc};font-weight:700">\uD83C\uDFC6 Platinum #12 \u00b7 difficulty 6/10</span><span style="font-family:Outfit;font-weight:800;font-size:28px;${ratingTextStyled(9.5, t.score)}">9.5</span></div>
       <div style="margin-top:10px;display:flex;gap:6px"><span style="background:${rgba(acc,.3)};color:${acc};padding:3px 8px;border-radius:999px;font-weight:700">my 2026 Game of the Year</span><span style="background:${b.panel2};border:1px solid ${b.line};padding:3px 8px;border-radius:999px;font-weight:700">my 2026 best RPG</span></div>
-      <div style="margin-top:10px;color:#d7deea;line-height:1.5">A vast, broken world that rewards curiosity and punishes impatience\u2026</div></div></div>`;
+      <div style="margin-top:10px;color:#d7deea;line-height:1.5;${t.card.textBox!==false ? `background:${rgba(b.panel,.72)};border:1.5px solid ${rgba(acc,.5)};border-radius:10px;padding:8px 10px` : ""}">A vast, broken world that rewards curiosity and punishes impatience\u2026</div></div></div>`;
   $("#cardBg").innerHTML = Object.entries(PAGE_BGS).map(([k,v])=> `<button class="chip ${t.card.bg===k?"on":""}" data-cbg="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:${v.panel};border:2px solid ${v.line};flex:none"></span>${v.name}</button>`).join("");
   $("#cardStyle").innerHTML = Object.entries(CARD_STYLES).map(([k,v])=> `<button class="chip ${t.card.style===k?"on":""}" data-cstyle="${k}">${v}</button>`).join("");
   $("#cardPattern").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${(t.card.pattern||"none")===k?"on":""}" data-cpat="${k}">${v}</button>`).join("");
   $("#cardPattern").querySelectorAll("[data-cpat]").forEach(b=> b.onclick = ()=>{ cardDraft.card.pattern=b.dataset.cpat; paintCardStyle(); });
+  $("#cardText").innerHTML = [[true,"Boxed"],[false,"Plain"]].map(([k,v])=> `<button class="chip ${(t.card.textBox!==false)===k?"on":""}" data-ctext="${k?1:0}">${v}</button>`).join("");
+  $("#cardText").querySelectorAll("[data-ctext]").forEach(b=> b.onclick = ()=>{ cardDraft.card.textBox = b.dataset.ctext==="1"; paintCardStyle(); });
   $("#cardScore").innerHTML = Object.entries(SCORE_STYLES).map(([k,v])=> `<button class="chip ${(t.score||"gradient")===k?"on":""}" data-cscore="${k}" style="display:flex;align-items:center;gap:8px"><span style="font-family:Outfit;font-weight:800;font-size:20px;line-height:1;${ratingTextStyled(9, k)}">9</span>${v}</button>`).join("");
   $("#cardScore").querySelectorAll("[data-cscore]").forEach(b=> b.onclick = ()=>{ cardDraft.score=b.dataset.cscore; paintCardStyle(); });
   $("#cardAccent").innerHTML = ACCENTS.map(c=> `<button class="swatch ${acc===c?"on":""}" data-cacc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
@@ -4614,19 +4618,28 @@ async function saveReviewImage(g, saved, who){
   // Long reviews become a series: part 1 is the full card, later parts are continuation cards.
   // On a fixed page size (8.5×11 / square / portrait) the card keeps its full width: the text shrinks (to 12px)
   // until the review fits the page, and only then spills into continuation cards.
+  const ct = cardThemeFor(me?.id, me);                                          // the person saving picks the look (their Image style), whoever wrote the review
+  // Boxed review text (Image style → Review text): a panel behind the writing, like the Magazine layout's.
+  // BOX1 / BOXN = the extra room the panel needs above the text on the first card / on continuation cards.
+  const boxed = ct.textBox && allLines.length > 0, BOX1 = boxed ? 16 : 0, BOXN = boxed ? 10 : 0;
+  const textPanel = (cx, top, lines)=>{ if (!boxed || !lines) return;
+    const t0 = top - F - 14, hh = (lines-1)*LH + F + 14 + F*0.35 + 15;
+    cx.save(); cx.beginPath(); cx.roundRect(30, t0, W-60, hh, 14);
+    cx.fillStyle = rgba(ct.panel, .72); cx.fill(); cx.strokeStyle = rgba(ct.accent, .5); cx.lineWidth = 1.5; cx.stroke(); cx.restore(); };
+  H += BOX1;
   let PART1 = Math.round(34*25/LH), PARTN = Math.round(46*25/LH); const MAXPARTS = 4;
   { const fixedH = revTargetH(W);
     if (fixedH){ const revMax = fixedH - (H + 70) - 18;
       while (allLines.length*LH > revMax && F > 12){ F -= 0.5; LH = F*RT.lh/RT.font; BODY = `400 ${F}px Manrope, sans-serif`; allLines = wrapAll(); }
-      PART1 = Math.max(1, Math.floor(revMax/LH)); PARTN = Math.max(1, Math.floor((fixedH - 56 - 40 - 26 - 18 - 70)/LH)); } }
+      PART1 = Math.max(1, Math.floor(revMax/LH)); PARTN = Math.max(1, Math.floor((fixedH - 56 - 40 - 26 - 18 - 70 - BOXN)/LH)); } }
   const parts = [allLines.slice(0, PART1)];
   for (let i = PART1; i < allLines.length && parts.length < MAXPARTS; i += PARTN) parts.push(allLines.slice(i, i+PARTN));
+  parts.forEach((p,i)=>{ while (i > 0 && p.length > 1 && !p[0]) p.shift(); while (p.length > 1 && !p[p.length-1]) p.pop(); });   // no blank line at the top of a continuation card or the foot of any card
   if (allLines.length > PART1 + PARTN*(MAXPARTS-1)){ const last = parts[parts.length-1]; last[last.length-1] = last[last.length-1].replace(/\s*$/, "") + " \u2026"; }
   const revLines = parts[0], nParts = parts.length;
   if (revLines.length) H += 18 + revLines.length*LH;
   H += 70;
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  const ct = cardThemeFor(me?.id, me);                                          // the person saving picks the look (their Image style), whoever wrote the review
   const gold=ct.accent, text="#e6ebf4", mut="#8b98b5", soft="#c4cddd";
   paintCardBg(x, W, H, ct, cover);
   let y=56;
@@ -4691,6 +4704,7 @@ async function saveReviewImage(g, saved, who){
       x.fillText(pl.label, pl.x + PILL_PAD, top + pl.y + PILL_H/2 + 1); x.textBaseline="alphabetic"; });
     y += pills[pills.length-1].y + PILL_H + 14; }
   if (revLines.length){
+    y += BOX1; textPanel(x, y + 8, revLines.length);
     x.font=BODY; x.fillStyle="#d7deea";
     revLines.forEach((ln,i)=> x.fillText(ln, 44, y + 8 + i*LH));
     y += 18 + revLines.length*LH;
@@ -4704,15 +4718,16 @@ async function saveReviewImage(g, saved, who){
   // continuation cards: compact header (title + author), then the next slice of the review
   for (let pi = 1; pi < nParts; pi++){
     const lines = parts[pi], c2 = document.createElement("canvas"), x2 = c2.getContext("2d");
-    const H2 = 56 + 40 + 26 + 18 + lines.length*LH + 70;
+    const H2 = 56 + 40 + 26 + 18 + lines.length*LH + 70 + BOXN;
     const S2 = exportScale(W, H2); c2.width = W*S2; c2.height = H2*S2; x2.scale(S2, S2);
     paintCardBg(x2, W, H2, ct, cover);
     x2.textAlign="right"; x2.font="800 16px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText("JOYSTICK", W-56, 48); x2.fillStyle=gold; x2.fillText("D", W-44, 48); x2.textAlign="left";
     x2.font="800 22px Outfit, sans-serif"; x2.fillStyle=text; x2.fillText(wrapText(x2, g.title, W-88-150)[0] || "", 44, 70);
     x2.font="700 14px Manrope, sans-serif"; x2.fillStyle=soft; x2.fillText(author.username, 44, 96);
     const nw2 = x2.measureText(author.username).width; x2.font="600 14px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText(`'s review \u00b7 continued`, 44+nw2, 96);
+    textPanel(x2, 140 + BOXN, lines.length);
     x2.font=BODY; x2.fillStyle="#d7deea";
-    lines.forEach((ln,i)=> x2.fillText(ln, 44, 140 + i*LH));
+    lines.forEach((ln,i)=> x2.fillText(ln, 44, 140 + BOXN + i*LH));
     x2.font="600 13px Manrope, sans-serif"; x2.fillStyle=mut; x2.fillText("joystickd.com", 44, H2-40);
     x2.textAlign="right"; x2.fillStyle=gold; x2.font="700 13px Outfit, sans-serif"; x2.fillText(`Part ${pi+1} of ${nParts}${pi+1<nParts ? "  \u2192" : ""}`, W-44, H2-40); x2.textAlign="left";
     const b2 = await new Promise(res=> fitCanvasToFormat(c2, W, H2, S2, ct).toBlob(res, "image/png")); if (b2) items.push({ blob: b2, filename: `${base}-part-${pi+1}.png` });
@@ -5431,7 +5446,7 @@ function wireSettingsUI(){
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
-  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none" }; t.score="gradient"; saveLook(t); };
+  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none", textBox:true }; t.score="gradient"; saveLook(t); };
   $("#lookReset").onclick = ()=> saveLook(null);
   $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
