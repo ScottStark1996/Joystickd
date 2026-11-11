@@ -1354,7 +1354,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"8-bit", blocks:"Blocks" };
 const TINTS = { off:"Off", soft:"Soft", bold:"Bold" };
 // Ring = a conic gradient around the avatar (metallic sheen comes from the light/dark stops), drawn flush
 // against the photo. `stops` run clockwise from the top-left; `glow` is an optional soft outer light.
@@ -1442,7 +1442,9 @@ function paintPattern(x, W, H, pattern, accent){
     case "checks":  x.fillStyle = rgba(accent, .09); for (let py=0, j=0; py<H; py+=12, j++) for (let px=0, i=0; px<W; px+=12, i++) if ((i+j)%2===0) x.fillRect(px, py, 12, 12); break;
     case "scanlines": x.fillStyle = rgba(accent, .13); for (let py=0; py<H; py+=4) x.fillRect(0, py, W, 1); break;
     case "diamonds":  x.strokeStyle = rgba(accent, .14); x.lineWidth = 1; x.translate(W/2, H/2); x.rotate(Math.PI/4); { const D = Math.hypot(W,H); x.beginPath(); for (let v=-D; v<D; v+=18){ x.moveTo(v,-D); x.lineTo(v,D); x.moveTo(-D,v); x.lineTo(D,v); } x.stroke(); } break;
-    case "pixels":    for (let py=0; py<H; py+=40) for (let px=0; px<W; px+=40) PIXEL_TILE.forEach(([dx,dy,a])=>{ x.fillStyle = rgba(accent, a); x.fillRect(px+dx, py+dy, 6, 6); }); break;
+    case "pixels": case "eightbit": case "blocks":
+                      { const t = pixelRects(PIXEL_ARTS[pattern]), byA = {}; t.rects.forEach(r=> (byA[r[4]] ||= []).push(r));
+                        Object.entries(byA).forEach(([a, rs])=>{ x.fillStyle = rgba(accent, +a); for (let py=0; py<H; py+=t.h) for (let px=0; px<W; px+=t.w) rs.forEach(r=> x.fillRect(px+r[0], py+r[1], r[2], r[3])); }); } break;
   }
   x.restore();
 }
@@ -1490,7 +1492,23 @@ function nameFillCtx(x, t, x0, y0, x1, y1){ if (!t) return null; if (t.nameFx===
   const st = nameStops(t), g = x.createLinearGradient(x0, y0, x1, y1); st.forEach((c,i)=> g.addColorStop(i/(st.length-1), c)); return g; }
 // The theme that should be shown for a user: only while they're Pro.
 function themeFor(uid, P){ if (!isProId(uid) && !(P && isPro(P))) return null; const t = P && "theme" in P ? P.theme : themeOf[uid]; return t ? cleanTheme(t) : null; }
-const PIXEL_TILE = [[4,6,.2],[24,2,.11],[30,22,.17],[12,28,.12]];   // chunky "pixels": x, y, alpha inside a 40px tile
+// Pixel-art patterns (Pixels, 8-bit, Blocks): a tile on a grid of `u`-px squares. Each row is a string: a letter is an
+// opacity step (PIXEL_ALPHA), "." is empty; `gap` leaves a hairline between squares. The same tile feeds the CSS
+// header background and the canvas exports, so the screen and saved images match.
+const PIXEL_ALPHA = { a:.09, b:.15, c:.22 };
+const PIXEL_ARTS = {
+  pixels:   { u: 8, gap: 0, rows: ["cb...a..", "b.......", "....ab..", "a...bc..", "..a..b.a", ".......c", "b.a...cb", "bc...a.."] },                                   // mosaic: chunky squares in three strengths (64px tile)
+  eightbit: { u: 3, gap: 0, rows: ["........................", "................aa......", "..cc.cc.........aa......", ".ccccccc......aaaaaa....", ".ccccccc....b.aaaaaa....", "..ccccc.........aa......", "...ccc..........aa......", "....c...................", "........................", ".....................c..", "...........b............", "......a....b............", ".........bb.bb..........", "...........b............", "...........b.....bbb....", "...a............b...b...", "..aaa...........b...b...", ".aaaaa..........b...b...", "..aaa............bbb....", "...a....................", "...........c............", "......................a.", "........................", "........................"] },   // 8-bit icons: heart, d-pad, sparkle, gem, ring (72px tile)
+  blocks:   { u: 6, gap: 1, rows: [".aa.........", ".aa...ccc...", ".......c....", "............", "..........b.", "..bb......b.", ".bb..aaaa.bb", "............", "....c.......", "....c..aa...", "...cc...aa..", "............"] },   // falling four-square pieces with a hairline between squares (72px tile)
+};
+function pixelRects(art){
+  if (art._r) return art._r;
+  const u = art.u, g = art.gap || 0, rects = [];
+  art.rows.forEach((row, y)=>{ for (let x=0; x<row.length; ){ const ch = row[x], al = PIXEL_ALPHA[ch]; if (!al){ x++; continue; }
+    let n = 1; if (!g) while (x+n < row.length && row[x+n] === ch) n++;          // merge a run of equal squares into one rectangle
+    rects.push([x*u, y*u, n*u - g, u - g, al]); x += n; } });
+  return art._r = { w: art.rows[0].length * u, h: art.rows.length * u, rects };
+}
 function patternCss(t){ const c = a => rgba(t.accent, a);
   switch (t.pattern){
     case "dots":    return [`radial-gradient(${c(.28)} 1.3px, transparent 1.8px)`, "14px 14px"];
@@ -1500,8 +1518,10 @@ function patternCss(t){ const c = a => rgba(t.accent, a);
     case "checks":  return [`conic-gradient(${c(.11)} 25%, transparent 0 50%, ${c(.11)} 0 75%, transparent 0)`, "24px 24px"];
     case "scanlines": return [`repeating-linear-gradient(0deg, ${c(.13)} 0 1px, transparent 1px 4px)`, "auto"];
     case "diamonds":  return [`repeating-linear-gradient(45deg, ${c(.14)} 0 1px, transparent 1px 18px), repeating-linear-gradient(-45deg, ${c(.14)} 0 1px, transparent 1px 18px)`, "auto"];
-    case "pixels":    { const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g fill="${t.accent}">${PIXEL_TILE.map(([px,py,a])=> `<rect x="${px}" y="${py}" width="6" height="6" opacity="${a}"/>`).join("")}</g></svg>`;
-                        return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, "40px 40px"]; }
+    case "pixels": case "eightbit": case "blocks":
+                      { const p = pixelRects(PIXEL_ARTS[t.pattern]);
+                        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${p.w}" height="${p.h}" shape-rendering="crispEdges"><g fill="${t.accent}">${p.rects.map(([px,py,w,h,a])=> `<rect x="${px}" y="${py}" width="${w}" height="${h}" opacity="${a}"/>`).join("")}</g></svg>`;
+                        return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${p.w}px ${p.h}px`]; }
     default: return ["none", "auto"]; } }
 // Inline style for a themed profile header (null = default look)
 function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
