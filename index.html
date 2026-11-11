@@ -1376,6 +1376,11 @@ const FRAMES = {
   aurora:  { name:"Aurora",   stops:["#2fd37a","#00c2d1","#4a8cff","#b06cf0","#ff5ab0","#2fd37a"], glow:"rgba(74,140,255,.35)" },
 };
 const frameGradient = f => `conic-gradient(from 215deg, ${f.stops.join(",")})`;
+// "Accent color" frame: a ring made from the member's own accent — lighter and darker steps of it give the same
+// metallic sheen as the preset frames. It isn't in FRAMES (which also lists the username and badge textures).
+const accentFrame = accent => ({ name:"Accent", stops:[mixHex(accent,"#ffffff",.6), accent, mixHex(accent,"#000000",.5), mixHex(accent,"#ffffff",.3), mixHex(accent,"#000000",.3), mixHex(accent,"#ffffff",.6)], glow: rgba(accent,.35) });
+// The frame a theme asks for, as something drawable ({stops, glow}) — or null for no frame.
+function frameOf(t){ if (!t) return null; if (t.frame==="accent") return accentFrame(t.accent); const f = FRAMES[t.frame]; return f && f.stops ? f : null; }
 const PAGE_BGS = {
   navy:    { name:"Navy (default)", bg:"#0e1526", panel:"#161f35", panel2:"#1e2a47", line:"#28365a" },
   charcoal:{ name:"Charcoal",       bg:"#111316", panel:"#1a1d22", panel2:"#23272e", line:"#30353e" },
@@ -1416,7 +1421,7 @@ const rgba = (h,a) => { const [r,g,b]=hexRgb(h); return `rgba(${r},${g},${b},${a
 function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   accent: /^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent,
   pattern: PATTERNS[t.pattern] ? t.pattern : "none", tint: TINTS[t.tint] ? t.tint : "soft",
-  nameColor: t.nameColor !== false, frame: FRAMES[t.frame] ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
+  nameColor: t.nameColor !== false, frame: (t.frame==="accent" || FRAMES[t.frame]) ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
   badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
   bg: PAGE_BGS[t.bg] ? t.bg : "navy",
   score: SCORE_STYLES[t.score] ? t.score : "gradient",
@@ -1552,9 +1557,9 @@ function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); con
   return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
 const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? nameFxStyle(t) : ""; };
 const scoreStyleFor = (uid, P) => { const t = uid ? themeFor(uid, P) : null; return t && SCORE_STYLES[t.score] ? t.score : "gradient"; };
-const frameKeyFor = uid => { const t = themeFor(uid); return t && FRAMES[t.frame]?.stops ? t.frame : null; };
+const frameForUser = uid => frameOf(themeFor(uid));
 // Canvas: ring around an avatar on exported images
-function drawFrameRing(x, cx, cy, r, uid, scale=1){ const k = frameKeyFor(uid); const f = k && FRAMES[k]; if (!f) return;
+function drawFrameRing(x, cx, cy, r, uid, scale=1){ const f = frameForUser(uid); if (!f) return;
   const w = 4.5*scale;
   x.save();
   let grad; if (x.createConicGradient){ grad = x.createConicGradient(215*Math.PI/180, cx, cy); f.stops.forEach((c,i)=> grad.addColorStop(i/(f.stops.length-1), c)); }
@@ -1569,15 +1574,15 @@ let lookDraft = null;
 function openLook(){ if (!requirePro("theme")) return; lookDraft = cleanTheme(me.theme); paintLook(); $("#lookWrap").classList.add("open"); }
 function paintLook(){
   const t = lookDraft, P = { id: me.id, username: me.username, proUntil: me.proUntil, theme: t };
-  const fr = FRAMES[t.frame];
   $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
-    <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", fr && fr.stops ? t.frame : null)}<span class="prounder" style="${badgeCss(t)}">PRO</span></div>
+    <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", frameOf(t))}<span class="prounder" style="${badgeCss(t)}">PRO</span></div>
     <div><h1 style="${nameFxCss(t)};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
   $("#lookSwatches").innerHTML = ACCENTS.map(c=> `<button class="swatch ${t.accent===c?"on":""}" data-acc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
     + `<label class="swatch custom ${ACCENTS.includes(t.accent)?"":"on"}">Custom <input type="color" id="lookCustom" value="${t.accent}"></label>`;
   $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
   $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
-  $("#lookFrames").innerHTML = Object.entries(FRAMES).map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.stops ? k : null)}<span>${f.name}</span></button>`).join("");
+  $("#lookFrames").innerHTML = [["none", FRAMES.none], ["accent", accentFrame(t.accent)], ...Object.entries(FRAMES).filter(([k])=> k!=="none")]
+    .map(([k,f])=> `<button class="framebtn ${t.frame===k?"on":""}" data-frame="${k}">${avatarEl(me.id, me.username, "sm", f.stops ? f : null)}<span>${f.name}</span></button>`).join("");
   $("#lookNameFx").innerHTML = [["accent","Accent color"], ...Object.entries(FRAMES).filter(([k,f])=>f.stops).map(([k,f])=>[k,f.name])].map(([k,label])=> `<button class="chip ${t.nameFx===k?"on":""}" data-namefx="${k}"><span style="${nameFxCss({...t, nameFx:k})};font-weight:800">${esc(me.username)}</span><span style="margin-left:6px;font-weight:500;font-size:11px">${label}</span></button>`).join("");
   $("#lookNameFx").querySelectorAll("[data-namefx]").forEach(b=> b.onclick = ()=>{ lookDraft.nameFx=b.dataset.namefx; paintLook(); });
   $("#lookNameStrength").innerHTML = [["bold","Bold gradient"],["soft","Soft gradient"]].map(([k,l])=> `<button class="chip ${(t.nameSoft?"soft":"bold")===k?"on":""}" data-namestr="${k}">${l}</button>`).join("");
@@ -1786,9 +1791,9 @@ const avatars = {};                   // user id -> avatar_url (or null)
 function avatarEl(uid, name, cls="sm", frame){
   const url = uid ? avatars[uid] : null;
   const inner = url ? `<img class="avatar ${cls} img" src="${esc(url)}" alt="">` : `<span class="avatar ${cls}">${esc(((name||"?")[0]||"?").toUpperCase())}</span>`;
-  const k = frame === undefined ? frameKeyFor(uid) : (frame && FRAMES[frame]?.stops ? frame : null);
-  if (!k) return inner;
-  const f = FRAMES[k];
+  // frame: left out = this user's own frame; null = none; a FRAMES key; or a drawable frame ({stops, glow})
+  const f = frame === undefined ? frameForUser(uid) : (frame && typeof frame === "object") ? (frame.stops ? frame : null) : (frame && FRAMES[frame]?.stops ? FRAMES[frame] : null);
+  if (!f) return inner;
   return `<span class="avfr ${cls}" style="--fgr:${frameGradient(f)};--glow:${f.glow||"transparent"}">${inner}</span>`;
 }
 
@@ -2416,6 +2421,25 @@ function exploreMore(key, params, redraw){
     m.next = (m.next || 0) + data.length; m.more = data.length >= EXPLORE_PAGE; m.at = Date.now(); redraw();
   }, e=>{ m.loading = false; m.err = String(e?.message || e); redraw(); });
 }
+// Put a freshly built list page on screen without rebuilding the game cards that are already there. Rebuilding
+// them makes every cover reload, which shows as a blink — most visibly on "Show more", which draws twice (once
+// for "Loading…", once when the next batch arrives). Cards are reused only when the new list starts with exactly
+// the cards on screen (then the extra ones are added to the end); a new sort, filter or page is a normal full draw.
+function paintList(box, html){
+  const tpl = document.createElement("template"); tpl.innerHTML = html;
+  const top = [...tpl.content.childNodes], neu = top.find(n=> n.nodeType===1 && n.classList.contains("grid"));
+  const old = [...box.children].find(n=> n.classList.contains("grid"));
+  const sig = neu ? [...neu.children].map(c=> c.outerHTML) : null;
+  if (old && neu && old._sig && old._sig.length <= sig.length && old._sig.every((x,i)=> x===sig[i])){
+    const at = top.indexOf(neu), stale = [...box.childNodes].filter(n=> n!==old);
+    [...neu.children].slice(old._sig.length).forEach(c=> old.appendChild(c));
+    old._sig = sig;
+    old.before(...top.slice(0, at)); old.after(...top.slice(at+1));   // new heading / filters / button go in around the grid…
+    stale.forEach(n=> n.remove());                                    // …then the old ones come out; the grid itself never leaves the page
+    return;
+  }
+  box.innerHTML = ""; box.appendChild(tpl.content); if (neu) neu._sig = sig;
+}
 // "Show more" under a critic ranking: first reveals what's already loaded, then loads the next batch.
 function exploreMoreBtn(id, key, shown, total){
   const m = exploreMeta[key] || {};
@@ -2471,14 +2495,14 @@ function drawGenres(){
     list = explorerList(list, genreSort, genreMin); total = list.length; list = list.slice(0, genreShown);
     gridHtml = list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, genreSort))).join("");
   }
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${critic ? `Every game with ${genreSels.length>1 ? "all of these" : "this tag"} and at least 3 critic reviews \u00b7 OpenCritic scores, IGDB\u2019s where a game isn\u2019t on OpenCritic` : `${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}`}</div></div>
+  paintList(body, `<div class="awards-head" style="margin-top:4px"><div><h1>${genreSels.map(esc).join(" + ")}</h1><div class="stats">${critic ? `Every game with ${genreSels.length>1 ? "all of these" : "this tag"} and at least 3 critic reviews \u00b7 OpenCritic scores, IGDB\u2019s where a game isn\u2019t on OpenCritic` : `${pool.length} game${pool.length===1?"":"s"} logged by the community${genreSels.length>1 ? " with all of these" : ""}`}</div></div>
       <button class="cta ghost sm" id="genreBack">\u2190 Change genres</button></div>
     ${genreSels.length>1 ? `<div class="genres" style="margin:2px 0 10px">${genreSels.map(x=>`<button class="gchip on" data-gdel="${esc(x)}" title="Remove">${esc(x)} \u00d7</button>`).join("")}</div>` : ""}
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(genreSort) ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
       : gridHtml ? `<div class="grid">${gridHtml}</div>${critic ? exploreMoreBtn("genreMore", ekey, genreShown, total) : genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
-                 : `<div class="empty small">${q ? (critic && Array.isArray(catalogue) && exploreMeta[ekey]?.more ? "No match in the games loaded so far." : "No games here match that.") : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`g:${genreSels.join("|")}:${genreSort}`]||"")}</div>` : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>${critic && q && Array.isArray(catalogue) ? exploreMoreBtn("genreMore", ekey, genreShown, total) : ""}`}`;
+                 : `<div class="empty small">${q ? (critic && Array.isArray(catalogue) && exploreMeta[ekey]?.more ? "No match in the games loaded so far." : "No games here match that.") : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`g:${genreSels.join("|")}:${genreSort}`]||"")}</div>` : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>${critic && q && Array.isArray(catalogue) ? exploreMoreBtn("genreMore", ekey, genreShown, total) : ""}`}`);
   $("#genreMin") && ($("#genreMin").onchange = e=>{ genreMin = +e.target.value; genreShown = 30; drawGenres(); });
   $("#genreBack").onclick = ()=>{ genreView = "list"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
   body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); genreShown = 30; drawGenres(); });
@@ -2516,13 +2540,13 @@ function drawYears(){
     list = explorerList(list, yearSort, yearMin); total = list.length; list = list.slice(0, yearShown);
     gridHtml = list.map(r=> commCard(getGame(r.game_id)||r.game, r, explorerCap(r, yearSort))).join("");
   }
-  body.innerHTML = `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${critic ? `Every ${yearSel} game with at least 3 critic reviews \u00b7 OpenCritic scores, IGDB\u2019s where a game isn\u2019t on OpenCritic` : `${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community`}</div></div>
+  paintList(body, `<div class="awards-head" style="margin-top:4px"><div><h1>${yearSel}</h1><div class="stats">${critic ? `Every ${yearSel} game with at least 3 critic reviews \u00b7 OpenCritic scores, IGDB\u2019s where a game isn\u2019t on OpenCritic` : `${counts[yearSel]} game${counts[yearSel]===1?"":"s"} from ${yearSel} logged by the community`}</div></div>
       <button class="cta ghost sm" id="yearBack">\u2190 All years</button></div>
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${yearSort===k?"on":""}" data-ysort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(yearSort) ? `<label class="sortwrap">Min ratings <select id="yearMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${yearMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
       : gridHtml ? `<div class="grid">${gridHtml}</div>${critic ? exploreMoreBtn("yearMore", ekey, yearShown, total) : yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
-                 : `<div class="empty small">${q ? (critic && Array.isArray(catalogue) && exploreMeta[ekey]?.more ? "No match in the games loaded so far." : "No games here match that.") : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`y:${yearSel}:${yearSort}`]||"")}</div>` : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>${critic && q && Array.isArray(catalogue) ? exploreMoreBtn("yearMore", ekey, yearShown, total) : ""}`}`;
+                 : `<div class="empty small">${q ? (critic && Array.isArray(catalogue) && exploreMeta[ekey]?.more ? "No match in the games loaded so far." : "No games here match that.") : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`y:${yearSel}:${yearSort}`]||"")}</div>` : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>${critic && q && Array.isArray(catalogue) ? exploreMoreBtn("yearMore", ekey, yearShown, total) : ""}`}`);
   $("#yearMin") && ($("#yearMin").onchange = e=>{ yearMin = +e.target.value; yearShown = 30; drawYears(); });
   $("#yearBack").onclick = ()=>{ yearSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); };
   body.querySelectorAll("[data-ysort]").forEach(b=> b.onclick = ()=>{ yearSort = b.dataset.ysort; yearShown = 30; drawYears(); });
@@ -3810,7 +3834,7 @@ function renderCommunity(app){
     : commSort==="plat" ? `${r.platinum_count} platinum${r.platinum_count===1?"":"s"}`
     : commSort==="reviewed" ? `${r.review_count} review${r.review_count===1?"":"s"}`
     : r.avg_rating!=null ? `${(+r.avg_rating).toFixed(1)} · ${r.rating_count} rating${r.rating_count===1?"":"s"}` : "—";
-  app.innerHTML = `
+  paintList(app, `
     <div class="awards-head">
       <div><h1>Community</h1><div class="stats">What everyone on Joystickd is playing and rating</div></div>
     </div>
@@ -3823,7 +3847,7 @@ function renderCommunity(app){
       </div>
     </div>
     ${list.length ? `<div class="grid">${list.map(r=>{ const g=getGame(r.game_id)||r.game; return commCard(g, r); }).join("")}</div>${commShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="commMore">Show more (${total-commShown} left)</button></div>` : ""}`
-      : `<div class="empty small">Nothing here yet — it fills in as people log games.</div>`}`;
+      : `<div class="empty small">Nothing here yet — it fills in as people log games.</div>`}`);
   app.querySelectorAll("[data-csort]").forEach(b=> b.onclick = ()=>{ commSort=b.dataset.csort; commShown=30; render(); });
   $("#commMin") && ($("#commMin").onchange = e=>{ commMin=+e.target.value; commShown=30; render(); });
   $("#commCaps").onclick = ()=>{ commCaps = !commCaps; try { localStorage.setItem("jd_commCaps", commCaps ? "1" : "0"); } catch(e){} render(); };
