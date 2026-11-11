@@ -405,7 +405,11 @@
   .cmt-toggle:hover,.cmt-toggle.on{background:var(--panel2);color:var(--text)}
   .cmt-list{margin-top:8px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;gap:10px}
   .cmt{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:baseline}
-  .cmt-acts{display:flex;gap:6px}
+  .cmt-acts{display:flex;gap:6px;align-items:center}
+  .cmt-like{font-size:13px;font-weight:700;color:var(--muted);padding:6px 10px;margin:-4px 0;border-radius:999px;line-height:1.3;white-space:nowrap}
+  .cmt-like:hover:not(:disabled){background:var(--panel2)}
+  .cmt-like.on{color:#ff5fa8}
+  .cmt-like:disabled{cursor:default}
   .cmt-who{font-weight:700;font-size:13px;color:var(--gold);padding:0;text-align:left}
   .cmt-when{font-size:11px;color:var(--muted)}
   .cmt-del{font-size:12px;color:var(--muted);padding:0 4px}
@@ -603,7 +607,10 @@
   .bio-edit{font-size:12px;color:var(--muted);text-decoration:none;margin-left:6px}
   .bio-edit:hover{color:var(--gold)}
   .pfilters{justify-content:flex-end;flex-wrap:wrap;gap:8px;align-items:center}
-  @media(max-width:640px){.pfilters{flex-direction:row;justify-content:flex-start}.pfilters .sortwrap{align-self:auto}}
+  @media(max-width:640px){.pfilters{flex-direction:row;justify-content:flex-start}.pfilters .sortwrap{align-self:auto}
+    .pfilters .pf-sort{flex:1 1 100%}                                           /* phones: Sort gets the whole first row… */
+    .pfilters .pf-genre{flex:1 1 0;min-width:0}                                 /* …Year and Genre share the second */
+    .pfilters .pf-sort select,.pfilters .pf-genre select{flex:1;min-width:0;width:100%}}
   .statrow{display:flex;gap:26px;margin-top:6px}
   .stat b{display:flex;align-items:center;gap:6px;font-family:Outfit;font-weight:800;font-size:22px;color:var(--text);line-height:1.1}
   .stat small{display:block;margin-top:2px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -1896,8 +1903,33 @@ async function loadComments(gid, uid){
   if (!LIVE) return;
   const { data } = await sb.from("review_comments").select("id,user_id,body,created_at").eq("game_id", gid).eq("review_user", uid).order("created_at",{ascending:true});
   commentsCache[ckey(gid,uid)] = data || [];
+  const likesP = loadCommentLikes((data||[]).map(c=>c.id));                     // hearts load alongside the names
   const ids = [...new Set((data||[]).map(c=>c.user_id))].filter(u=>u!==me?.id && !revNames[u] && !follows.names[u]);
   if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
+  await likesP;
+}
+// ---- likes on comments: comment id -> [ids of the people who liked it]
+const commentLikes = {};
+async function loadCommentLikes(ids){
+  if (!LIVE || !ids.length) return;
+  for (let i = 0; i < ids.length; i += 150){
+    const part = ids.slice(i, i+150);
+    const { data, error } = await sb.from("comment_likes").select("comment_id,user_id").in("comment_id", part);
+    if (error){ console.error(error); return; }                                 // comments still work without their hearts
+    part.forEach(id=>{ commentLikes[id] = []; });
+    (data||[]).forEach(r=>{ (commentLikes[r.comment_id] ||= []).push(r.user_id); });
+  }
+}
+const cLikeState = cid => { const who = (commentLikes[cid]||[]).filter(u=> !isBlocked(u)); return { n: who.length, on: !!me && who.includes(me.id) }; };
+const cLikeLabel = st => `${st.on ? "\u2665" : "\u2661"}${st.n ? " " + st.n : ""}`;
+function paintCLike(b, cid){ const st = cLikeState(cid); b.classList.toggle("on", st.on); b.setAttribute("aria-pressed", st.on); b.textContent = cLikeLabel(st); }
+async function toggleCommentLike(cid){
+  if (!requireAuth()) return;
+  const before = commentLikes[cid] || [], had = before.includes(me.id);
+  commentLikes[cid] = had ? before.filter(u=> u!==me.id) : [...before, me.id];  // show it straight away, undo if the database says no
+  const { error } = had ? await sb.from("comment_likes").delete().match({ comment_id: cid, user_id: me.id })
+                        : await sb.from("comment_likes").insert({ comment_id: cid, user_id: me.id });
+  if (error && !/duplicate key/i.test(error.message||"")){ commentLikes[cid] = before; dbFail(error); }
 }
 async function loadCommentCounts(gid){
   if (!LIVE) return;
@@ -1939,7 +1971,8 @@ function commentsBlock(gid, uid){
         <div class="cmt">
           <button class="cmt-who" data-user="${esc(whoName(c.user_id))}"${nameStyle(c.user_id)}>${esc(whoName(c.user_id))}</button>
           <span class="cmt-when">${c.created_at ? fmtDate(c.created_at.slice(0,10)) : ""}</span>
-          <span class="cmt-acts">${(me && c.user_id!==me.id) ? `<button class="cmt-del" data-creport="${gid}:${uid}:${c.id}" title="Report comment">⚑</button>` : ""}${(me && (c.user_id===me.id || uid===me.id || me.isAdmin)) ? `<button class="cmt-del" data-cdel="${gid}:${uid}:${c.id}" aria-label="Delete comment">✕</button>` : ""}</span>
+          <span class="cmt-acts">${(()=>{ const st = cLikeState(c.id), own = !!me && c.user_id===me.id; if (own && !st.n) return "";   // your own comment: just the count, once it has one
+            return `<button class="cmt-like ${st.on?"on":""}" data-clike="${c.id}" ${own?"disabled":""} aria-pressed="${st.on}" aria-label="${own ? "Likes on your comment" : "Like this comment"}">${cLikeLabel(st)}</button>`; })()}${(me && c.user_id!==me.id) ? `<button class="cmt-del" data-creport="${gid}:${uid}:${c.id}" title="Report comment">⚑</button>` : ""}${(me && (c.user_id===me.id || uid===me.id || me.isAdmin)) ? `<button class="cmt-del" data-cdel="${gid}:${uid}:${c.id}" aria-label="Delete comment">✕</button>` : ""}</span>
           <div class="cmt-body">${esc(c.body)}</div>
         </div>`).join("") : `<div class="hint">No comments yet.</div>`}
       ${me ? `<div class="cmt-form"><textarea class="cmt-input" data-cinput="${gid}:${uid}" placeholder="Add a comment…" maxlength="2000"></textarea><button class="cta sm" data-cpost="${gid}:${uid}">Post</button></div>`
@@ -1956,6 +1989,8 @@ function wireComments(app, repaint){
   });
   app.querySelectorAll("[data-cpost]").forEach(b=> b.onclick = async ()=>{ const [gid,uid]=b.dataset.cpost.split(":"); const ta=app.querySelector(`[data-cinput="${b.dataset.cpost}"]`); await postComment(+gid, uid, ta.value); if (repaint) repaint(); });
   app.querySelectorAll("[data-cdel]").forEach(b=> b.onclick = async ()=>{ const [gid,uid,id]=b.dataset.cdel.split(":"); if (confirm("Delete this comment?")){ await deleteComment(+gid, uid, +id); if (repaint) repaint(); } });
+  app.querySelectorAll("[data-clike]").forEach(b=> b.onclick = async ()=>{ const cid = +b.dataset.clike; if (b.dataset.busy) return; b.dataset.busy = 1;
+    const p = toggleCommentLike(cid); paintCLike(b, cid); await p; delete b.dataset.busy; paintCLike(b, cid); });   // only this button repaints, so nothing else on the page flickers
   app.querySelectorAll("[data-csignin]").forEach(b=> b.onclick = openAuth);
   app.querySelectorAll("[data-creport]").forEach(b=> b.onclick = ()=>{ const [gid,uid,cid]=b.dataset.creport.split(":"); const c=(commentsCache[ckey(+gid,uid)]||[]).find(x=>x.id===+cid); openReport({type:"comment", gid:+gid, targetUser:c?.user_id, commentId:+cid, label:`Comment by ${whoName(c?.user_id)}`}); });
   app.querySelectorAll(".cmt-who[data-user]").forEach(b=> b.onclick = ()=>{ view.tab="logs"; view.gameId=null; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
@@ -2231,7 +2266,7 @@ function feedCard(f, idx, kind){
             </div>
             ${l.review ? (()=>{ const key=`${kind}:${idx}`, long = l.review.length > 420 || (l.review.match(/\n/g)||[]).length > 5, exp = feedExpanded.has(key);
               return `<div class="review rev-text${(long && !exp) ? " clamp" : ""}" role="button" tabindex="0" ${open}>${esc(l.review)}</div>${long ? `<button class="linklike rev-more" data-fexpand="${key}">${exp ? "Show less" : "Read more"}</button>` : ""}`; })() : ""}
-            <div class="crev-foot">${LIVE && me && !mine && l.review ? `<button class="likebtn ${liked?"on":""}" data-hlike="${g.id}:${f.userId}" aria-label="Like this review">${liked?"♥":"♡"} ${lk.length||""}</button><button class="cmt-toggle" data-freport="${g.id}:${f.userId}" title="Report review">⚑ Report</button>` : ""}<button class="cmt-toggle" ${open}>Open log →</button></div>
+            <div class="crev-foot">${LIVE && me && l.review ? `<button class="likebtn ${liked?"on":""}" data-hlike="${g.id}:${f.userId}" ${mine?"disabled":""} aria-label="${mine ? "Likes on your review" : "Like this review"}">${liked?"♥":"♡"} ${lk.length||""}</button>${mine ? "" : `<button class="cmt-toggle" data-freport="${g.id}:${f.userId}" title="Report review">⚑ Report</button>`}` : ""}<button class="cmt-toggle" ${open}>Open log →</button></div>
             ${(l.review||"").trim() ? commentsBlock(g.id, f.userId) : ""}
           </div>
         </article>`;
@@ -2869,9 +2904,9 @@ function renderLogs(app, P, isMe){
     list = [...list].sort(sorters[gamesSort].fn);
     body = !rated ? `<div class="empty small">${isMe ? "Nothing logged yet. Open a game and tap “Log this game”." : "Nothing logged yet."}</div>` : `
       <div class="filters pfilters">
-        <label class="sortwrap">Genre <select id="pGenre"><option value="">All genres</option>${genres.map(x=>`<option value="${esc(x)}" ${gamesGenre===x?"selected":""}>${esc(x)}</option>`).join("")}</select></label>
+        <label class="sortwrap pf-sort">Sort <select id="pSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${gamesSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label>
         <label class="sortwrap">Year <select id="pYear"><option value="">All years</option>${years.map(y=>`<option value="${y}" ${gamesYear===y?"selected":""}>${y}</option>`).join("")}</select></label>
-        <label class="sortwrap">Sort <select id="pSort">${Object.entries(sorters).map(([k,v])=>`<option value="${k}" ${gamesSort===k?"selected":""}>${v.label}</option>`).join("")}</select></label>
+        <label class="sortwrap pf-genre">Genre <select id="pGenre"><option value="">All genres</option>${genres.map(x=>`<option value="${esc(x)}" ${gamesGenre===x?"selected":""}>${esc(x)}</option>`).join("")}</select></label>
       </div>
       ${list.length ? `<div class="grid">${list.slice(0, pageOf("games")).map(id=>card(getGame(id), logs[id].platinum && platNumText(logs[id]) ? `Platinum ${platNumText(logs[id])}` : undefined, isMe, !isMe, isMe?null:logs[id])).join("")}</div>${moreBtn("games", list.length)}` : `<div class="empty small">No games match${gamesYear ? ` from ${gamesYear}` : ""}${gamesGenre ? ` in ${esc(gamesGenre)}` : ""}.</div>`}`;
   }
@@ -3555,19 +3590,21 @@ function openT5(gid, P, isMe){
   $("#t5Sub").querySelector("[data-t5user]").onclick = ()=>{ closeT5(); view.tab="logs"; view.gameId=null; view.user=P.username; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(P.username)); render(); window.scrollTo(0,0); };
   const myL = !isMe ? logs[gid] : null;
   const canLike = LIVE && me && P.id && P.id!==me.id && !isBlocked(P.id) && (l.review||"").trim();
+  const ownLikes = !!(LIVE && me && P.id && P.id===me.id && (l.review||"").trim());   // my own review: show its like count (can't be tapped)
   const t5HeartHtml = ()=>{ const lk=likesFor(gid, P.id), liked=!!lk.find(k=>k.user_id===me.id);
+    if (ownLikes) return `<button class="likebtn" id="t5Like" disabled aria-label="Likes on your review">\u2661 ${lk.length||""}</button>`;
     return `<button class="likebtn ${liked?"on":""}" id="t5Like" aria-label="Like this review">${liked?"\u2665":"\u2661"} ${lk.length||""}</button><button class="cmt-toggle" id="t5Report" title="Report review">\u2691 Report</button>`; };
   const hasReview = !!(l.review||"").trim();
   $("#t5Body").innerHTML = logCard(l, g, P.ballot, isMe, P.id)
-    + (canLike ? `<div class="crev-foot" id="t5Foot">${t5HeartHtml()}</div>` : "")
+    + (canLike || ownLikes ? `<div class="crev-foot" id="t5Foot">${t5HeartHtml()}</div>` : "")
     + (myL ? `<div class="yours">Your rating: ${myL.rating!=null ? `<b style="${ratingText(myL.rating)}">${myL.rating}</b>/10` : "played"}${myL.platinum ? " · platinumed" : ""}</div>` : "")
     + (LIVE && hasReview && P.id ? `<div id="t5Cmts"></div>` : "");
   if (LIVE && hasReview && P.id){                        // comments live inside the sheet; repaint just that box
     const paintCmts = ()=>{ const box=$("#t5Cmts"); if (!box) return; box.innerHTML = commentsBlock(gid, P.id); wireComments(box, paintCmts); };
     paintCmts(); if (!commentsCache[ckey(gid, P.id)]) loadComments(gid, P.id).then(paintCmts);
   }
-  if (canLike){
-    const wireT5Like = ()=>{ const btn=$("#t5Like"); if (btn) btn.onclick = async ()=>{ await toggleLike(gid, P.id); if ($("#t5Foot")){ $("#t5Foot").innerHTML = t5HeartHtml(); wireT5Like(); } };
+  if (canLike || ownLikes){
+    const wireT5Like = ()=>{ const btn=$("#t5Like"); if (btn && !ownLikes) btn.onclick = async ()=>{ await toggleLike(gid, P.id); if ($("#t5Foot")){ $("#t5Foot").innerHTML = t5HeartHtml(); wireT5Like(); } };
       const rb=$("#t5Report"); if (rb) rb.onclick = ()=>{ closeT5(); openReport({ type:"review", gid, targetUser:P.id, label:`Review of ${g?.title||"a game"} by ${P.username}` }); }; };
     wireT5Like();
     // refresh the count from the server so it's accurate even when this sheet
@@ -5529,17 +5566,19 @@ async function readProfile(where){
 let notifs = { items:[], seenAt:null, unread:0 };
 async function loadNotifs(){
   if (!LIVE || !me) return;
-  const [P, L, F, CM] = await Promise.all([
+  const [P, L, F, CM, CL] = await Promise.all([
     sb.from("profiles").select("notifications_seen_at").eq("id", me.id).maybeSingle(),
     sb.from("review_likes").select("user_id,game_id,created_at").eq("review_user", me.id).order("created_at",{ascending:false}).limit(30),
     sb.from("follows").select("follower,created_at").eq("followee", me.id).order("created_at",{ascending:false}).limit(30),
     sb.from("review_comments").select("user_id,game_id,created_at").eq("review_user", me.id).neq("user_id", me.id).order("created_at",{ascending:false}).limit(30),
+    sb.from("comment_likes").select("user_id,game_id,review_user,created_at").eq("comment_user", me.id).order("created_at",{ascending:false}).limit(30),
   ]);
   notifs.seenAt = P.data?.notifications_seen_at || null;
   const items = [
     ...(L.data||[]).map(r=>({ type:"like", uid:r.user_id, gameId:r.game_id, at:r.created_at })),
     ...(F.data||[]).map(r=>({ type:"follow", uid:r.follower, at:r.created_at })),
     ...(CM.data||[]).map(r=>({ type:"comment", uid:r.user_id, gameId:r.game_id, at:r.created_at })),
+    ...(CL?.data||[]).filter(r=> !isBlocked(r.user_id)).map(r=>({ type:"clike", uid:r.user_id, gameId:r.game_id, reviewUser:r.review_user, at:r.created_at })),
   ].sort((a,b)=> (b.at||"").localeCompare(a.at||"")).slice(0,30);
   const ids = [...new Set(items.map(i=>i.uid))].filter(u=>!revNames[u] && !follows.names[u]);
   if (ids.length){ const { data: ps } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").in("id", ids); (ps||[]).forEach(p=>{ revNames[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); }); }
@@ -5562,16 +5601,19 @@ function openNotifs(){
     if (i.type==="reports") return `<button class="nrow fresh" data-nreports><span class="avatar sm">⚑</span><span class="ntext"><b>${i.n} open report${i.n===1?"":"s"}</b> waiting for review<small>Admin</small></span></button>`;
     const what = i.type==="follow" ? "started following you"
       : i.type==="comment" ? `commented on your review${g ? ` of <b>${esc(g.title)}</b>` : ""}`
+      : i.type==="clike" ? `liked your comment${g ? ` on <b>${esc(g.title)}</b>` : ""}`
       : `liked your review${g ? ` of <b>${esc(g.title)}</b>` : ""}`;
-    const open = i.type==="follow" ? `data-nuser="${esc(notifName(i.uid))}"` : (i.gameId ? `data-ngame="${i.gameId}"` : "");
+    const open = i.type==="follow" ? `data-nuser="${esc(notifName(i.uid))}"` : (i.gameId ? `data-ngame="${i.gameId}"${i.type==="clike" && i.reviewUser ? ` data-nthread="${esc(i.reviewUser)}"` : ""}` : "");
     return `<button class="nrow ${fresh?"fresh":""}" ${open}>
       ${avatarEl(i.uid, notifName(i.uid))}
       <span class="ntext"><b>${esc(notifName(i.uid))}</b> ${what}<small>${i.at ? fmtDate(i.at.slice(0,10)) : ""}</small></span>
-    </button>`; }).join("") : `<div class="empty small">Nothing yet. Likes on your reviews and new followers show up here.</div>`;
+    </button>`; }).join("") : `<div class="empty small">Nothing yet. Likes on your reviews and comments, and new followers, show up here.</div>`;
   $("#notifWrap").classList.add("open");
   $("#notifList").querySelectorAll("[data-nreports]").forEach(b=> b.onclick = ()=>{ closeNotifs(); view.tab="logs"; view.gameId=null; view.user=null; profileTab="reports"; render(); });
   $("#notifList").querySelectorAll("[data-nuser]").forEach(b=> b.onclick = ()=>{ closeNotifs(); view.tab="logs"; view.gameId=null; view.user=b.dataset.nuser; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.nuser)); render(); });
-  $("#notifList").querySelectorAll("[data-ngame]").forEach(b=> b.onclick = ()=>{ closeNotifs(); view.tab="games"; view.gameId=+b.dataset.ngame; gameTab="reviews"; render(); window.scrollTo(0,0); });
+  $("#notifList").querySelectorAll("[data-ngame]").forEach(b=> b.onclick = ()=>{ closeNotifs(); view.tab="games"; view.gameId=+b.dataset.ngame; gameTab="reviews";
+    if (b.dataset.nthread){ const k = ckey(+b.dataset.ngame, b.dataset.nthread); openComments.add(k); loadComments(+b.dataset.ngame, b.dataset.nthread).then(()=>{ if (view.gameId===+b.dataset.ngame) render(); }); }   // a liked comment: open with that thread showing
+    render(); window.scrollTo(0,0); });
   // mark read
   if (notifs.unread){ notifs.unread=0; notifs.seenAt=new Date().toISOString(); paintBell();
     sb.from("profiles").update({notifications_seen_at: notifs.seenAt}).eq("id", me.id).then(({error})=>{ if(error) console.error(error); }); }
