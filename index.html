@@ -1116,6 +1116,7 @@
     <button class="set-row" id="pmSnap">Save profile snapshot</button>
     <button class="set-row" id="pmBlock">Block</button>
     <button class="set-row" id="pmReport">⚑ Report profile</button>
+    <button class="set-row" id="pmExcl" hidden></button>
     <div class="actions"><button class="cta ghost" id="pmCancel">Cancel</button></div>
   </div>
 </div>
@@ -2862,7 +2863,6 @@ function renderLogs(app, P, isMe){
           : (isMe && LIVE ? `<p class="bio muted"><button class="linklike bio-edit" id="bioEdit">+ Add a short bio</button></p>` : "")}
       </div>
       ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta" id="editProfBtn" style="margin:0;padding:9px 14px;font-size:13px">Edit profile</button><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button></div>` : followButton(P)}
-      ${(!isMe && me?.isAdmin && P.excluded!=null) ? `<button class="cta ghost ${P.excluded?"danger-btn":""}" id="exclBtn" style="margin:0;padding:9px 14px;font-size:13px" title="Admin: this account's ratings ${P.excluded?"do NOT":""} count toward community averages">${P.excluded ? "Excluded from stats" : "Counts in stats"}</button>` : ""}
     </div>
     <nav class="ptabs${themeFor(P.id, P)?" themed":""}"${(()=>{ const t=themeFor(P.id,P); return t ? ` style="--acc:${t.accent}"` : ""; })()}>${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
     ${body}`;
@@ -2893,12 +2893,6 @@ function renderLogs(app, P, isMe){
   $("#fbtn") && ($("#fbtn").onclick = ()=>{ $("#fbtn").dataset.act==="follow" ? follow(P.id, P.username) : unfollow(P.id); });
   $("#profMoreBtn") && ($("#profMoreBtn").onclick = ()=> openProfMenu(P));
   $("#unblockBtn") && ($("#unblockBtn").onclick = ()=> unblockUser(P.id, P.username));
-  $("#exclBtn") && ($("#exclBtn").onclick = async ()=>{
-    const flag = !P.excluded;
-    if (!confirm(flag ? `Exclude ${P.username}'s ratings from community averages? They won't see any change.` : `Count ${P.username}'s ratings again?`)) return;
-    const { error } = await sb.rpc("set_excluded", { target:P.id, flag }); if (error) return dbFail(error);
-    P.excluded = flag; clearCommunity(); stats.rows=null; toast(flag ? "Excluded from stats" : "Counting again"); render();
-  });
   // Top 5 slots (any profile): a game with a written review opens the review sheet; otherwise go straight to the game page
   app.querySelectorAll("[data-t5view]").forEach(b=> b.onclick = e=>{
     if (e.target.closest("[data-slot]")) return;   // the edit chip handles itself
@@ -5420,6 +5414,7 @@ function wireSettingsUI(){
   $("#pmSnap").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
     snapTarget = profMenuCtx; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
     $("#snapBadges").hidden = !profileBadges(profMenuCtx).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); };
+  $("#pmExcl").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (profMenuCtx) toggleExcluded(profMenuCtx); };
   $("#pmReport").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
     openReport({ type:"profile", targetUser:profMenuCtx.id, label:`Profile of ${profMenuCtx.username}` }); };
   $("#setSignout").onclick = async ()=>{ closeSettings(); await pushOnSignOut(); await sb.auth.signOut(); };
@@ -5554,7 +5549,20 @@ function openProfMenu(P){
   profMenuCtx = P;
   $("#pmSub").textContent = "@" + P.username;
   $("#pmBlock").textContent = isBlocked(P.id) ? `Unblock ${P.username}` : `Block ${P.username}`;
+  // Admin only: whether this account's ratings count toward community averages (lives here so it never crowds the profile header)
+  const ex = $("#pmExcl"), showEx = !!(me?.isAdmin && P.id !== me.id && P.excluded != null);
+  ex.hidden = !showEx; ex.classList.toggle("danger-btn", showEx && !!P.excluded);
+  if (showEx) ex.innerHTML = P.excluded
+    ? `Admin: excluded from stats<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">This account's ratings don't count toward community averages. Tap to count them again.</small>`
+    : `Admin: counts in stats<small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">This account's ratings count toward community averages. Tap to exclude them.</small>`;
   $("#profMenuWrap").classList.add("open");
+}
+async function toggleExcluded(P){
+  if (!P || !me?.isAdmin) return;
+  const flag = !P.excluded;
+  if (!confirm(flag ? `Exclude ${P.username}'s ratings from community averages? They won't see any change.` : `Count ${P.username}'s ratings again?`)) return;
+  const { error } = await sb.rpc("set_excluded", { target:P.id, flag }); if (error) return dbFail(error);
+  P.excluded = flag; clearCommunity(); stats.rows=null; toast(flag ? "Excluded from stats" : "Counting again"); render();
 }
 
 // Admin: every active Pro member, with where they bought it and when it ends
