@@ -1354,7 +1354,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"8-bit", blocks:"Blocks" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf" };
 const TINTS = { off:"Off", soft:"Soft", bold:"Bold" };
 // Ring = a conic gradient around the avatar (metallic sheen comes from the light/dark stops), drawn flush
 // against the photo. `stops` run clockwise from the top-left; `glow` is an optional soft outer light.
@@ -1442,7 +1442,13 @@ function paintPattern(x, W, H, pattern, accent){
     case "checks":  x.fillStyle = rgba(accent, .09); for (let py=0, j=0; py<H; py+=12, j++) for (let px=0, i=0; px<W; px+=12, i++) if ((i+j)%2===0) x.fillRect(px, py, 12, 12); break;
     case "scanlines": x.fillStyle = rgba(accent, .13); for (let py=0; py<H; py+=4) x.fillRect(0, py, W, 1); break;
     case "diamonds":  x.strokeStyle = rgba(accent, .14); x.lineWidth = 1; x.translate(W/2, H/2); x.rotate(Math.PI/4); { const D = Math.hypot(W,H); x.beginPath(); for (let v=-D; v<D; v+=18){ x.moveTo(v,-D); x.lineTo(v,D); x.moveTo(-D,v); x.lineTo(D,v); } x.stroke(); } break;
-    case "pixels": case "eightbit": case "blocks":
+    case "stars":     { const t = VECTOR_ARTS[pattern], byA = {}; vectorShapes(t, true).forEach(sh=> (byA[sh[1]] ||= []).push(sh));   // one filled path per opacity step
+                        Object.entries(byA).forEach(([a, shs])=>{ x.fillStyle = rgba(accent, +a); x.beginPath();
+                          for (let py=0; py<H; py+=t.h) for (let px=0; px<W; px+=t.w) shs.forEach(sh=>{
+                            if (sh[0]==="c"){ x.moveTo(px+sh[2]+sh[4], py+sh[3]); x.arc(px+sh[2], py+sh[3], sh[4], 0, 2*Math.PI); }
+                            else { x.moveTo(px+sh[2], py+sh[3]); for (let i=4; i<sh.length; i+=2) x.lineTo(px+sh[i], py+sh[i+1]); x.closePath(); } });
+                          x.fill(); }); } break;
+    case "pixels": case "eightbit": case "blocks": case "shelf":
                       { const t = pixelRects(PIXEL_ARTS[pattern]), byA = {}; t.rects.forEach(r=> (byA[r[4]] ||= []).push(r));
                         Object.entries(byA).forEach(([a, rs])=>{ x.fillStyle = rgba(accent, +a); for (let py=0; py<H; py+=t.h) for (let px=0; px<W; px+=t.w) rs.forEach(r=> x.fillRect(px+r[0], py+r[1], r[2], r[3])); }); } break;
   }
@@ -1492,15 +1498,30 @@ function nameFillCtx(x, t, x0, y0, x1, y1){ if (!t) return null; if (t.nameFx===
   const st = nameStops(t), g = x.createLinearGradient(x0, y0, x1, y1); st.forEach((c,i)=> g.addColorStop(i/(st.length-1), c)); return g; }
 // The theme that should be shown for a user: only while they're Pro.
 function themeFor(uid, P){ if (!isProId(uid) && !(P && isPro(P))) return null; const t = P && "theme" in P ? P.theme : themeOf[uid]; return t ? cleanTheme(t) : null; }
-// Pixel-art patterns (Pixels, 8-bit, Blocks): a tile on a grid of `u`-px squares. Each row is a string: a letter is an
+// Pixel-art patterns (Pixels, Charms, Blocks, Trophy shelf): a tile on a grid of `u`-px squares. Each row is a string: a letter is an
 // opacity step (PIXEL_ALPHA), "." is empty; `gap` leaves a hairline between squares. The same tile feeds the CSS
 // header background and the canvas exports, so the screen and saved images match.
 const PIXEL_ALPHA = { a:.09, b:.15, c:.22 };
 const PIXEL_ARTS = {
   pixels:   { u: 8, gap: 0, rows: ["cb...a..", "b.......", "....ab..", "a...bc..", "..a..b.a", ".......c", "b.a...cb", "bc...a.."] },                                   // mosaic: chunky squares in three strengths (64px tile)
-  eightbit: { u: 3, gap: 0, rows: ["........................", "................aa......", "..cc.cc.........aa......", ".ccccccc......aaaaaa....", ".ccccccc....b.aaaaaa....", "..ccccc.........aa......", "...ccc..........aa......", "....c...................", "........................", ".....................c..", "...........b............", "......a....b............", ".........bb.bb..........", "...........b............", "...........b.....bbb....", "...a............b...b...", "..aaa...........b...b...", ".aaaaa..........b...b...", "..aaa............bbb....", "...a....................", "...........c............", "......................a.", "........................", "........................"] },   // 8-bit icons: heart, d-pad, sparkle, gem, ring (72px tile)
+  eightbit: { u: 3, gap: 0, rows: ["........................", "................aa......", "..cc.cc.........aa......", ".ccccccc......aaaaaa....", ".ccccccc....b.aaaaaa....", "..ccccc.........aa......", "...ccc..........aa......", "....c...................", "........................", ".....................c..", "...........b............", "......a....b............", ".........bb.bb..........", "...........b............", "...........b.....bbb....", "...a............b...b...", "..aaa...........b...b...", ".aaaaa..........b...b...", "..aaa............bbb....", "...a....................", "...........c............", "......................a.", "........................", "........................"] },   // Charms (key stays "eightbit" so saved themes keep working): heart, d-pad, sparkle, gem, ring (72px tile)
   blocks:   { u: 6, gap: 1, rows: [".aa.........", ".aa...ccc...", ".......c....", "............", "..........b.", "..bb......b.", ".bb..aaaa.bb", "............", "....c.......", "....c..aa...", "...cc...aa..", "............"] },   // falling four-square pieces with a hairline between squares (72px tile)
+  shelf:    { u: 3, gap: 0, rows: ["........................................................", "........................................................", "...ccccccc.......aaaaaaa.......bbbbbbb.......aaaaaaa....", "..ccccccccc.....aaaaaaaaa.....bbbbbbbbb.....aaaaaaaaa...", "..c.ccccc.c.....a.aaaaa.a.....b.bbbbb.b.....a.aaaaa.a...", "..c.ccccc.c.....a.aaaaa.a.....b.bbbbb.b.....a.aaaaa.a...", "...c.ccc.c.......a.aaa.a.......b.bbb.b.......a.aaa.a....", ".....ccc...........aaa...........bbb...........aaa......", "......c.............a.............b.............a.......", "......c.............a.............b.............a.......", "....ccccc.........aaaaa.........bbbbb.........aaaaa.....", "........................................................", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "........................................................", "........................................................", "........................................................", "........................................................", "........................................................", "ccc.......aaaaaaa.......bbbbbbb.......aaaaaaa.......cccc", "cccc.....aaaaaaaaa.....bbbbbbbbb.....aaaaaaaaa.....ccccc", "cc.c.....a.aaaaa.a.....b.bbbbb.b.....a.aaaaa.a.....c.ccc", "cc.c.....a.aaaaa.a.....b.bbbbb.b.....a.aaaaa.a.....c.ccc", "c.c.......a.aaa.a.......b.bbb.b.......a.aaa.a.......c.cc", "c...........aaa...........bbb...........aaa...........cc", ".............a.............b.............a.............c", ".............a.............b.............a.............c", "cc.........aaaaa.........bbbbb.........aaaaa.........ccc", "........................................................", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "........................................................", "........................................................", "........................................................"] },   // trophy shelf: cups lined up on shelves, alternating strength (168 × 96 tile)
 };
+// Drawn patterns (Stars): a tile of circles ["c", opacity, x, y, radius] and polygons ["p", opacity, x1, y1, x2, y2, …].
+// As with the pixel tiles, the same data feeds the CSS header background and the canvas exports. A tile may list a
+// few shapes that appear only on profile headers (`header`) or only on saved images (`image`).
+const VECTOR_ARTS = {
+  // Stars: a crescent moon, six four-point sparkles and soft stars in three sizes (230 × 116 tile)
+  stars: { w: 230, h: 116,
+    header: [["p",0.26,186.7,46.7,185.8,47.8,184.7,48.7,183.5,49.5,182.2,50.2,180.8,50.6,179.4,50.9,178,51,176.6,50.9,175.2,50.6,173.8,50.2,172.5,49.5,171.3,48.7,170.2,47.8,169.3,46.7,168.5,45.5,167.8,44.2,167.4,42.9,167.1,41.4,167,40,167.1,38.6,167.4,37.1,167.8,35.8,168.5,34.5,169.3,33.3,170.2,32.2,171.3,31.3,172.5,30.5,173.8,29.8,175.2,29.4,176.6,29.1,178,29,178.9,29.3,177.8,29.9,176.8,30.7,175.9,31.6,175.2,32.5,174.6,33.6,174.1,34.8,173.8,36,173.6,37.2,173.6,38.4,173.8,39.6,174.1,40.8,174.6,42,175.2,43.1,175.9,44,176.8,44.9,177.8,45.7,178.9,46.3,180,46.8,181.2,47.1,182.4,47.2,183.7,47.2,184.9,47.1,186.1,46.8]],    // the crescent: profile headers only (it repeats too visibly across a big saved image)
+    image:  [["p",0.22,178,35,179,39,183,40,179,41,178,45,177,41,173,40,177,39]],   // saved images get a sparkle in its place
+    shapes: [
+    ["p",0.34,34,22,35.6,28.4,42,30,35.6,31.6,34,38,32.4,31.6,26,30,32.4,28.4], ["p",0.28,102,79.5,103.3,84.7,108.5,86,103.3,87.3,102,92.5,100.7,87.3,95.5,86,100.7,84.7], ["p",0.24,206,84.5,207.1,88.9,211.5,90,207.1,91.1,206,95.5,204.9,91.1,200.5,90,204.9,88.9], ["p",0.22,112,13,113,17,117,18,113,19,112,23,111,19,107,18,111,17], ["p",0.2,14,85.5,14.9,89.1,18.5,90,14.9,90.9,14,94.5,13.1,90.9,9.5,90,13.1,89.1], ["p",0.18,150,66,150.8,69.2,154,70,150.8,70.8,150,74,149.2,70.8,146,70,149.2,69.2],
+    ["c",0.32,14,14,2], ["c",0.25,62,58,1.6], ["c",0.22,76,12,1.5], ["c",0.3,54,100,2.1], ["c",0.22,130,44,1.5], ["c",0.25,142,102,1.7], ["c",0.28,214,54,1.9], ["c",0.22,190,68,1.5], ["c",0.18,26,60,1.2], ["c",0.17,86,44,1.1], ["c",0.17,122,106,1.1], ["c",0.18,168,88,1.2], ["c",0.17,222,10,1.1], ["c",0.17,74,78,1.1], ["c",0.16,6,44,1.1], ["c",0.16,140,8,1.1], ["c",0.15,46,8,1], ["c",0.15,196,106,1], ["c",0.14,96,62,1], ["c",0.14,228,78,1], ["c",0.14,158,22,1], ["c",0.14,204,28,1],
+  ] },
+};
+const vectorShapes = (art, forImage) => ((forImage ? art.image : art.header) || []).concat(art.shapes);
 function pixelRects(art){
   if (art._r) return art._r;
   const u = art.u, g = art.gap || 0, rects = [];
@@ -1509,7 +1530,7 @@ function pixelRects(art){
     rects.push([x*u, y*u, n*u - g, u - g, al]); x += n; } });
   return art._r = { w: art.rows[0].length * u, h: art.rows.length * u, rects };
 }
-function patternCss(t){ const c = a => rgba(t.accent, a);
+function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImage: the saved-image version of the pattern (Image style preview)
   switch (t.pattern){
     case "dots":    return [`radial-gradient(${c(.28)} 1.3px, transparent 1.8px)`, "14px 14px"];
     case "grid":    return [`linear-gradient(${c(.16)} 1px, transparent 1px), linear-gradient(90deg, ${c(.16)} 1px, transparent 1px)`, "22px 22px"];
@@ -1518,7 +1539,10 @@ function patternCss(t){ const c = a => rgba(t.accent, a);
     case "checks":  return [`conic-gradient(${c(.11)} 25%, transparent 0 50%, ${c(.11)} 0 75%, transparent 0)`, "24px 24px"];
     case "scanlines": return [`repeating-linear-gradient(0deg, ${c(.13)} 0 1px, transparent 1px 4px)`, "auto"];
     case "diamonds":  return [`repeating-linear-gradient(45deg, ${c(.14)} 0 1px, transparent 1px 18px), repeating-linear-gradient(-45deg, ${c(.14)} 0 1px, transparent 1px 18px)`, "auto"];
-    case "pixels": case "eightbit": case "blocks":
+    case "stars":     { const v = VECTOR_ARTS[t.pattern];
+                        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${v.w}" height="${v.h}"><g fill="${t.accent}">${vectorShapes(v, forImage).map(sh=> sh[0]==="c" ? `<circle cx="${sh[2]}" cy="${sh[3]}" r="${sh[4]}" opacity="${sh[1]}"/>` : `<polygon points="${sh.slice(2).join(" ")}" opacity="${sh[1]}"/>`).join("")}</g></svg>`;
+                        return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${v.w}px ${v.h}px`]; }
+    case "pixels": case "eightbit": case "blocks": case "shelf":
                       { const p = pixelRects(PIXEL_ARTS[t.pattern]);
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${p.w}" height="${p.h}" shape-rendering="crispEdges"><g fill="${t.accent}">${p.rects.map(([px,py,w,h,a])=> `<rect x="${px}" y="${py}" width="${w}" height="${h}" opacity="${a}"/>`).join("")}</g></svg>`;
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${p.w}px ${p.h}px`]; }
@@ -1577,7 +1601,7 @@ function paintCardStyle(){
   const t = cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent;
   const bgCss = t.card.style==="glow" ? `radial-gradient(circle at 15% 10%, ${rgba(acc,.3)}, ${rgba(acc,.05)} 45%, transparent 70%), ${b.panel}`
               : t.card.style==="cover" ? `linear-gradient(${rgba(b.bg,.55)},${rgba(b.bg,.55)}), linear-gradient(135deg,#3b4a7a,#7a3b5a 60%,#2a6a5a)` : b.panel;
-  const [patImg, patSz] = patternCss({ accent: acc, pattern: t.card.pattern||"none" });
+  const [patImg, patSz] = patternCss({ accent: acc, pattern: t.card.pattern||"none" }, true);
   const patCss = patImg==="none" ? "" : `background-image:${patImg};background-size:${patSz};`;
   $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px;font-size:12px;position:relative;overflow:hidden;isolation:isolate"><div style="position:absolute;inset:0;z-index:-1;${patCss}pointer-events:none"></div>
       <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Outfit;font-size:16px">${esc(getGame(Object.keys(logs)[0]||1)?.title || "Game title")}</b><span style="font-family:Outfit;font-weight:800">JOYSTICK<span style="color:${acc}">D</span></span></div>
