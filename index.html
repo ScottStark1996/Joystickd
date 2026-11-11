@@ -2324,16 +2324,58 @@ function explorerList(rows, sort, minRatings){
 }
 // Critic sorts look at the WHOLE IGDB catalogue (not just what the community has logged) via explore_games().
 // Results are cached per query; the community row (if any) still supplies the badge.
-const exploreCache = {}, exploreErr = {};
+const exploreCache = {}, exploreErr = {}, exploreMeta = {};   // meta per query: { at, more, next, loading, err }
+let EXPLORE_PAGE = 60;                                        // games per request; "Show more" asks the database for the next batch
+const EXPLORE_FRESH_MS = 10 * 60 * 1000, EXPLORE_RETRY_MS = 15 * 1000;   // re-ask after 10 minutes; retry a failed load after 15 seconds
 const isCriticSort = k => k==="chigh" || k==="clow";
+// Sample mode: the same ranking computed from the built-in list.
+function sampleExplore(params){
+  const rows = genreRows().filter(r=> (params.y ? (getGame(r.game_id)||r.game)?.year===params.y : true) && (params.tags||[]).every(t=> genresOfRow(r).includes(t)) && (getGame(r.game_id)||r.game)?.critic!=null);
+  return rows.map(r=> getGame(r.game_id)||r.game).sort((a,b)=> params.ord==="clow" ? a.critic-b.critic : b.critic-a.critic);
+}
+// One batch of critic-ranked games, starting `skip` games down the ranking. The first batch sends no skip_n, so it
+// also works against the older explore_games() that doesn't know that argument.
+function explorePage(params, skip){
+  if (!LIVE) return Promise.resolve({ data: sampleExplore(params).slice(skip, skip + EXPLORE_PAGE), error: null });
+  const args = { y: params.y || null, tags: params.tags && params.tags.length ? params.tags : null, ord: params.ord, lim: EXPLORE_PAGE, min_reviews: 3 };
+  if (skip) args.skip_n = skip;
+  return sb.rpc("explore_games", args);
+}
 function exploreFetch(key, params, redraw){
-  if (exploreCache[key]) return exploreCache[key];
-  if (!LIVE){ const rows = genreRows().filter(r=> (params.y ? (getGame(r.game_id)||r.game)?.year===params.y : true) && (params.tags||[]).every(t=> genresOfRow(r).includes(t)) && (getGame(r.game_id)||r.game)?.critic!=null);
-    exploreCache[key] = rows.map(r=> getGame(r.game_id)||r.game).sort((a,b)=> params.ord==="clow" ? a.critic-b.critic : b.critic-a.critic); return exploreCache[key]; }
-  exploreCache[key] = "loading";
-  sb.rpc("explore_games", { y: params.y || null, tags: params.tags && params.tags.length ? params.tags : null, ord: params.ord, lim: 60, min_reviews: 3 })
-    .then(({ data, error })=>{ if (error) { console.warn("explore_games", error); exploreErr[key] = error.message || String(error); } exploreCache[key] = (!error && Array.isArray(data)) ? data : "error"; (Array.isArray(data) ? data : []).forEach(cacheGame); redraw(); }, e=>{ console.warn("explore_games", e); exploreErr[key] = String(e?.message || e); exploreCache[key] = "error"; redraw(); });
+  const have = exploreCache[key], m = exploreMeta[key];
+  if (have){
+    const age = Date.now() - (m?.at || 0);
+    const stale = (Array.isArray(have) && !m?.loading && age > EXPLORE_FRESH_MS) || (have === "error" && age > EXPLORE_RETRY_MS);
+    if (!stale) return have;
+  }
+  if (!LIVE){ const all = sampleExplore(params); exploreCache[key] = all.slice(0, EXPLORE_PAGE); exploreMeta[key] = { at: Date.now(), more: all.length > EXPLORE_PAGE, next: Math.min(all.length, EXPLORE_PAGE) }; return exploreCache[key]; }
+  exploreCache[key] = "loading"; exploreMeta[key] = { at: Date.now() };
+  explorePage(params, 0)
+    .then(({ data, error })=>{ if (error) { console.warn("explore_games", error); exploreErr[key] = error.message || String(error); }
+      const ok = !error && Array.isArray(data);
+      exploreCache[key] = ok ? data : "error"; exploreMeta[key] = { at: Date.now(), more: ok && data.length >= EXPLORE_PAGE, next: ok ? data.length : 0 };
+      (ok ? data : []).forEach(cacheGame); redraw(); },
+      e=>{ console.warn("explore_games", e); exploreErr[key] = String(e?.message || e); exploreCache[key] = "error"; exploreMeta[key] = { at: Date.now() }; redraw(); });
   return "loading";
+}
+// Ask for the next batch of a ranking that's already on screen and add it to the end.
+function exploreMore(key, params, redraw){
+  const have = exploreCache[key], m = exploreMeta[key];
+  if (!Array.isArray(have) || !m || !m.more || m.loading) return;
+  m.loading = true; m.err = null;
+  explorePage(params, m.next || have.length).then(({ data, error })=>{
+    m.loading = false;
+    if (error || !Array.isArray(data)){ console.warn("explore_games (more)", error); m.err = (error && (error.message || String(error))) || "No response"; redraw(); return; }
+    const seen = new Set(have.map(g=> g.id));
+    data.forEach(g=>{ if (!seen.has(g.id)){ seen.add(g.id); cacheGame(g); have.push(g); } });
+    m.next = (m.next || 0) + data.length; m.more = data.length >= EXPLORE_PAGE; m.at = Date.now(); redraw();
+  }, e=>{ m.loading = false; m.err = String(e?.message || e); redraw(); });
+}
+// "Show more" under a critic ranking: first reveals what's already loaded, then loads the next batch.
+function exploreMoreBtn(id, key, shown, total){
+  const m = exploreMeta[key] || {};
+  if (!(shown < total || m.more || m.loading)) return "";
+  return `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="${id}" ${m.loading ? "disabled" : ""}>${m.loading ? "Loading…" : "Show more"}</button>${m.err ? `<div class="hint" style="margin-top:8px">Couldn’t load more right now — tap to try again.<br>${esc(m.err)}</div>` : ""}</div>`;
 }
 const criticCap = g => g.oc?.score!=null ? `OpenCritic ${g.oc.score}${g.oc.count ? ` \u00b7 ${g.oc.count} review${g.oc.count===1?"":"s"}` : ""}`
   : `Critic ${g.critic}${g.criticCount ? ` \u00b7 ${g.criticCount} review${g.criticCount===1?"":"s"}` : ""} \u00b7 IGDB`;
@@ -2375,8 +2417,9 @@ function drawGenres(){
     return;
   }
   let list = pool, total = 0, gridHtml = "", critic = isCriticSort(genreSort), catalogue = null;
+  const ekey = `g:${genreSels.join("|")}:${genreSort}`, eparams = { tags: genreSels, ord: genreSort };
   if (critic){
-    catalogue = exploreFetch(`g:${genreSels.join("|")}:${genreSort}`, { tags: genreSels, ord: genreSort }, drawGenres);
+    catalogue = exploreFetch(ekey, eparams, drawGenres);
     if (catalogue !== "loading"){ let gs = Array.isArray(catalogue) ? catalogue : []; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, genreShown); }
   } else {
     if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
@@ -2389,13 +2432,13 @@ function drawGenres(){
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${genreSort===k?"on":""}" data-gsort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(genreSort) ? `<label class="sortwrap">Min ratings <select id="genreMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${genreMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
-      : gridHtml ? `<div class="grid">${gridHtml}</div>${genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
-                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`g:${genreSels.join("|")}:${genreSort}`]||"")}</div>` : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>`}`;
+      : gridHtml ? `<div class="grid">${gridHtml}</div>${critic ? exploreMoreBtn("genreMore", ekey, genreShown, total) : genreShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="genreMore">Show more</button></div>` : ""}`
+                 : `<div class="empty small">${q ? (critic && Array.isArray(catalogue) && exploreMeta[ekey]?.more ? "No match in the games loaded so far." : "No games here match that.") : isCommunitySort(genreSort) && genreMin > 1 ? `No games here with ${genreMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`g:${genreSels.join("|")}:${genreSort}`]||"")}</div>` : critic ? "No critic-reviewed games with these tags." : "No rated games here yet."}</div>${critic && q && Array.isArray(catalogue) ? exploreMoreBtn("genreMore", ekey, genreShown, total) : ""}`}`;
   $("#genreMin") && ($("#genreMin").onchange = e=>{ genreMin = +e.target.value; genreShown = 30; drawGenres(); });
   $("#genreBack").onclick = ()=>{ genreView = "list"; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawGenres(); };
   body.querySelectorAll("[data-gdel]").forEach(b=> b.onclick = ()=>{ genreSels = genreSels.filter(y=> y!==b.dataset.gdel); genreShown = 30; drawGenres(); });
   body.querySelectorAll("[data-gsort]").forEach(b=> b.onclick = ()=>{ genreSort = b.dataset.gsort; genreShown = 30; drawGenres(); });
-  $("#genreMore") && ($("#genreMore").onclick = ()=>{ genreShown += 30; drawGenres(); });
+  $("#genreMore") && ($("#genreMore").onclick = ()=>{ genreShown += 30; if (critic && genreShown >= total) exploreMore(ekey, eparams, drawGenres); drawGenres(); });
 }
 // ---- Years: the same explorer, by release year -------------------------------------------------------------
 let yearSel = null, yearSort = "high", yearShown = 30, yearMin = 1;
@@ -2419,8 +2462,9 @@ function drawYears(){
     return;
   }
   let list = rows.filter(r=> yearOfRow(r)===yearSel), total = 0, gridHtml = "", critic = isCriticSort(yearSort), catalogue = null;
+  const ekey = `y:${yearSel}:${yearSort}`, eparams = { y: yearSel, ord: yearSort };
   if (critic){
-    catalogue = exploreFetch(`y:${yearSel}:${yearSort}`, { y: yearSel, ord: yearSort }, drawYears);
+    catalogue = exploreFetch(ekey, eparams, drawYears);
     if (catalogue !== "loading"){ let gs = Array.isArray(catalogue) ? catalogue : []; if (q) gs = gs.filter(g=> (g.title||"").toLowerCase().includes(q)); total = gs.length; const byId = {}; rows.forEach(r=> byId[r.game_id] = r); gridHtml = criticGrid(gs, byId, yearShown); }
   } else {
     if (q) list = list.filter(r=> ((getGame(r.game_id)||r.game)?.title||"").toLowerCase().includes(q));
@@ -2432,12 +2476,12 @@ function drawYears(){
     <div class="filters"><div class="genres">${Object.entries(GENRE_SORTS).map(([k,v])=>`<button class="gchip ${yearSort===k?"on":""}" data-ysort="${k}">${v}</button>`).join("")}</div>
       ${isCommunitySort(yearSort) ? `<label class="sortwrap">Min ratings <select id="yearMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${yearMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""}</div>
     ${catalogue === "loading" ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>`
-      : gridHtml ? `<div class="grid">${gridHtml}</div>${yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
-                 : `<div class="empty small">${q ? "No games here match that." : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`y:${yearSel}:${yearSort}`]||"")}</div>` : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>`}`;
+      : gridHtml ? `<div class="grid">${gridHtml}</div>${critic ? exploreMoreBtn("yearMore", ekey, yearShown, total) : yearShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="yearMore">Show more</button></div>` : ""}`
+                 : `<div class="empty small">${q ? (critic && Array.isArray(catalogue) && exploreMeta[ekey]?.more ? "No match in the games loaded so far." : "No games here match that.") : isCommunitySort(yearSort) && yearMin > 1 ? `No games here with ${yearMin}+ ratings yet.` : catalogue === "error" ? `Couldn\u2019t load critic rankings right now. Please try again in a moment.<div class="hint" style="margin-top:8px">${esc(exploreErr[`y:${yearSel}:${yearSort}`]||"")}</div>` : critic ? "No critic-reviewed games from this year." : "No rated games here yet."}</div>${critic && q && Array.isArray(catalogue) ? exploreMoreBtn("yearMore", ekey, yearShown, total) : ""}`}`;
   $("#yearMin") && ($("#yearMin").onchange = e=>{ yearMin = +e.target.value; yearShown = 30; drawYears(); });
   $("#yearBack").onclick = ()=>{ yearSel = null; view.query = ""; const s=$("#search"); if (s){ s.value=""; s.placeholder = searchPh(); } drawYears(); };
   body.querySelectorAll("[data-ysort]").forEach(b=> b.onclick = ()=>{ yearSort = b.dataset.ysort; yearShown = 30; drawYears(); });
-  $("#yearMore") && ($("#yearMore").onclick = ()=>{ yearShown += 30; drawYears(); });
+  $("#yearMore") && ($("#yearMore").onclick = ()=>{ yearShown += 30; if (critic && yearShown >= total) exploreMore(ekey, eparams, drawYears); drawYears(); });
 }
 function drawUsers(){
   const app = $("#app"); if (view.gameId || view.tab!=="games") return;
