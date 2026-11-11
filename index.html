@@ -2479,6 +2479,28 @@ function paintList(box, html){
   }
   box.innerHTML = ""; box.appendChild(tpl.content); if (neu) neu._sig = sig;
 }
+// Repaints a container but leaves in place whatever didn't change, so covers and avatars don't reload and the
+// page doesn't flash. Card grids and review lists are compared item by item: "Show more" only adds the new ones.
+// (Each node remembers the markup it was made from in _src; anything painted another way simply gets replaced.)
+function paintSame(box, html){
+  const tpl = document.createElement("template"); tpl.innerHTML = html;
+  const src = n => n.nodeType===1 ? n.outerHTML : "#" + n.nodeValue;
+  const isList = n => n.nodeType===1 && (n.classList.contains("grid") || n.classList.contains("reviews"));
+  const shell = n => n.cloneNode(false).outerHTML;
+  const merge = (parent, fresh, top)=>{
+    const old = [...parent.childNodes]; let p = 0;
+    fresh.forEach(n=>{
+      const s = src(n), list = top && isList(n), sh = list ? shell(n) : null; let j = p, how = 0;
+      for (; j < old.length; j++){ if (old[j]._src === s){ how = 1; break; } if (list && old[j]._shell === sh){ how = 2; break; } }
+      if (!how){ n._src = s; if (list){ n._shell = sh; n.childNodes.forEach(c=>{ c._src = src(c); }); }
+        if (p < old.length) parent.insertBefore(n, old[p]); else parent.appendChild(n); return; }
+      for (let k = p; k < j; k++) old[k].remove();                             // whatever sat before the match is gone from the new page
+      if (how === 2){ merge(old[j], [...n.childNodes], false); old[j]._src = s; }
+      p = j + 1; });
+    for (let k = p; k < old.length; k++) old[k].remove();
+  };
+  merge(box, [...tpl.content.childNodes], true);
+}
 // "Show more" under a critic ranking: first reveals what's already loaded, then loads the next batch.
 function exploreMoreBtn(id, key, shown, total){
   const m = exploreMeta[key] || {};
@@ -2957,7 +2979,7 @@ function renderLogs(app, P, isMe){
   else if (profileTab==="stats") body = isPro(P) ? profileStats(P, isMe) : `<div class="slock"><div style="font-size:34px">\uD83D\uDCCA</div><h3>Your stats <span class="protag">Pro</span></h3><p>Games per year, rating spread, genres and developers, platinum hours, streaks, your 10s \u2014 everything your logs add up to.</p><button class="cta" id="statsPro">See Joystickd Pro</button></div>`;
   else body = profileAwards(P.ballot, isMe);
 
-  app.innerHTML = `
+  paintSame(app, `
     ${(()=>{ const t = themeFor(P.id, P), card = t && (t.tint!=="off" || t.pattern!=="none"); return `<div class="profile-head${card?" themed":""}" ${headStyle(t)}>`; })()}
       <div class="avatar-wrap${isPro(P)?" haspro":""}">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isPro(P) ? `<span class="prounder" title="Joystickd Pro"${badgeStyle(P.id, P)}>PRO</span>` : ""}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
       <div>
@@ -2972,7 +2994,7 @@ function renderLogs(app, P, isMe){
       ${isMe && LIVE ? `<div style="display:flex;flex-direction:column;gap:8px;margin-left:auto"><button class="cta" id="editProfBtn" style="margin:0;padding:9px 14px;font-size:13px">Edit profile</button><button class="cta ghost" id="shareBtn" style="margin:0;padding:9px 14px;font-size:13px">Share profile</button></div>` : followButton(P)}
     </div>
     <nav class="ptabs${themeFor(P.id, P)?" themed":""}"${(()=>{ const t=themeFor(P.id,P); return t ? ` style="--acc:${t.accent}"` : ""; })()}>${TABS.map(([k,l,n])=>`<button class="ptab ${profileTab===k?"on":""}" data-ptab="${k}">${l}${n?`<b>${n}</b>`:""}</button>`).join("")}</nav>
-    ${body}`;
+    ${body}`);
   app.querySelectorAll("[data-ptab]").forEach(b=> b.onclick = ()=>{ profileTab=b.dataset.ptab; shown={}; listView=null; render(); });
   $("#statsPro") && ($("#statsPro").onclick = ()=> openPro("stats"));
   app.querySelectorAll("[data-osave]").forEach(b=> b.onclick = ()=>{ const id=+b.dataset.osave, g=getGame(id); if (g && logs[id]) chooseReviewImage(g, logs[id], { id: P.id, username: P.username, ballot: P.ballot || {} }); });
@@ -5812,7 +5834,7 @@ function followListTab(P, isMe, kind){
     ids2.length ? ids2.map(id=> userRow(id, (me && id!==me.id) ? followAction(id) : "")).join("") : `<div class="empty small">${empty}</div>`}</section>`;
 }
 function wireFollowActions(app){
-  const s=$("#peopleSearch"); if (s){ if (document.activeElement===s || peopleQuery) { const p=s.value.length; s.focus(); s.setSelectionRange(p,p); } s.addEventListener("input", e=>{ peopleQuery=e.target.value; searchPeople(); }); }
+  const s=$("#peopleSearch"); if (s){ if (document.activeElement===s || peopleQuery) { const p=s.value.length; s.focus(); s.setSelectionRange(p,p); } s.oninput = e=>{ peopleQuery=e.target.value; searchPeople(); }; }   // oninput (not addEventListener): the box can now survive a repaint, and must not collect duplicate listeners
   app.querySelectorAll("[data-fact]").forEach(b=> b.onclick = ()=>{ b.dataset.fact==="follow" ? follow(b.dataset.id, b.dataset.name) : unfollow(b.dataset.id); });
   app.querySelectorAll("[data-user]").forEach(b=> b.onclick = ()=>{ view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
 }
