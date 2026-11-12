@@ -471,9 +471,9 @@
   .sbar .val b{color:var(--text);font-family:Outfit}
   .scols{display:flex;align-items:flex-end;gap:4px;height:110px;padding-top:18px}
   .scol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;position:relative}
-  .scol i{display:block;width:100%;border-radius:4px 4px 2px 2px;background:var(--gold);min-height:3px}
+  .scol i{display:block;width:100%;border-radius:4px 4px 2px 2px;background:var(--gold);min-height:3px;position:relative}
   .scol i.dim{background:rgba(255,255,255,.07)}
-  .scol em{position:absolute;top:-16px;font-style:normal;font-size:10px;font-weight:700;color:var(--muted)}
+  .scol em{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;font-style:normal;font-size:10px;line-height:1;font-weight:700;color:var(--muted);white-space:nowrap}   /* the count sits right on top of its own bar */
   .scol small{margin-top:6px;font-size:10px;color:var(--muted);white-space:nowrap;min-height:14px;line-height:14px}
   .scols.dense .scol small{font-size:9px}
   .scols.dense{padding-left:12px;padding-right:12px}
@@ -2824,9 +2824,12 @@ function profileStats(P, isMe){
   const fmtH = h => h>=1000 ? (h/1000).toFixed(1)+"k" : String(Math.round(h));
   const tile = (b, small, sub) => `<div class="stile"><b>${b}</b><small>${small}</small>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
   const bars = (entries, valFn, labelFn, colorFn) => `<div class="sbars">${entries.map(([k,v])=>{ const val=valFn(v), mx=Math.max(...entries.map(e=>valFn(e[1])))||1; return `<div class="sbar"><span class="lab" title="${esc(k)}">${esc(k)}</span><span class="trk"><span class="fill" style="width:${Math.max(3, val/mx*100)}%;${colorFn?colorFn(v):""}"></span></span><span class="val">${labelFn(v)}</span></div>`; }).join("")}</div>`;
-  const cols = (labels, vals, colorFn) => { const mx=Math.max(1,...vals), n=vals.length, nl=labels.filter(Boolean).length, dense=nl>12, every=dense ? Math.ceil(n/8) : 1;
+  // Column chart. Each count sits on top of its own bar. With many columns (e.g. 30 release years) only the tallest bar
+  // and every few bars carry a count, and never two neighbours, so numbers can't run together ("22" + "32" → "2232").
+  const cols = (labels, vals, colorFn) => { const mx=Math.max(1,...vals), n=vals.length, nl=labels.filter(Boolean).length, dense=nl>12, every=dense ? Math.ceil(n/8) : 1, peak=vals.indexOf(mx);
     return `<div class="scols${dense?" dense":""}">${vals.map((v,i)=>{ const showLab = labels[i]!=="" && (i%every===0 || (i===n-1 && (n-1)%every >= every/2));
-      return `<div class="scol">${v && (!dense || v===mx || i%every===0) ? `<em>${v}</em>` : ""}<i class="${v?"":"dim"}" style="height:${Math.max(3, v/mx*100)}%;${colorFn?colorFn(i):""}"></i><small>${showLab ? labels[i] : "&nbsp;"}</small></div>`; }).join("")}</div>`; };
+      const showNum = v && (!dense || i===peak || (i%every===0 && Math.abs(i-peak) > 1));
+      return `<div class="scol"${labels[i] ? ` title="${esc(String(labels[i]))}: ${v}"` : ""}><i class="${v?"":"dim"}" style="height:${Math.max(3, v/mx*100)}%;${colorFn?colorFn(i):""}">${showNum ? `<em>${v}</em>` : ""}</i><small>${showLab ? labels[i] : "&nbsp;"}</small></div>`; }).join("")}</div>`; };
   const chip = id => { const g=getGame(id); return g ? `<button data-open="${g.id}"><span class="mini" style="${coverStyle(g)}"></span>${esc(g.title)}${L[id].rating!=null?` <span style="${ratingText(L[id].rating)}">${L[id].rating}</span>`:""}</button>` : ""; };
   const gameLine = id => { const g=getGame(id); return g ? `<button class="linklike" data-open="${g.id}">${esc(g.title)}</button>` : ""; };
   return `
