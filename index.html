@@ -248,6 +248,8 @@
   .segb{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
   .segb.on{background:var(--panel2);color:var(--text)}
   .award-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .award-save{margin-left:auto;flex-shrink:0;width:36px;height:36px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);font-size:17px;line-height:1;cursor:pointer}
+  .award-save:hover,.award-save:focus-visible{color:var(--gold);border-color:var(--gold-dim);outline:none}
   div.award:hover{transform:none;border-color:var(--line)}
   div.award[data-awexpand]{cursor:pointer}
   div.award[data-awexpand]:hover{border-color:var(--gold)}
@@ -1164,6 +1166,14 @@
     <h2 id="awardsImgTitle">Save awards as image</h2>
     <div class="g">Pick a layout.</div>
     <div class="actions"><button class="cta ghost" id="awardsImgCancel">Cancel</button><button class="cta ghost" id="awardsImgTall">Tall (2 columns)</button><button class="cta" id="awardsImgWide">Wide (3 columns)</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="awardOneWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="awardOneTitle">
+    <h2 id="awardOneTitle">Save this award as an image</h2>
+    <div class="g">Pick a layout. Spotlight is wide (16:9); Marquee is a tall poster (4:5).</div>
+    <div class="actions"><button class="cta ghost" id="awardOneCancel">Cancel</button><button class="cta ghost" id="awardOneWide">Spotlight (wide)</button><button class="cta" id="awardOneTall">Marquee (poster)</button></div>
   </div>
 </div>
 
@@ -3008,6 +3018,7 @@ function renderLogs(app, P, isMe){
   $("#shareBtn") && ($("#shareBtn").onclick = ()=> $("#shareProfWrap").classList.add("open"));
   app.querySelectorAll("[data-payear]").forEach(b=> b.onclick = ()=>{ profileAwardYear=+b.dataset.payear; render(); });
   app.querySelectorAll("[data-awardsimg]").forEach(b=> b.onclick = ()=> openAwardsImg(P, +b.dataset.awardsimg));
+  wireAwardSaves(app, key=> ({ key, year: profileAwardYear, P }));
   app.querySelectorAll("[data-plog]").forEach(b=> b.onclick = ()=> openT5(+b.dataset.plog, P, isMe));
   $("#t5EditBtn") && ($("#t5EditBtn").onclick = ()=>{ t5edit=!t5edit; render(); });
   $("#pGenre") && ($("#pGenre").onchange = e=>{ gamesGenre=e.target.value||null; shown={}; render(); });
@@ -3688,6 +3699,160 @@ $("#clearPick").onclick = ()=>{ pick.onClear?.(); closePicker(); render(); };
 $("#pickWrap").addEventListener("click", e=>{ if(e.target.id==="pickWrap") closePicker(); });
 
 // ---- awards --------------------------------------------------------------
+// ---- single-award share images ("Spotlight" wide + "Marquee" poster) ---------------------------------------
+// One category on its own: the community winner (Awards tab) or one person's pick (their ballot / profile).
+// Only cover art exists per game, so the backdrops are built from the cover. The accent is the saver's Image style.
+let awardOneCtx = null;
+function openAwardOne(ctx){
+  const a = AWARDS.find(k=> k.key===ctx.key); if (!a) return;
+  awardOneCtx = ctx;
+  $("#awardOneTitle").textContent = `Save “${a.label}” as an image`;
+  $("#awardOneWrap").classList.add("open");
+}
+// The little save control on an award card (it can sit inside a tappable card, so it swallows its own taps).
+function wireAwardSaves(root, ctxFor){
+  root.querySelectorAll("[data-awsave]").forEach(b=>{ const go = e=>{ e.preventDefault(); e.stopPropagation(); openAwardOne(ctxFor(b.dataset.awsave)); };
+    b.onclick = go; b.onkeydown = e=>{ if (e.key==="Enter" || e.key===" ") go(e); }; });
+}
+// What goes on the image for a category, or null when there's nothing to show.
+function awardOneData(ctx){
+  const a = AWARDS.find(k=> k.key===ctx.key); if (!a) return null;
+  const year = ctx.year;
+  if (ctx.community){
+    const t = tally(year, a.key), w = t[0], g = w && getGame(w.id); if (!g) return null;
+    const total = t.reduce((s,e)=> s+e.n, 0);
+    return { a, g, year, over:`${year} JOYSTICKD GAME AWARDS`, tag:"WINNER", meta:`${g.year ? g.year+"  ·  " : ""}${w.n} of ${total} vote${total===1?"":"s"}`, file:`joystickd-${year}-${a.key}` };
+  }
+  const P = ctx.P || {}, id = ((P.ballot||{})[year]||{})[a.key], g = id && getGame(id); if (!g) return null;
+  const mineP = !!me && P.id===me.id, name = P.username || "";
+  return { a, g, year, over: name ? `${name.toUpperCase()}\u2019S ${year} GAME AWARDS` : `MY ${year} GAME AWARDS`, tag: mineP || !P.id ? "MY PICK" : "THEIR PICK", meta: g.year ? String(g.year) : "", file:`joystickd-${name.toLowerCase()}-${year}-${a.key}` };
+}
+async function saveAwardOne(ctx, layout){
+  const d = awardOneData(ctx); if (!d){ toast("Nothing to save for that award yet"); return; }
+  toast("Building your image…");
+  try { await document.fonts.ready; } catch(e){}
+  const ct = cardThemeFor(me?.id, me);
+  d.accent = ct.accent;
+  d.cover = (d.g.cover && await loadCoverMax(d.g.cover)) || awardPlaceholderCover(d.g, ct);
+  const c = layout==="marquee" ? drawAwardMarquee(d) : drawAwardSpotlight(d);
+  const blob = await new Promise(res=> c.toBlob(res, "image/png"));
+  if (!blob){ toast("Couldn't create the image"); return; }
+  await deliverImage(blob, `${d.file}-${layout==="marquee" ? "poster" : "wide"}.png`.replace(/[^a-z0-9.\-]+/g, "-"));
+}
+// Stand-in art for a game with no cover: a dark card with the title's first letter.
+function awardPlaceholderCover(g, ct){
+  const c = document.createElement("canvas"); c.width = 600; c.height = 800; const x = c.getContext("2d");
+  const gr = x.createLinearGradient(0,0,600,800); gr.addColorStop(0, mixHex(ct.panel2, ct.accent, .25)); gr.addColorStop(1, ct.bg); x.fillStyle = gr; x.fillRect(0,0,600,800);
+  x.fillStyle = rgba(ct.accent, .85); x.textAlign = "center"; x.font = "800 260px Outfit, sans-serif"; x.fillText((g.title||"?")[0].toUpperCase(), 300, 330);   // upper third, clear of the poster's text
+  return c;
+}
+// -- drawing helpers shared by both layouts
+const AW_HEAD = z => `800 ${z}px Outfit, sans-serif`, AW_TITLE = z => `700 ${z}px Outfit, sans-serif`, AW_BODY = (z, w=600) => `${w} ${z}px Manrope, sans-serif`;
+function awBlur(x, art, W, H, alpha){                                          // soft full-bleed blur without canvas filters (iPhone-safe)
+  const a = document.createElement("canvas"); a.width = Math.max(8, Math.round(W/8)); a.height = Math.max(8, Math.round(H/8)); const ax = a.getContext("2d"); ax.imageSmoothingEnabled = true; ax.imageSmoothingQuality = "high";
+  const sc = Math.max(a.width/art.width, a.height/art.height), dw = art.width*sc, dh = art.height*sc; ax.drawImage(art, (a.width-dw)/2, (a.height-dh)/2, dw, dh);
+  const b = document.createElement("canvas"); b.width = Math.max(4, Math.round(a.width/4)); b.height = Math.max(4, Math.round(a.height/4)); const bx = b.getContext("2d"); bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = "high";
+  for (let i=0;i<2;i++){ bx.clearRect(0,0,b.width,b.height); bx.drawImage(a,0,0,b.width,b.height); ax.clearRect(0,0,a.width,a.height); ax.drawImage(b,0,0,a.width,a.height); }
+  x.save(); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.globalAlpha = alpha; x.drawImage(a,0,0,W,H); x.restore();
+}
+function awSpaced(x, s, px, y, track, align){                                  // letter-spaced text; returns its width
+  const chars = [...s], ws = chars.map(ch=> x.measureText(ch).width), total = ws.reduce((p,q)=> p+q, 0) + track*(chars.length-1);
+  let cx = align==="center" ? px - total/2 : px; const keep = x.textAlign; x.textAlign = "left";
+  chars.forEach((ch,i)=>{ x.fillText(ch, cx, y); cx += ws[i] + track; }); x.textAlign = keep; return total;
+}
+const awSpacedW = (x, s, track) => [...s].reduce((p,ch)=> p + x.measureText(ch).width, 0) + track*([...s].length-1);
+function awWrap(x, s, max){                                                    // breaks at spaces and after a slash ("NARRATIVE/" + "WRITING")
+  const raw = s.replace(/\//g, "/​"), words = raw.split(/ |​/), seps = []; raw.replace(/ |​/g, m=>{ seps.push(m===" " ? " " : ""); return m; });
+  const out = []; let cur = "";
+  words.forEach((w,k)=>{ const t = cur ? cur + seps[k-1] + w : w; if (cur && x.measureText(t).width > max){ out.push(cur); cur = w; } else cur = t; });
+  if (cur) out.push(cur); return out;
+}
+function awFit(x, s, max, maxLines, sizes, mk){                                // largest size whose lines all fit; else smallest, cut with an ellipsis
+  for (const z of sizes){ x.font = mk(z); const l = awWrap(x, s, max); if (l.length <= maxLines && l.every(t=> x.measureText(t).width <= max)) return { z, l }; }
+  const z = sizes[sizes.length-1]; x.font = mk(z); let l = awWrap(x, s, max);
+  if (l.length > maxLines){ l = l.slice(0, maxLines); l[maxLines-1] += "…"; }
+  l = l.map(t=>{ let n = t; while (x.measureText(n).width > max && n.length > 4) n = n.slice(0,-2).trimEnd() + "…"; return n; });
+  return { z, l };
+}
+function awStar(x, cx, cy, r, col){ x.fillStyle = col; x.beginPath(); for (let i=0;i<10;i++){ const an = -Math.PI/2 + i*Math.PI/5, rr = i%2 ? r*.42 : r; x.lineTo(cx + rr*Math.cos(an), cy + rr*Math.sin(an)); } x.closePath(); x.fill(); }
+function awLaurel(x, cx, cy, R, col, n, from, to){                             // a branch on the left, mirrored on the right
+  [1,-1].forEach(side=>{ x.save(); x.translate(cx, cy); x.scale(side, 1);
+    x.strokeStyle = col; x.lineWidth = Math.max(1.5, R*.018); x.beginPath(); x.arc(0, 0, R, from*Math.PI/180, to*Math.PI/180); x.stroke(); x.fillStyle = col;
+    const leaf = (px, py, rot, l, w)=>{ x.save(); x.translate(px, py); x.rotate(rot); x.beginPath(); x.moveTo(0,0); x.quadraticCurveTo(l*.5, -w, l, 0); x.quadraticCurveTo(l*.5, w, 0, 0); x.fill(); x.restore(); };
+    for (let i=0;i<n;i++){ const t = i/(n-1), an = (from + t*(to-from))*Math.PI/180, L = R*.30*(1-.38*t), w = L*.30;
+      leaf(R*Math.cos(an), R*Math.sin(an), an + Math.PI/2 + .62, L, w); leaf(R*Math.cos(an), R*Math.sin(an), an + Math.PI/2 - .62, L*.82, w); }
+    const tip = to*Math.PI/180; leaf(R*Math.cos(tip), R*Math.sin(tip), tip + Math.PI/2, R*.2, R*.056);
+    x.restore(); });
+}
+function awWordmark(x, rx, y, size, accent){ x.save(); x.textAlign = "right"; x.font = `800 ${size}px Outfit, sans-serif`; const dW = x.measureText("D").width; x.fillStyle = accent; x.fillText("D", rx, y); x.fillStyle = "#e6ebf4"; x.fillText("JOYSTICK", rx - dW - size*.04, y); x.restore(); }
+function awOverline(x, s, px, y, max, align, col){                             // the "2026 JOYSTICKD GAME AWARDS" line, shrunk only if it must
+  let z = 30, track = 5.5; for (const [zz, tt] of [[30,5.5],[27,5],[24,4.5],[21,4],[18,3]]){ z = zz; track = tt; x.font = AW_BODY(z, 800); if (awSpacedW(x, s, track) <= max) break; }
+  x.fillStyle = col; return { w: awSpaced(x, s, px, y, track, align), z };
+}
+// Canvas at 2× (3200×1800 wide, 2160×2700 poster): sharp, without a 10 MB file.
+function awCanvas(W, H){ const c = document.createElement("canvas"), x = c.getContext("2d"), S = Math.min(2, exportScale(W, H)); c.width = W*S; c.height = H*S; x.scale(S, S); return [c, x]; }
+
+// Spotlight — wide 16:9: letterbox bars, blurred cover backdrop, beams on a tilted cover, category in big type.
+function drawAwardSpotlight(o){
+  const W = 1600, H = 900, [c, x] = awCanvas(W, H), ac = o.accent;
+  x.fillStyle = "#05070c"; x.fillRect(0,0,W,H); awBlur(x, o.cover, W, H, .9);
+  const g = x.createLinearGradient(0,0,W,0); g.addColorStop(0,"rgba(4,6,12,.92)"); g.addColorStop(.5,"rgba(4,6,12,.62)"); g.addColorStop(1,"rgba(4,6,12,.3)"); x.fillStyle = g; x.fillRect(0,0,W,H);
+  x.save(); x.globalCompositeOperation = "lighter";
+  [[1250,-40,980,900,1420,900,.20],[1500,-40,1080,900,1560,900,.12]].forEach(([sx,sy,ax,ay,bx,by,al])=>{ const lg = x.createLinearGradient(sx,sy,(ax+bx)/2,ay); lg.addColorStop(0, rgba(ac,al)); lg.addColorStop(1, rgba(ac,0)); x.fillStyle = lg;
+    x.beginPath(); x.moveTo(sx-14,sy); x.lineTo(sx+14,sy); x.lineTo(bx,by); x.lineTo(ax,ay); x.closePath(); x.fill(); });
+  x.restore();
+  const v = x.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,W*.75); v.addColorStop(0,"rgba(0,0,0,0)"); v.addColorStop(1,"rgba(0,0,0,.75)"); x.fillStyle = v; x.fillRect(0,0,W,H);
+  const bar = 78; x.fillStyle = "#000"; x.fillRect(0,0,W,bar); x.fillRect(0,H-bar,W,bar); x.fillStyle = rgba(ac,.55); x.fillRect(0,bar,W,2); x.fillRect(0,H-bar-2,W,2);
+  awWordmark(x, W-70, 50, 26, ac); x.font = AW_BODY(18,600); x.fillStyle = "#8b98b5"; x.textAlign = "left"; x.fillText("joystickd.com", 70, H-30);
+  // cover: tilted a touch, glowing in the accent
+  const ch = Math.min(560, 400*o.cover.height/o.cover.width), cw = ch*o.cover.width/o.cover.height, cx = 1195, cy = H/2+6;
+  x.save(); x.translate(cx, cy); x.rotate(-3*Math.PI/180);
+  x.shadowColor = rgba(ac,.55); x.shadowBlur = 90; x.fillStyle = "#000"; x.beginPath(); x.roundRect(-cw/2,-ch/2,cw,ch,14); x.fill();
+  x.shadowColor = "rgba(0,0,0,.8)"; x.shadowBlur = 40; x.shadowOffsetY = 24; x.beginPath(); x.roundRect(-cw/2,-ch/2,cw,ch,14); x.fill(); x.shadowColor = "transparent"; x.shadowBlur = 0; x.shadowOffsetY = 0;
+  x.save(); x.beginPath(); x.roundRect(-cw/2,-ch/2,cw,ch,14); x.clip(); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(o.cover,-cw/2,-ch/2,cw,ch);
+  const sh = x.createLinearGradient(-cw/2,-ch/2,cw/2,ch/2); sh.addColorStop(0,"rgba(255,255,255,.22)"); sh.addColorStop(.35,"rgba(255,255,255,0)"); x.fillStyle = sh; x.fillRect(-cw/2,-ch/2,cw,ch); x.restore();
+  x.strokeStyle = rgba(ac,.9); x.lineWidth = 3; x.beginPath(); x.roundRect(-cw/2,-ch/2,cw,ch,14); x.stroke(); x.restore();
+  // text block, centered vertically between the bars
+  const L = 110, maxW = 760; x.textAlign = "left";
+  const cat = awFit(x, o.a.label.toUpperCase(), maxW, 2, [104,92,80,70,60], AW_HEAD), lh = cat.z*1.02;
+  const ti = awFit(x, o.g.title, maxW, 2, [58,50,44,38], AW_TITLE), tlh = ti.z*1.1;
+  const blockH = 30 + 30 + cat.l.length*lh + 62 + 44 + 40 + ti.l.length*tlh + (o.meta ? 40 : 0);
+  let y = (H - blockH)/2 + 30;
+  awStar(x, L+13, y-10, 14, ac); awOverline(x, o.over, L+40, y, maxW-40, "left", ac);
+  y += 30 + cat.z*.86;
+  x.fillStyle = "#fff"; x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 24; x.font = AW_HEAD(cat.z); cat.l.forEach((l,i)=>{ x.fillText(l, L-4, y + i*lh); }); x.shadowColor = "transparent"; x.shadowBlur = 0;
+  y += (cat.l.length-1)*lh + 78;
+  x.font = AW_HEAD(26); const tw = awSpacedW(x, o.tag, 5); x.fillStyle = ac; x.beginPath(); x.roundRect(L, y-31, tw+44, 44, 8); x.fill(); x.fillStyle = "#10131c"; awSpaced(x, o.tag, L+22, y, 5, "left");
+  x.fillStyle = rgba(ac,.5); x.fillRect(L+tw+64, y-10, Math.max(0, maxW-tw-64-160), 2);
+  y += 30 + ti.z;
+  x.font = AW_TITLE(ti.z); x.fillStyle = "#fff"; ti.l.forEach((l,i)=>{ x.fillText(l, L, y + i*tlh); });
+  y += (ti.l.length-1)*tlh + 46;
+  if (o.meta){ x.font = AW_BODY(24,500); x.fillStyle = "#aab4c8"; x.fillText(o.meta, L, y); }
+  return c;
+}
+
+// Marquee — tall 4:5 poster: the cover fills the image; the award sits on a fade at the foot, inside a thin frame.
+function drawAwardMarquee(o){
+  const W = 1080, H = 1350, [c, x] = awCanvas(W, H), ac = o.accent;
+  x.fillStyle = "#05070c"; x.fillRect(0,0,W,H);
+  { const art = o.cover, sc = Math.max(W/art.width, H/art.height), sw = W/sc, sh = H/sc; x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(art, (art.width-sw)/2, 0, sw, sh, 0, 0, W, H); }   // keep the top of the cover
+  const g = x.createLinearGradient(0,470,0,960); g.addColorStop(0,"rgba(5,7,12,0)"); g.addColorStop(.6,"rgba(5,7,12,.82)"); g.addColorStop(1,"rgba(5,7,12,.97)"); x.fillStyle = g; x.fillRect(0,470,W,490); x.fillStyle = "rgba(5,7,12,.97)"; x.fillRect(0,960,W,H-960);
+  const gl = x.createRadialGradient(W/2,1060,20,W/2,1060,560); gl.addColorStop(0, rgba(ac,.18)); gl.addColorStop(1, rgba(ac,0)); x.fillStyle = gl; x.fillRect(0,600,W,750);
+  x.strokeStyle = rgba(ac,.85); x.lineWidth = 2.5; x.strokeRect(30,30,W-60,H-60); x.strokeStyle = rgba(ac,.3); x.lineWidth = 1; x.strokeRect(42,42,W-84,H-84);
+  x.font = AW_BODY(18,600); x.fillStyle = "#8b98b5"; x.textAlign = "left"; x.fillText("joystickd.com", 74, H-70); awWordmark(x, W-74, H-68, 24, ac);
+  // built upward from the foot
+  x.textAlign = "center"; let y = H-128;
+  if (o.meta){ x.font = AW_BODY(23,500); x.fillStyle = "#aab4c8"; x.fillText(o.meta, W/2, y); y -= 44; } else y -= 10;
+  const ti = awFit(x, o.g.title, W-220, 1, [48,42,36,30], AW_TITLE); x.font = AW_TITLE(ti.z); x.fillStyle = "#fff"; x.fillText(ti.l[0], W/2, y); y -= ti.z + 26;
+  x.fillStyle = rgba(ac,.6); x.fillRect(W/2-150, y, 120, 2); x.fillRect(W/2+30, y, 120, 2); awStar(x, W/2, y+1, 9, ac); y -= 40;
+  const cat = awFit(x, o.a.label.toUpperCase(), W-170, 2, [92,82,72,64,56,50], AW_HEAD); x.fillStyle = "#fff"; x.font = AW_HEAD(cat.z); x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 22;
+  for (let k = cat.l.length-1; k >= 0; k--){ x.fillText(cat.l[k], W/2, y); y -= cat.z*1.02; } x.shadowColor = "transparent"; x.shadowBlur = 0;
+  y += cat.z*1.02 - (cat.z*.82 + 24);
+  const ov = awOverline(x, o.over, W/2, y, W-190, "center", ac); y -= ov.z + 92;
+  awLaurel(x, W/2, y, 76, ac, 9, 112, 250); awStar(x, W/2, y-22, 13, ac); x.fillStyle = ac; x.font = AW_HEAD(o.tag.length > 7 ? 17 : 22); awSpaced(x, o.tag, W/2, y+20, o.tag.length > 7 ? 2.5 : 4, "center");
+  return c;
+}
+
 const AWARDS = [
   {key:"goty",     label:"Game of the Year"},
   {key:"direction",label:"Best Game Direction"},
@@ -3749,6 +3914,7 @@ function awardCard(a, i, g, sub, editable, opts={}){
   return `<${editable?"button":"div"} class="award ${i===0?"goty":""} ${g?"filled":""}" ${editable?`data-award="${a.key}"`:""}${opts.expandKey?` data-awexpand="${opts.expandKey}"`:""}>
     <span class="award-cover" style="${g ? coverStyle(g) : ""}">${g ? "" : (editable ? "+" : "")}</span>
     <span class="award-text"><span class="award-cat">${a.label}</span>${title}${sub ? `<span class="award-sub">${sub}</span>` : ""}</span>
+    ${g && opts.save ? `<span class="award-save" role="button" tabindex="0" data-awsave="${a.key}" title="Save this award as an image" aria-label="Save ${esc(a.label)} as an image">\u2913</span>` : ""}
   </${editable?"button":"div"}>`;
 }
 
@@ -3777,13 +3943,13 @@ async function renderAwards(app){
     ${!open ? `<div class="lockbox">🔒 Voting for ${awardYear} opens on <b>${opensText}</b>, so the year's releases get a fair shake first.${mine ? "" : " Results will tally once ballots are in."}</div>` : ""}
     <div class="awards">
       ${AWARDS.map((a,i)=>{
-        if (mine){ const g=ballot[a.key]&&getGame(ballot[a.key]); return awardCard(a,i,g, open ? null : "🔒 Voting not open yet", open); }
+        if (mine){ const g=ballot[a.key]&&getGame(ballot[a.key]); return awardCard(a,i,g, open ? null : "🔒 Voting not open yet", open, { save:true }); }
         const t=tally(awardYear,a.key), w=t[0], g=w&&getGame(w.id);
         const expanded = w && awardsExpanded.has(a.key);
         const sub = w ? `${w.n} vote${w.n===1?"":"s"}${ballot[a.key]===w.id ? " · your pick" : ""}${t.length>1 && !expanded ? ` · tap for top ${Math.min(t.length,3)}` : ""}` : "";
         const panel = expanded ? `<div class="award-top3">${t.slice(0,3).map((e,ri)=>{ const eg=getGame(e.id);
           return `<button class="top3-row" data-awgame="${e.id}"><span class="top3-rank">${["\u{1F947}","\u{1F948}","\u{1F949}"][ri]}</span><span class="top3-cover" style="${eg?coverStyle(eg):""}"></span><span class="top3-title">${esc(eg?.title||"\u2026")}</span><span class="top3-votes">${e.n} vote${e.n===1?"":"s"}</span></button>`; }).join("")}</div>` : "";
-        return awardCard(a,i,g,sub,false,{ gameLink:true, expandKey: w ? a.key : null }) + panel; }).join("")}
+        return awardCard(a,i,g,sub,false,{ gameLink:true, expandKey: w ? a.key : null, save:true }) + panel; }).join("")}
     </div>
     ${mine ? "" : `<div class="hint center">Winners are tallied from everyone's ballots.${LIVE ? "" : " (Demo voters included in sample mode.)"}</div>`}`;
   $("#awardYear").onchange = e=>{ awardYear=+e.target.value; awardsExpanded.clear(); render(); };
@@ -3791,12 +3957,13 @@ async function renderAwards(app){
   $("#myAwardsImg") && ($("#myAwardsImg").onclick = ()=>{ if (!me) return; openAwardsImg({ id: me.id, username: me.username, ballot: ballots.me }, awardYear); });
   app.querySelectorAll("[data-mode]").forEach(b=> b.onclick = ()=>{ if (b.dataset.mode==="mine" && !requireAuth()) return; awardMode=b.dataset.mode; render(); });
   app.querySelectorAll("[data-awexpand]").forEach(d=> d.onclick = e=>{
-    if (e.target.closest("[data-awgame]")) return;
+    if (e.target.closest("[data-awgame], [data-awsave]")) return;
     const k=d.dataset.awexpand;
     awardsExpanded.has(k) ? awardsExpanded.delete(k) : awardsExpanded.add(k);
     render();
   });
   app.querySelectorAll("[data-awgame]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="games"; view.gameId=+b.dataset.awgame; gameTab="overview"; render(); window.scrollTo(0,0); });
+  wireAwardSaves(app, key=> mine ? { key, year: awardYear, P: { id: me?.id, username: me?.username || "", ballot: ballots.me } } : { key, year: awardYear, community: true });
   app.querySelectorAll("[data-award]").forEach(b=> b.onclick = ()=>{
     if (!votingOpen(awardYear)){ toast(`Voting for ${awardYear} opens ${opensText}`); return; }
     if (!requireAuth()) return;
@@ -3827,7 +3994,7 @@ function profileAwards(ballot, isMe){
   return `
     <div class="pa-head">${years.map(y=>`<button class="gchip ${y===profileAwardYear?"on":""}" data-payear="${y}">${y}</button>`).join("")}<button class="cta ghost sm" data-awardsimg="${profileAwardYear}" style="margin-left:auto">Save as image</button></div>
     <div class="awards compact">
-      ${AWARDS.filter(a=>b[a.key]).map((a,i)=>{ const g=getGame(b[a.key]); return awardCard(a, a.key==="goty"?0:1, g, null, false); }).join("")}
+      ${AWARDS.filter(a=>b[a.key]).map((a,i)=>{ const g=getGame(b[a.key]); return awardCard(a, a.key==="goty"?0:1, g, null, false, { save:true }); }).join("")}
     </div>`;
 }
 
@@ -5311,6 +5478,11 @@ function wirePwUI(){
   $("#awardsImgCancel").onclick = ()=> $("#awardsImgWrap").classList.remove("open");
   const goAwardsImg = async cols => { $("#awardsImgWrap").classList.remove("open"); const c = awardsImgCtx; if (!c) return;
     try { if (c.community) await saveCommunityAwardsImage(c.year, cols); else await saveAwardsImage(c.P, c.year, cols); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#awardOneCancel").onclick = ()=> $("#awardOneWrap").classList.remove("open");
+  const goAwardOne = async layout => { $("#awardOneWrap").classList.remove("open"); const c = awardOneCtx; if (!c) return;
+    try { await saveAwardOne(c, layout); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
+  $("#awardOneWide").onclick = ()=> goAwardOne("spotlight");
+  $("#awardOneTall").onclick = ()=> goAwardOne("marquee");
   $("#awardsImgTall").onclick = ()=> goAwardsImg(2);
   $("#awardsImgWide").onclick = ()=> goAwardsImg(3);
   $("#pwSave").onclick = async ()=>{
