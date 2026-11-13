@@ -1737,6 +1737,19 @@ function drawFrameRing(x, cx, cy, r, uid, scale=1){ const f = frameForUser(uid);
   x.strokeStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(cx, cy, r + 0.5*scale, 0, 7); x.stroke();                                            // thin shade where ring meets photo
   x.restore(); }
 // ---- the Profile look sheet
+// The accent swatches plus the "Custom" colour input. The input itself is created once and then kept: the phone's colour
+// picker (Grid / Spectrum / Sliders) stays attached to that exact element while you drag, and replacing it on every
+// change used to cut the picker off after the first touch — so a drag only ever picked the first colour.
+function paintSwatches(box, attr, id, accent){
+  const inp = box.querySelector("#" + id);
+  if (inp){ box.querySelectorAll(`[data-${attr}]`).forEach(b=> b.classList.toggle("on", b.dataset[attr]===accent));
+    inp.closest(".swatch").classList.toggle("on", !ACCENTS.includes(accent)); if (inp.value.toLowerCase() !== String(accent).toLowerCase()) inp.value = accent; return; }
+  box.innerHTML = ACCENTS.map(c=> `<button class="swatch ${accent===c?"on":""}" data-${attr}="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
+    + `<label class="swatch custom ${ACCENTS.includes(accent)?"":"on"}">Custom <input type="color" id="${id}" value="${accent}"></label>`;
+}
+// While a colour is being dragged the picker reports many changes a second; repaint the preview once per frame.
+let swatchRaf = 0;
+function swatchRepaint(paint){ if (swatchRaf) return; swatchRaf = requestAnimationFrame(()=>{ swatchRaf = 0; paint(); }); }
 let lookDraft = null;
 function openLook(){ if (!requirePro("theme")) return; lookDraft = cleanTheme(me.theme); paintLook(); $("#lookWrap").classList.add("open"); }
 function paintLook(){
@@ -1744,8 +1757,7 @@ function paintLook(){
   $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
     <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", frameOf(t))}<span class="prounder" style="${badgeCss(t)}">PRO</span></div>
     <div><h1 style="${nameFxCss(t)};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
-  $("#lookSwatches").innerHTML = ACCENTS.map(c=> `<button class="swatch ${t.accent===c?"on":""}" data-acc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
-    + `<label class="swatch custom ${ACCENTS.includes(t.accent)?"":"on"}">Custom <input type="color" id="lookCustom" value="${t.accent}"></label>`;
+  paintSwatches($("#lookSwatches"), "acc", "lookCustom", t.accent);
   $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
   $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
   $("#lookFrames").innerHTML = [["none", FRAMES.none], ["accent", accentFrame(t.accent)], ...Object.entries(FRAMES).filter(([k])=> k!=="none")]
@@ -1760,7 +1772,7 @@ function paintLook(){
   $("#lookBadgeFx").querySelectorAll("[data-badgefx]").forEach(b=> b.onclick = ()=>{ lookDraft.badgeFx=b.dataset.badgefx; paintLook(); });
   $("#lookNameColor").checked = t.nameColor;
   $("#lookSwatches").querySelectorAll("[data-acc]").forEach(b=> b.onclick = ()=>{ lookDraft.accent=b.dataset.acc; paintLook(); });
-  $("#lookCustom").oninput = e=>{ lookDraft.accent = e.target.value.toLowerCase(); paintLook(); $("#lookCustom").focus(); };
+  $("#lookCustom").oninput = e=>{ lookDraft.accent = e.target.value.toLowerCase(); swatchRepaint(paintLook); };
   $("#lookPatterns").querySelectorAll("[data-pat]").forEach(b=> b.onclick = ()=>{ lookDraft.pattern=b.dataset.pat; paintLook(); });
   $("#lookTints").querySelectorAll("[data-tint]").forEach(b=> b.onclick = ()=>{ lookDraft.tint=b.dataset.tint; paintLook(); });
   $("#lookFrames").querySelectorAll("[data-frame]").forEach(b=> b.onclick = ()=>{ lookDraft.frame=b.dataset.frame; paintLook(); });
@@ -1789,12 +1801,11 @@ function paintCardStyle(){
   $("#cardText").querySelectorAll("[data-ctext]").forEach(b=> b.onclick = ()=>{ cardDraft.card.textBox = b.dataset.ctext==="1"; paintCardStyle(); });
   $("#cardScore").innerHTML = Object.entries(SCORE_STYLES).map(([k,v])=> `<button class="chip ${(t.score||"gradient")===k?"on":""}" data-cscore="${k}" style="display:flex;align-items:center;gap:8px"><span style="font-family:Outfit;font-weight:800;font-size:20px;line-height:1;${ratingTextStyled(9, k)}">9</span>${v}</button>`).join("");
   $("#cardScore").querySelectorAll("[data-cscore]").forEach(b=> b.onclick = ()=>{ cardDraft.score=b.dataset.cscore; paintCardStyle(); });
-  $("#cardAccent").innerHTML = ACCENTS.map(c=> `<button class="swatch ${acc===c?"on":""}" data-cacc="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")
-    + `<label class="swatch custom ${ACCENTS.includes(acc)?"":"on"}">Custom <input type="color" id="cardCustom" value="${acc}"></label>`;
+  paintSwatches($("#cardAccent"), "cacc", "cardCustom", acc);
   $("#cardBg").querySelectorAll("[data-cbg]").forEach(b=> b.onclick = ()=>{ cardDraft.card.bg=b.dataset.cbg; paintCardStyle(); });
   $("#cardStyle").querySelectorAll("[data-cstyle]").forEach(b=> b.onclick = ()=>{ cardDraft.card.style=b.dataset.cstyle; paintCardStyle(); });
   $("#cardAccent").querySelectorAll("[data-cacc]").forEach(b=> b.onclick = ()=>{ cardDraft.card.accent=b.dataset.cacc; paintCardStyle(); });
-  $("#cardCustom").oninput = e=>{ cardDraft.card.accent = e.target.value.toLowerCase(); paintCardStyle(); $("#cardCustom").focus(); };
+  $("#cardCustom").oninput = e=>{ cardDraft.card.accent = e.target.value.toLowerCase(); swatchRepaint(paintCardStyle); };
 }
 async function saveLook(theme){
   const { error } = await sb.from("profiles").update({ theme }).eq("id", me.id);
