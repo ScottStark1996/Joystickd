@@ -1628,18 +1628,31 @@ function hazeBands(W, H, from, step){ let d = ""; for (let y = from; y < H; y +=
 const FOGTOWN = (()=>{
   const W = 430, H = 112, base = H - 8, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
   const ring = (cx, cy, r) => `M${f(cx-r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2*r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2*r)} 0Z`;
-  // the far row of rooftops, and a water tower
-  let far = ""; { const r = rng(41); let x = 0; while (x < W){ let w = Math.round(26 + r()*30); if (x + w > W - 26) w = W - x; const h = Math.round(44 + r()*26), y = base - h;
-    far += r() < .4 ? `M${x} ${base}V${y+9}L${f(x+w/2)} ${y}L${x+w} ${y+9}V${base}Z` : `M${x} ${base}V${y}H${x+w}V${base}Z`; x += w; } }
-  far += `M318 ${base}V${base-80}h3V${base}ZM343 ${base}V${base-80}h3V${base}ZM312 ${base-80}v-16h40v16ZM312 ${base-96}L332 ${base-106}L352 ${base-96}Z`;
+  // Rooflines are kept as lists of straight runs [x from, x to, height at start, height at end], so the far row can be
+  // drawn only where it shows ABOVE the street front. (Both rows are see-through tints; if the far row ran on down
+  // behind the front one, its outlines would show through the nearer buildings.)
+  const farRoof = [], nearRoof = [];
+  { const r = rng(41); let x = 0; while (x < W){ let w = Math.round(26 + r()*30); if (x + w > W - 26) w = W - x; const h = Math.round(44 + r()*26), y = base - h;
+    if (r() < .4) farRoof.push([x, x + w/2, y + 9, y], [x + w/2, x + w, y, y + 9]); else farRoof.push([x, x + w, y, y]); x += w; } }
   // the street front: gabled houses and flat-roofed shops (some with an awning line), a few windows still lit
   let body = "", trim = "", unlit = "", lit = ""; const spans = []; { const r = rng(13); let x = 0;
     while (x < W){ let w = Math.round(34 + r()*26); if (x + w > W - 34) w = W - x; const h = Math.round(36 + r()*20), y = base - h, kind = r(); spans.push([x, x + w]);
-      if (kind < .3) body += `M${x} ${base}V${y+10}L${f(x+w/2)} ${y}L${x+w} ${y+10}V${base}Z`;
-      else { body += `M${x} ${base}V${y}H${x+w}V${base}Z`; trim += `M${x+1} ${y-2}H${x+w-1}`; if (kind > .62) trim += `M${x+3} ${base-14}H${x+w-3}`; }
+      if (kind < .3){ body += `M${x} ${base}V${y+10}L${f(x+w/2)} ${y}L${x+w} ${y+10}V${base}Z`; nearRoof.push([x, x + w/2, y + 10, y], [x + w/2, x + w, y, y + 10]); }
+      else { nearRoof.push([x, x + w, y, y]); body += `M${x} ${base}V${y}H${x+w}V${base}Z`; trim += `M${x+1} ${y-2}H${x+w-1}`; if (kind > .62) trim += `M${x+3} ${base-14}H${x+w-3}`; }
       const cols = Math.max(1, Math.floor((w - 12)/11) + 1), sx = x + (w - ((cols-1)*11 + 5))/2, top = kind < .3 ? y + 13 : y + 6;                       // same margin left and right
       for (let wy = top; wy + 7 <= base - 15; wy += 12) for (let c = 0; c < cols; c++){ const d = `M${f(sx + c*11)} ${wy}h5v7h-5z`; if (r() < .12) lit += d; else unlit += d; }
       x += w; } }
+  // the far row of rooftops and a water tower, only where they rise above the street front
+  const roofAt = (runs, x, side)=>{ const q = runs.find(q=> side > 0 ? (x >= q[0] && x < q[1]) : (x > q[0] && x <= q[1])); return q ? q[2] + (q[3] - q[2])*(x - q[0])/(q[1] - q[0]) : base; };
+  let far = ""; { const cuts = new Set([0, W]); [...farRoof, ...nearRoof].forEach(q=>{ cuts.add(q[0]); cuts.add(q[1]); });
+    farRoof.forEach(a=> nearRoof.forEach(b=>{ const x0 = Math.max(a[0], b[0]), x1 = Math.min(a[1], b[1]); if (x1 <= x0) return;                         // where a far roofline crosses a near one
+      const d0 = roofAt([a], x0, 1) - roofAt([b], x0, 1), d1 = roofAt([a], x1, -1) - roofAt([b], x1, -1); if (d0*d1 < 0) cuts.add(x0 + (x1 - x0)*d0/(d0 - d1)); }));
+    const X = [...cuts].sort((p, q)=> p - q);
+    for (let i = 0; i < X.length - 1; i++){ const xa = X[i], xb = X[i+1], fa = roofAt(farRoof, xa, 1), fb = roofAt(farRoof, xb, -1), na = roofAt(nearRoof, xa, 1), nb = roofAt(nearRoof, xb, -1);
+      if (fa >= na - .01 && fb >= nb - .01) continue;                                                                                                    // hidden behind the front row here
+      far += `M${f(xa)} ${f(fa)}L${f(xb)} ${f(fb)}L${f(xb)} ${f(Math.max(nb, fb))}L${f(xa)} ${f(Math.max(na, fa))}Z`; }
+    [318, 343].forEach(x=>{ const foot = roofAt(nearRoof, x + 1.5, 1); if (foot > base - 80) far += `M${x} ${base-80}h3V${f(foot)}h-3Z`; });               // the tower's legs stop at the roofs in front
+    far += `M312 ${base-80}v-16h40v16ZM312 ${base-96}L332 ${base-106}L352 ${base-96}Z`; }
   // utility poles with two sagging lines, each carrying a street lamp
   const PH = 62, px = [0, 1, 2].map(i=> (i + .5)*W/3); let poles = "", wires = "", posts = "", heads = "", halo = "";
   px.forEach(x=>{ poles += `M${f(x)} ${base+2}V${base-PH}M${f(x-6)} ${base-PH+3}H${f(x+6)}M${f(x-4.5)} ${base-PH+7}H${f(x+4.5)}`; });
@@ -1655,7 +1668,7 @@ const FOGTOWN = (()=>{
            moon:  null,                                                          // nothing in the corner on this one
            stars: { w:180, h:70, ops: flakes },
            moonAt: [0, 0],
-           spans };                                                             // where each front building starts and ends (used by the tests)
+           spans, roofs: { far: farRoof, near: nearRoof, at: roofAt } };        // where each front building starts and ends, and both rooflines (used by the tests)
 })();
 // Lakeside: a placed scene like the others. A still lake in the fog: a far shore of pines, ripples on the water, and a
 // boardwalk running straight out from the near bank (narrowing as it goes) to a canoe drifting just off its far end on a rope; a lamp where
@@ -6791,12 +6804,34 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")){
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{ if (had) showUpdateBar(); had = true; });
     } catch(e){ console.warn("sw:", e); }
   });
-  function showUpdateBar(){
-    if ($("#updBar")) return;
-    const b = document.createElement("button"); b.id="updBar"; b.className="updbar"; b.textContent="Joystickd was updated — tap to reload";
-    b.onclick = ()=> location.reload(); document.body.appendChild(b);
-  }
 }
+function showUpdateBar(){
+  if ($("#updBar")) return;
+  const b = document.createElement("button"); b.id="updBar"; b.className="updbar"; b.textContent="Joystickd was updated — tap to reload";
+  b.onclick = ()=> reloadPage(); document.body.appendChild(b);
+}
+// ---- "a newer version is out" check ------------------------------------------------------------------------
+// A page keeps running whatever code it loaded, and the app's webview can stay alive in the background for days, so
+// people were left on an old copy (which, for one thing, doesn't know newer banner names and so shows no banner at all).
+// Ask the server, headers only, whether the page has changed: whenever Joystickd comes back to the foreground and every
+// 30 minutes while it's open. If it has: reload quietly when the person has been away a while and nothing is open or
+// being typed; otherwise show the "tap to reload" bar and leave it to them.
+let pageVer = null, verCheckedAt = 0, hiddenAt = 0, reloadPage = ()=> location.reload();
+async function pageVersion(){
+  try { const r = await fetch(location.pathname, { method:"HEAD", cache:"no-store" }); if (!r.ok) return null;
+    const v = r.headers.get("etag") || r.headers.get("last-modified"); return v ? v.replace(/^W\//, "") : null; } catch(e){ return null; }
+}
+async function checkForUpdate(awayMs = 0){
+  if (!location.protocol.startsWith("http") || Date.now() - verCheckedAt < 120000) return; verCheckedAt = Date.now();
+  const v = await pageVersion(); if (!v) return;
+  if (pageVer === null){ pageVer = v; return; }                                // first look: remember what we are running
+  if (v === pageVer) return;
+  const busy = !!document.querySelector(".sheet-wrap.open") || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
+  if (!busy && awayMs > 300000) reloadPage(); else showUpdateBar();
+}
+addEventListener("load", ()=>{ checkForUpdate(); });
+document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState === "hidden") hiddenAt = Date.now(); else checkForUpdate(hiddenAt ? Date.now() - hiddenAt : 0); });
+setInterval(()=>{ if (document.visibilityState === "visible") checkForUpdate(0); }, 30*60*1000);
 buildPips();
 wireReportUI();
 wirePwUI();
