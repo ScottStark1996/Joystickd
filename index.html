@@ -868,6 +868,9 @@
     <button class="plat-toggle" id="snapBio" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include bio<small>Your profile bio, under your name</small></span><span class="switch"><i></i></span></button>
     <button class="plat-toggle" id="snapBadges" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include badges<small>Founding member and other badges on the avatar</small></span><span class="switch"><i></i></span></button>
     <button class="plat-toggle" id="snapShelves" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include my shelves<small>Your extra titled Top 5s, under the main Top 5</small></span><span class="switch"><i></i></span></button>
+    <button class="plat-toggle" id="snapBanner" role="switch" style="margin-top:10px" hidden><span class="pt-text">Include banner<small>The profile banner behind the name and stats, as on the profile page</small></span><span class="switch"><i></i></span></button>
+    <button class="plat-toggle" id="snapBoxes" role="switch" style="margin-top:10px"><span class="pt-text">Boxes around sections<small>Top 5, shelves and the ratings chart each in their own box</small></span><span class="switch"><i></i></span></button>
+    <button class="set-row" id="snapStyleBtn" style="margin-top:12px" hidden>Snapshot style… <span class="protag">Pro</span><small style="display:block;font-weight:500;color:var(--muted);margin-top:2px">Card color, background, pattern and highlight color for this image</small></button>
     <div class="actions"><button class="cta ghost" id="snapCancel">Cancel</button><button class="cta" id="snapGo">Save image</button></div>
   </div>
 </div>
@@ -946,14 +949,15 @@
 <div class="sheet-wrap" id="cardWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
     <h2 id="cardTitle">Image style</h2>
-    <div class="g">How every image you save looks — review cards, posters, comparison cards and profile snapshots. Pro only.</div>
+    <div class="g" id="cardSub">How the images you save look. Pro only.</div>
+    <div class="seg" id="cardTabs" style="margin:12px 0 2px"><button class="segb" data-ctab="review">Review images</button><button class="segb" data-ctab="snap">Profile snapshot</button></div>
     <div class="look-prev" id="cardPrev" style="padding:0;overflow:hidden"></div>
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
-    <div class="look-sec"><h3>Background</h3><div class="chips" id="cardStyle"></div></div>
+    <div class="look-sec"><h3>Background</h3><div class="g" id="cardStyleHint" style="margin:-2px 0 8px" hidden>Blurred cover uses the first game in your Top 5.</div><div class="chips" id="cardStyle"></div></div>
     <div class="look-sec"><h3>Pattern</h3><div class="chips" id="cardPattern"></div></div>
-    <div class="look-sec"><h3>Review text</h3><div class="g" style="margin:-2px 0 8px">Boxed puts a panel behind the writing on review cards, so it stays easy to read over a pattern or cover art.</div><div class="chips" id="cardText"></div></div>
+    <div class="look-sec" id="cardTextSec"><h3>Review text</h3><div class="g" style="margin:-2px 0 8px">Boxed puts a panel behind the writing on review cards, so it stays easy to read over a pattern or cover art.</div><div class="chips" id="cardText"></div></div>
     <div class="look-sec"><h3>Highlight color</h3><div class="swatches" id="cardAccent"></div></div>
-    <div class="look-sec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">How your rating number looks on saved images.</div><div class="chips" id="cardScore"></div></div>
+    <div class="look-sec" id="cardScoreSec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">How your rating number looks on saved images.</div><div class="chips" id="cardScore"></div></div>
     <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
   </div>
 </div>
@@ -1815,9 +1819,18 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
           // the card's highlight color is its own hex (older saves used "gold" / "theme" — mapped here)
           accent: /^#[0-9a-f]{6}$/i.test(t.card?.accent||"") ? t.card.accent.toLowerCase() : t.card?.accent==="theme" ? (/^#[0-9a-f]{6}$/i.test(t.accent||"") ? t.accent.toLowerCase() : DEFAULT_THEME.accent) : "#f0b429",
           style: ["solid","cover","glow"].includes(t.card?.style) ? t.card.style : "solid", pattern: PATTERNS[t.card?.pattern] ? t.card.pattern : "none",
-          textBox: t.card?.textBox !== false } }; }                             // panel behind the review text on review cards (on unless switched off)
+          textBox: t.card?.textBox !== false },                                 // panel behind the review text on review cards (on unless switched off)
+  // the profile snapshot's own style; null = not set yet, so it follows the review image style (as it always did)
+  snap: t.snap && typeof t.snap==="object" ? { bg: PAGE_BGS[t.snap.bg] ? t.snap.bg : "navy", accent: /^#[0-9a-f]{6}$/i.test(t.snap.accent||"") ? t.snap.accent.toLowerCase() : "#f0b429",
+          style: ["solid","cover","glow"].includes(t.snap.style) ? t.snap.style : "solid", pattern: PATTERNS[t.snap.pattern] ? t.snap.pattern : "none" } : null }; }
 // Colors for the images a Pro user saves (review cards, continuation cards, profile snapshot).
 const CARD_STYLES = { solid:"Solid", cover:"Blurred cover", glow:"Accent glow" };
+// The profile snapshot's look: its own style once the owner has set one, otherwise the same as their review images.
+function snapThemeFor(uid, P){
+  const t = themeFor(uid, P), ct = cardThemeFor(uid, P); if (!t || !t.snap) return ct;
+  const b = PAGE_BGS[t.snap.bg] || PAGE_BGS.navy;
+  return { ...ct, bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t.snap.accent, style: t.snap.style, pattern: t.snap.pattern, own: true };
+}
 function cardThemeFor(uid, P){
   const t = themeFor(uid, P); const b = PAGE_BGS[t?.card?.bg] || PAGE_BGS.navy;
   return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", score: t ? (t.score||"gradient") : "gradient", pattern: t ? (t.card.pattern||"none") : "none", textBox: t ? t.card.textBox !== false : true, isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
@@ -2023,15 +2036,26 @@ function paintLook(){
   $("#lookNameColor").onchange = e=>{ lookDraft.nameColor = e.target.checked; };
 }
 // ---- Image style sheet (Pro)
-let cardDraft = null;
-function openCardStyle(){ if (!requirePro("cards")) return; cardDraft = cleanTheme(me.theme); paintCardStyle(); $("#cardWrap").classList.add("open"); }
+// Two tabs: "review" edits the style of review cards, posters and comparison cards (theme.card); "snap" edits the profile
+// snapshot's own style (theme.snap), which starts as a copy of the review style the first time it is opened.
+let cardDraft = null, cardTab = "review";
+function openCardStyle(tab){ if (!requirePro("cards")) return; cardDraft = cleanTheme(me.theme); cardTab = tab === "snap" ? "snap" : "review"; paintCardStyle(); $("#cardWrap").classList.add("open"); }
+const snapView = ()=> cardDraft.snap || { bg: cardDraft.card.bg, accent: cardDraft.card.accent, style: cardDraft.card.style, pattern: cardDraft.card.pattern || "none" };   // what the snapshot looks like right now
+const cardEdit = ()=> cardTab === "snap" ? (cardDraft.snap ||= snapView()) : cardDraft.card;                    // the style being changed (looking at the snapshot tab changes nothing; the first edit there gives it its own style)
 function paintCardStyle(){
-  const t = cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent;
+  const snap = cardTab === "snap", t = snap ? { ...cardDraft, card: snapView() } : cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent;
+  $("#cardTabs").querySelectorAll("[data-ctab]").forEach(x=>{ x.classList.toggle("on", x.dataset.ctab === cardTab); x.onclick = ()=>{ cardTab = x.dataset.ctab; paintCardStyle(); }; });
+  $("#cardTextSec").hidden = snap; $("#cardScoreSec").hidden = snap; $("#cardStyleHint").hidden = !snap;
+  $("#cardSub").textContent = snap ? "How your saved profile snapshot looks. It has its own style, separate from your review images. Pro only." : "How your review cards, posters and comparison cards look. Pro only.";
   const bgCss = t.card.style==="glow" ? `radial-gradient(circle at 15% 10%, ${rgba(acc,.3)}, ${rgba(acc,.05)} 45%, transparent 70%), ${b.panel}`
               : t.card.style==="cover" ? `linear-gradient(${rgba(b.bg,.55)},${rgba(b.bg,.55)}), linear-gradient(135deg,#3b4a7a,#7a3b5a 60%,#2a6a5a)` : b.panel;
   const [patImg, patSz, patRep, patPos] = patternCss({ accent: acc, pattern: t.card.pattern||"none" }, true);
   const patCss = patImg==="none" ? "" : `background-image:${patImg};background-size:${patSz};${patRep ? `background-repeat:${patRep};background-position:${patPos};` : ""}`;
-  $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px;font-size:12px;position:relative;overflow:hidden;isolation:isolate"><div style="position:absolute;inset:0;z-index:-1;${patCss}pointer-events:none"></div>
+  if (snap){ const tiles = [1,2,3,4,5].map(n=> `<span style="flex:1;aspect-ratio:3/4;border-radius:6px;background:${b.panel2};border:1px solid ${b.line};position:relative"><i style="position:absolute;left:4px;top:4px;font:800 9px Outfit,sans-serif;font-style:normal;color:${acc};background:rgba(10,14,25,.85);border-radius:4px;padding:1px 5px">${n}</i></span>`).join("");
+    $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px 46px;font-size:12px;position:relative;overflow:hidden;isolation:isolate"><div style="position:absolute;inset:0;z-index:-1;${patCss}pointer-events:none"></div>
+      <div style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:50%;background:#233150;color:${acc};display:grid;place-items:center;font:800 16px Outfit,sans-serif;flex:none">${esc((me.username[0]||"?").toUpperCase())}</span><b style="font-family:Outfit;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(me.username)}</b><span style="font-family:Outfit;font-weight:800">JOYSTICK<span style="color:${acc}">D</span></span></div>
+      <div style="color:var(--muted);font:700 10px Outfit,sans-serif;letter-spacing:.04em;margin:12px 0 6px">TOP 5</div><div style="display:flex;gap:6px">${tiles}</div></div></div>`; }
+  else $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px;font-size:12px;position:relative;overflow:hidden;isolation:isolate"><div style="position:absolute;inset:0;z-index:-1;${patCss}pointer-events:none"></div>
       <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Outfit;font-size:16px">${esc(getGame(Object.keys(logs)[0]||1)?.title || "Game title")}</b><span style="font-family:Outfit;font-weight:800">JOYSTICK<span style="color:${acc}">D</span></span></div>
       <div style="color:var(--muted);margin-top:2px">2026 \u00b7 Developer</div>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px"><span style="color:${acc};font-weight:700">\uD83C\uDFC6 Platinum #12 \u00b7 difficulty 6/10</span><span style="font-family:Outfit;font-weight:800;font-size:28px;${ratingTextStyled(9.5, t.score)}">9.5</span></div>
@@ -2040,16 +2064,16 @@ function paintCardStyle(){
   $("#cardBg").innerHTML = Object.entries(PAGE_BGS).map(([k,v])=> `<button class="chip ${t.card.bg===k?"on":""}" data-cbg="${k}" style="display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:${v.panel};border:2px solid ${v.line};flex:none"></span>${v.name}</button>`).join("");
   $("#cardStyle").innerHTML = Object.entries(CARD_STYLES).map(([k,v])=> `<button class="chip ${t.card.style===k?"on":""}" data-cstyle="${k}">${v}</button>`).join("");
   $("#cardPattern").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${(t.card.pattern||"none")===k?"on":""}" data-cpat="${k}">${v}</button>`).join("");
-  $("#cardPattern").querySelectorAll("[data-cpat]").forEach(b=> b.onclick = ()=>{ cardDraft.card.pattern=b.dataset.cpat; paintCardStyle(); });
+  $("#cardPattern").querySelectorAll("[data-cpat]").forEach(b=> b.onclick = ()=>{ cardEdit().pattern=b.dataset.cpat; paintCardStyle(); });
   $("#cardText").innerHTML = [[true,"Boxed"],[false,"Plain"]].map(([k,v])=> `<button class="chip ${(t.card.textBox!==false)===k?"on":""}" data-ctext="${k?1:0}">${v}</button>`).join("");
   $("#cardText").querySelectorAll("[data-ctext]").forEach(b=> b.onclick = ()=>{ cardDraft.card.textBox = b.dataset.ctext==="1"; paintCardStyle(); });
   $("#cardScore").innerHTML = Object.entries(SCORE_STYLES).map(([k,v])=> `<button class="chip ${(t.score||"gradient")===k?"on":""}" data-cscore="${k}" style="display:flex;align-items:center;gap:8px"><span style="font-family:Outfit;font-weight:800;font-size:20px;line-height:1;${ratingTextStyled(9, k)}">9</span>${v}</button>`).join("");
   $("#cardScore").querySelectorAll("[data-cscore]").forEach(b=> b.onclick = ()=>{ cardDraft.score=b.dataset.cscore; paintCardStyle(); });
   paintSwatches($("#cardAccent"), "cacc", "cardCustom", acc);
-  $("#cardBg").querySelectorAll("[data-cbg]").forEach(b=> b.onclick = ()=>{ cardDraft.card.bg=b.dataset.cbg; paintCardStyle(); });
-  $("#cardStyle").querySelectorAll("[data-cstyle]").forEach(b=> b.onclick = ()=>{ cardDraft.card.style=b.dataset.cstyle; paintCardStyle(); });
-  $("#cardAccent").querySelectorAll("[data-cacc]").forEach(b=> b.onclick = ()=>{ cardDraft.card.accent=b.dataset.cacc; paintCardStyle(); });
-  $("#cardCustom").oninput = e=>{ cardDraft.card.accent = e.target.value.toLowerCase(); swatchRepaint(paintCardStyle); };
+  $("#cardBg").querySelectorAll("[data-cbg]").forEach(b=> b.onclick = ()=>{ cardEdit().bg=b.dataset.cbg; paintCardStyle(); });
+  $("#cardStyle").querySelectorAll("[data-cstyle]").forEach(b=> b.onclick = ()=>{ cardEdit().style=b.dataset.cstyle; paintCardStyle(); });
+  $("#cardAccent").querySelectorAll("[data-cacc]").forEach(b=> b.onclick = ()=>{ cardEdit().accent=b.dataset.cacc; paintCardStyle(); });
+  $("#cardCustom").oninput = e=>{ cardEdit().accent = e.target.value.toLowerCase(); swatchRepaint(paintCardStyle); };
 }
 async function saveLook(theme){
   const { error } = await sb.from("profiles").update({ theme }).eq("id", me.id);
@@ -3603,7 +3627,19 @@ function paintListEditor(){
   $("#listGames").querySelectorAll("[data-ldown]").forEach(b=> b.onclick = ()=>{ const i=+b.dataset.ldown; [listDraft.games[i+1],listDraft.games[i]]=[listDraft.games[i],listDraft.games[i+1]]; paintListEditor(); });
   $("#listGames").querySelectorAll("[data-lrm]").forEach(b=> b.onclick = ()=>{ listDraft.games.splice(+b.dataset.lrm,1); paintListEditor(); });
 }
-let snapTarget=null, snapChartOn=true, snapBadgesOn=true, snapShelvesOn=true, snapBioOn=true;
+let snapTarget=null, snapChartOn=true, snapBadgesOn=true, snapShelvesOn=true, snapBioOn=true, snapBannerOn=false, snapBoxesOn=false;
+// Open the snapshot sheet for a profile (yours or someone else's): only the switches that apply to it are shown.
+function openSnap(P){
+  snapTarget = P; const sw = (id, on, hidden)=>{ const b = $(id); b.hidden = !!hidden; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); };
+  sw("#snapChart", snapChartOn, false);
+  sw("#snapBio", snapBioOn, !(P.bio||"").trim());
+  sw("#snapBadges", snapBadgesOn, !profileBadges(P).length);
+  sw("#snapShelves", snapShelvesOn, !(isPro(P) && (P.shelves||[]).some(sh=> (sh.games||[]).some(Boolean))));
+  sw("#snapBanner", snapBannerOn, !themeFor(P.id, P));
+  sw("#snapBoxes", snapBoxesOn, false);
+  $("#snapStyleBtn").hidden = !(me && P.id === me.id);                           // only the owner can restyle their snapshot
+  $("#snapWrap").classList.add("open");
+}
 // ---- platinum wall ------------------------------------------------------------
 let wallOpts = { sort:"num", badge:true, num:true, diff:false, hours:false, fun:false, highlights:false }, wallTarget=null;
 function openWall(P){
@@ -3745,7 +3781,10 @@ function wireSnapUI(){
   $("#snapShelves").onclick = ()=>{ snapShelvesOn=!snapShelvesOn; $("#snapShelves").classList.toggle("on", snapShelvesOn); $("#snapShelves").setAttribute("aria-checked", snapShelvesOn); };
   $("#snapBadges").onclick = ()=>{ snapBadgesOn=!snapBadgesOn; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); };
   $("#snapBio").onclick = ()=>{ snapBioOn=!snapBioOn; $("#snapBio").classList.toggle("on", snapBioOn); $("#snapBio").setAttribute("aria-checked", snapBioOn); };
-  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn, shelves: snapShelvesOn, bio: snapBioOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
+  $("#snapStyleBtn").onclick = ()=>{ $("#snapWrap").classList.remove("open"); openCardStyle("snap"); };
+  $("#snapBanner").onclick = ()=>{ snapBannerOn=!snapBannerOn; $("#snapBanner").classList.toggle("on", snapBannerOn); $("#snapBanner").setAttribute("aria-checked", snapBannerOn); };
+  $("#snapBoxes").onclick = ()=>{ snapBoxesOn=!snapBoxesOn; $("#snapBoxes").classList.toggle("on", snapBoxesOn); $("#snapBoxes").setAttribute("aria-checked", snapBoxesOn); };
+  $("#snapGo").onclick = async ()=>{ $("#snapWrap").classList.remove("open"); if (!snapTarget) return; try { await saveProfileImage(snapTarget, { chart: snapChartOn, badges: snapBadgesOn, shelves: snapShelvesOn, bio: snapBioOn, banner: snapBannerOn, boxes: snapBoxesOn }); } catch(e){ console.error(e); toast("Couldn't build the snapshot"); } };
 }
 function wireListEditor(){
   $("#listCancel").onclick = ()=> $("#listWrap").classList.remove("open");
@@ -5960,14 +5999,28 @@ async function saveProfileImage(P, opts={}){
   if (opts.bio && (P.bio||"").trim()){ const m = document.createElement("canvas").getContext("2d"); m.font = "500 14px Manrope, sans-serif";
     bioLines = wrapText(m, P.bio.trim().replace(/\s+/g, " "), W-104); if (bioLines.length > 3){ bioLines = bioLines.slice(0,3); bioLines[2] = bioLines[2].replace(/[\s.,;:]*$/, "") + "\u2026"; } }
   const bioH = bioLines.length ? 6 + bioLines.length*BIO_LH : 0;
+  // two looks you can switch on: the profile banner behind the name and stats, and a box around each section
+  const banT = opts.banner ? themeFor(P.id, P) : null, boxes = !!opts.boxes;
+  const BAN = banT ? 16 : 0, SEC = boxes ? 16 : 0, nRows = (top.length ? 1 : 0) + shelves.length;      // extra room under the banner, and between boxed sections
   let H = (top.length ? 176 + 14 + cvH + 66 : 216) + bioH;
   H += shelves.length * rowH;
   if (withChart) H += chartH + 62;
+  H += BAN + SEC*nRows + (boxes ? 12 : 0) + (boxes && withChart && nRows ? 14 : 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d");
   const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
-  const ct = cardThemeFor(P.id, P);
+  const ct = snapThemeFor(P.id, P);
   const gold=ct.accent, text="#e6ebf4", mut="#8b98b5";
-  paintCardBg(x, W, H, ct, null);
+  paintCardBg(x, W, H, ct, ct.own && ct.style === "cover" ? (covers.find(Boolean) || null) : null);   // "Blurred cover" on a snapshot = the first Top 5 cover
+  // the banner: the same box as on the profile page (page color, accent tint, pattern, thin accent outline), behind the header
+  if (banT){ const bx = 36, by = 36, bw = W - 72, bh = (bioLines.length ? 170 + (bioLines.length - 1)*BIO_LH + 18 : 156) - by;
+    x.save(); x.beginPath(); x.roundRect(bx, by, bw, bh, 16); x.clip();
+    x.fillStyle = (PAGE_BGS[banT.bg] || PAGE_BGS.navy).bg; x.fillRect(bx, by, bw, bh);
+    if (banT.tint !== "off"){ x.fillStyle = rgba(banT.accent, banT.tint === "bold" ? .17 : .07); x.fillRect(bx, by, bw, bh); }
+    x.translate(bx, by); paintPattern(x, bw, bh, banT.pattern, banT.accent, { inset: 0 }); x.restore();
+    if (banT.tint !== "off"){ x.strokeStyle = rgba(banT.accent, .28); x.lineWidth = 1; x.beginPath(); x.roundRect(bx + .5, by + .5, bw - 1, bh - 1, 16); x.stroke(); } }
+  // a box behind one section (label, then its content), in the same style as the boxed review text
+  const secBox = (top, bottom)=>{ if (!boxes) return; x.fillStyle = rgba(ct.panel, .72); x.beginPath(); x.roundRect(36, top, W - 72, bottom - top, 14); x.fill();
+    x.strokeStyle = rgba(ct.accent, .5); x.lineWidth = 1.5; x.beginPath(); x.roundRect(36, top, W - 72, bottom - top, 14); x.stroke(); };
   // wordmark
   x.textAlign="right"; x.font="800 16px Outfit, sans-serif";
   x.fillStyle=text; x.fillText("JOYSTICK", W-56, 56); x.fillStyle=gold; x.fillText("D", W-44, 56);
@@ -5998,6 +6051,7 @@ async function saveProfileImage(P, opts={}){
   if (bioLines.length){ x.font="500 14px Manrope, sans-serif"; x.fillStyle="#c4cddd"; bioLines.forEach((ln,i)=> x.fillText(ln, 52, 170 + i*BIO_LH)); }
   // top 5
   const coverRow = (label, ids, imgs, ty)=>{
+    secBox(ty - 24, ty + 14 + cvH + 16);
     x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut; x.fillText(label.toUpperCase(), 52, ty);
     const startX = 52;
     ids.forEach((id,i)=>{ const g=getGame(id), bx=startX+i*(cvW+gap), by=ty+14;
@@ -6010,11 +6064,12 @@ async function saveProfileImage(P, opts={}){
       x.fillStyle=gold; x.font="800 12px Outfit, sans-serif"; x.textAlign="center"; x.fillText(String(i+1), bx+17, by+19); x.textAlign="left";
     });
   };
-  let nextY = 176 + bioH;
-  if (top.length){ coverRow("Top 5", top, covers, nextY); nextY += 14 + cvH + 40; }
-  shelves.forEach((sh,i)=>{ coverRow(sh.title, sh.ids, shelfCovers[i], nextY); nextY += rowH; });
+  let nextY = 176 + bioH + BAN + (boxes ? 6 : 0);
+  if (top.length){ coverRow("Top 5", top, covers, nextY); nextY += 14 + cvH + 40 + SEC; }
+  shelves.forEach((sh,i)=>{ coverRow(sh.title, sh.ids, shelfCovers[i], nextY); nextY += rowH + SEC; });
   if (withChart){
-    const cy = (top.length || shelves.length) ? nextY - 14 : 176 + bioH;
+    const cy = (top.length || shelves.length) ? nextY - (boxes ? 0 : 14) : 176 + bioH + BAN + (boxes ? 6 : 0);   // boxed: the same gap between every box
+    secBox(cy - 24, cy + 16 + chartH + 12);
     const avg = (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1);
     x.font="700 13px Outfit, sans-serif"; x.fillStyle=mut;
     x.fillText("RATINGS", 52, cy);
@@ -6309,7 +6364,9 @@ function wireSettingsUI(){
   $("#cardCancel").onclick = ()=> $("#cardWrap").classList.remove("open");
   $("#cardWrap").addEventListener("click", e=>{ if(e.target.id==="cardWrap") $("#cardWrap").classList.remove("open"); });
   $("#cardSave").onclick = ()=>{ $("#cardWrap").classList.remove("open"); saveLook(cleanTheme(cardDraft)); };
-  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme); t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none", textBox:true }; t.score="gradient"; saveLook(t); };
+  $("#cardReset").onclick = ()=>{ $("#cardWrap").classList.remove("open"); const t=cleanTheme(me.theme);       // resets only the tab you are on
+    if (cardTab === "snap") t.snap = { bg:"navy", accent:"#f0b429", style:"solid", pattern:"none" }; else { t.card={ bg:"navy", accent:"#f0b429", style:"solid", pattern:"none", textBox:true }; t.score="gradient"; }
+    saveLook(t); };
   $("#lookReset").onclick = ()=> saveLook(null);
   $("#proClose").onclick = ()=> $("#proWrap").classList.remove("open");
   $("#proWrap").addEventListener("click", e=>{ if(e.target.id==="proWrap") $("#proWrap").classList.remove("open"); });
@@ -6333,11 +6390,7 @@ function wireSettingsUI(){
   $("#editProfWrap").addEventListener("click", e=>{ if(e.target.id==="editProfWrap") closeEditProf(); });
   $("#epAvatar").onclick = ()=>{ closeEditProf(); const f=$("#avatarFile"); if (f) f.click(); else toast("Open your profile to change your picture"); };
   $("#epBio").onclick = ()=>{ closeEditProf(); openBio(); };
-  $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); snapTarget=myProfileObj(); $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
-    $("#snapBadges").hidden = !profileBadges(me).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn);
-    $("#snapBio").hidden = !(me.bio||"").trim(); $("#snapBio").classList.toggle("on", snapBioOn); $("#snapBio").setAttribute("aria-checked", snapBioOn);
-    const hasShelves = isPro(me) && (me.shelves||[]).some(sh=> (sh.games||[]).some(Boolean));
-    $("#snapShelves").hidden = !hasShelves; $("#snapShelves").classList.toggle("on", snapShelvesOn); $("#snapShelves").setAttribute("aria-checked", snapShelvesOn); $("#snapWrap").classList.add("open"); };
+  $("#snapBtn").onclick = ()=>{ if (!me) return; closeEditProf(); openSnap(myProfileObj()); };
   $("#cmpProfBtn").onclick = ()=>{ closeEditProf(); openCompare("profile"); };
   // Hide the big platinum stat under the username (for players who don't chase platinums)
   $("#setPlats").onclick = async ()=>{ if (!me) return; const next = !me.hidePlats;
@@ -6358,8 +6411,7 @@ function wireSettingsUI(){
   $("#pmShare").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
     shareUrl(location.origin + location.pathname + "?u=" + encodeURIComponent(profMenuCtx.username), `${profMenuCtx.username} on Joystickd`, "Profile link copied"); };
   $("#pmSnap").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
-    snapTarget = profMenuCtx; $("#snapChart").classList.toggle("on", snapChartOn); $("#snapChart").setAttribute("aria-checked", snapChartOn);
-    $("#snapBadges").hidden = !profileBadges(profMenuCtx).length; $("#snapBadges").classList.toggle("on", snapBadgesOn); $("#snapBadges").setAttribute("aria-checked", snapBadgesOn); $("#snapWrap").classList.add("open"); };
+    openSnap(profMenuCtx); };
   $("#pmExcl").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (profMenuCtx) toggleExcluded(profMenuCtx); };
   $("#pmReport").onclick = ()=>{ $("#profMenuWrap").classList.remove("open"); if (!profMenuCtx) return;
     openReport({ type:"profile", targetUser:profMenuCtx.id, label:`Profile of ${profMenuCtx.username}` }); };
