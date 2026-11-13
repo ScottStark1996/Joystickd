@@ -1658,7 +1658,7 @@ const FOGTOWN = (()=>{
            spans };                                                             // where each front building starts and ends (used by the tests)
 })();
 // Lakeside: a placed scene like the others. A still lake in the fog: a far shore of pines, ripples on the water, and a
-// boardwalk running straight out from the near bank (narrowing as it goes) to a rowboat tied at its far end; a lamp where
+// boardwalk running straight out from the near bank (narrowing as it goes) to a canoe drifting just off its far end on a rope; a lamp where
 // the pier meets the bank, a bench and two bare trees (repeating sideways only). Nothing in the corner; drifting flakes
 // take the place of stars. Built once from fixed seeds.
 const LAKESIDE = (()=>{
@@ -1680,7 +1680,13 @@ const LAKESIDE = (()=>{
   let planks = "", posts = ""; for (let i = 1; i < 9; i++){ const t = 1 - Math.pow(1 - i/9, 1.6); planks += `M${f(PL(t))} ${f(PY(t))}H${f(PR(t))}`; }
   [0, .34, .62, .84, 1].forEach(t=>{ const h = 9 - 5*t; posts += `M${f(PL(t))} ${f(PY(t)+1)}v${f(-h)}M${f(PR(t))} ${f(PY(t)+1)}v${f(-h)}`; });
   const ropes = `M${f(PL(0))} ${f(PY(0)-8)}L${f(PL(1))} ${f(PY(1)-3.4)}M${f(PR(0))} ${f(PY(0)-8)}L${f(PR(1))} ${f(PY(1)-3.4)}`;
-  const bx = f(PL(1) - 30), by = y1 + 1, boat = `M${bx} ${by}q2 6 8 6h14q6 0 8 -6Z`, tackle = `M${f(bx+7)} ${by-1}l12 5M${f(bx+30)} ${by}L${f(PL(1))} ${y1-3}`;      // an oar and the mooring line
+  // the canoe: drifted a little way off the far end on a slack rope, angled, a touch small because it is further out.
+  // Drawn around (0,0) = the middle of its gunwale and then set in place; with a faint reflection and a paddle lying across it.
+  const CK = .86, CAT = [221, 60.6, -7], c = v => f(v*CK);
+  const canoe = `M${c(-19)} ${c(-2.4)}Q0 ${c(1.4)} ${c(19)} ${c(-2.4)}Q${c(16.5)} ${c(4.2)} ${c(9)} ${c(4.6)}H${c(-9)}Q${c(-16.5)} ${c(4.2)} ${c(-19)} ${c(-2.4)}Z`;
+  const mirror = `M${c(-17)} ${c(5.6)}Q0 ${c(4.8)} ${c(17)} ${c(5.6)}Q${c(12)} ${c(8.6)} ${c(6)} ${c(8.8)}H${c(-6)}Q${c(-12)} ${c(8.6)} ${c(-17)} ${c(5.6)}Z`;
+  const paddle = `M${c(-8)} ${c(-.3)}L${c(6)} ${c(-2.3)}l${c(3.6)} ${c(-.6)}`;                                                             // lying low across the gunwales
+  const rope = `M${f(PL(1))} ${y1-3}Q${f(PL(1)+5)} ${f(y1+.6)} ${f(CAT[0] + 16.3*.99)} ${f(CAT[1] - 4.1)}`, wake = `M196 66.6h8M241 63.6h9M203 62.2h5M190 62.8h5`;   // mooring line from the end post to the bow; ripples around the hull
   // ripples, kept clear of the pier and the boat
   let ripples = ""; { const r = rng(4), keep = [PL(1) - 40, PR(0) + 4]; for (let i = 0; i < 30; i++){ const y = 62 + r()*26, x = r()*W, l = 8 + r()*18; if (x + l > keep[0] && x < keep[1]) continue;
     ripples += `M${f(x)} ${f(y)}h${f(l)}`; if (x + l > W) ripples += `M${f(x - W)} ${f(y)}h${f(l)}`; } }
@@ -1689,7 +1695,7 @@ const LAKESIDE = (()=>{
   const farFog = fogLayers(W, [[110, 55, 125, 9], [340, 51, 110, 10]], .014), nearFog = fogLayers(W, [[70, 82, 115, 9], [385, 86, 115, 9]], .013);
   const fr = rng(31), flakes = []; for (let i = 0; i < 14; i++) flakes.push([PA.circ(+(4 + fr()*172).toFixed(1), +(4 + fr()*62).toFixed(1), +(.6 + fr()*.9).toFixed(2)), +(.14 + fr()*.2).toFixed(2), 0, 0, null]);
   return { sky:   { w:W, h:H, ops:[[far, .09, 0, 0, null], [`M0 58H${W}V${H}H0Z`, .05, 0, 0, null], ...farFog, [ripples, 0, .14, 1, null], [halo, .09, 0, 0, null],
-                                   [boat, .32, 0, 0, null], [tackle, 0, .32, 1.1, null], [deck, .20, 0, 0, null], [planks, 0, .20, 1, null], [posts, 0, .40, 1.8, null], [ropes, 0, .26, 1, null], ...nearFog,
+                                   [mirror, .09, 0, 0, CAT], [canoe, .34, 0, 0, CAT], [paddle, 0, .34, 1.1, CAT], [rope, 0, .30, .9, null], [wake, 0, .18, 1, null], [deck, .20, 0, 0, null], [planks, 0, .20, 1, null], [posts, 0, .40, 1.8, null], [ropes, 0, .26, 1, null], ...nearFog,
                                    [tree(1.3), 0, .26, 1.8, [40, f(bank(40)), 0]], [tree(1.05), 0, .24, 1.6, [392, f(bank(392)), 0]], [line(bank, H), .24, 0, 0, null], [bench, 0, .30, 1.6, null],
                                    [post, 0, .38, 1.6, null], [head, .80, 0, 0, null], [hazeBands(W, H, 40, 3), .0045, 0, 0, null]] },
            moon:  null,                                                          // nothing in the corner on this one
