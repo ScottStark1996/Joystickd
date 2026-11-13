@@ -1196,8 +1196,8 @@
 <div class="sheet-wrap" id="awardOneWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="awardOneTitle">
     <h2 id="awardOneTitle">Save this award as an image</h2>
-    <div class="g">Pick a layout. Spotlight is wide (16:9); Marquee is a tall poster (4:5).</div>
-    <div class="actions"><button class="cta ghost" id="awardOneCancel">Cancel</button><button class="cta ghost" id="awardOneWide">Spotlight (wide)</button><button class="cta" id="awardOneTall">Marquee (poster)</button></div>
+    <div class="g" id="awardOneSub">Pick a layout. Spotlight is wide (16:9); Marquee is a tall poster (4:5).</div>
+    <div class="actions" style="flex-wrap:wrap"><button class="cta ghost" id="awardOneCancel">Cancel</button><button class="cta ghost" id="awardOneWide">Spotlight (wide)</button><button class="cta ghost" id="awardOneTall">Marquee (poster)</button><button class="cta" id="awardOnePodium" hidden>Top 3 (with votes)</button></div>
   </div>
 </div>
 
@@ -3769,6 +3769,10 @@ function openAwardOne(ctx){
   const a = AWARDS.find(k=> k.key===ctx.key); if (!a) return;
   awardOneCtx = ctx;
   $("#awardOneTitle").textContent = `Save “${a.label}” as an image`;
+  const top3 = !!ctx.community;                                                 // the Top 3 layout is for community results (a personal pick has no runners-up)
+  $("#awardOnePodium").hidden = !top3; $("#awardOneTall").classList.toggle("ghost", top3);
+  $("#awardOneSub").textContent = top3 ? "Pick a layout. Spotlight is wide (16:9), Marquee is a tall poster (4:5), and Top 3 shows first, second and third place with their votes."
+    : "Pick a layout. Spotlight is wide (16:9); Marquee is a tall poster (4:5).";
   $("#awardOneWrap").classList.add("open");
 }
 // The little save control on an award card (it can sit inside a tappable card, so it swallows its own taps).
@@ -3783,7 +3787,8 @@ function awardOneData(ctx){
   if (ctx.community){
     const t = tally(year, a.key), w = t[0], g = w && getGame(w.id); if (!g) return null;
     const total = t.reduce((s,e)=> s+e.n, 0);
-    return { a, g, year, over:`${year} JOYSTICKD GAME AWARDS`, tag:"WINNER", meta:`${g.year ? g.year+"  ·  " : ""}${w.n} of ${total} vote${total===1?"":"s"}`, file:`joystickd-${year}-${a.key}` };
+    return { a, g, year, over:`${year} JOYSTICKD GAME AWARDS`, tag:"WINNER", meta:`${g.year ? g.year+"  ·  " : ""}${w.n} of ${total} vote${total===1?"":"s"}`, file:`joystickd-${year}-${a.key}`,
+      total, places: t.slice(0,3).map(e=>({ g:getGame(e.id), n:e.n })).filter(p=> p.g) };   // top three, for the "Top 3" layout
   }
   const P = ctx.P || {}, id = ((P.ballot||{})[year]||{})[a.key], g = id && getGame(id); if (!g) return null;
   const mineP = !!me && P.id===me.id, name = P.username || "";
@@ -3795,11 +3800,16 @@ async function saveAwardOne(ctx, layout){
   try { await document.fonts.ready; } catch(e){}
   const ct = cardThemeFor(me?.id, me);
   d.accent = ct.accent;
-  d.cover = (d.g.cover && await loadCoverMax(d.g.cover)) || awardPlaceholderCover(d.g, ct);
-  const c = layout==="marquee" ? drawAwardMarquee(d) : drawAwardSpotlight(d);
+  const art = async g => (g.cover && await loadCoverMax(g.cover)) || awardPlaceholderCover(g, ct);
+  let c;
+  if (layout==="podium"){
+    if (!d.places || !d.places.length){ toast("Nothing to save for that award yet"); return; }
+    const covers = await Promise.all(d.places.map(p=> art(p.g))); d.places.forEach((p,i)=>{ p.cover = covers[i]; });
+    c = drawAwardPodium(d);
+  } else { d.cover = await art(d.g); c = layout==="marquee" ? drawAwardMarquee(d) : drawAwardSpotlight(d); }
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  await deliverImage(blob, `${d.file}-${layout==="marquee" ? "poster" : "wide"}.png`.replace(/[^a-z0-9.\-]+/g, "-"));
+  await deliverImage(blob, `${d.file}-${layout==="marquee" ? "poster" : layout==="podium" ? "top3" : "wide"}.png`.replace(/[^a-z0-9.\-]+/g, "-"));
 }
 // Stand-in art for a game with no cover: a dark card with the title's first letter.
 function awardPlaceholderCover(g, ct){
@@ -3912,6 +3922,65 @@ function drawAwardMarquee(o){
   y += cat.z*1.02 - (cat.z*.82 + 24);
   const ov = awOverline(x, o.over, W/2, y, W-190, "center", ac); y -= ov.z + 92;
   awLaurel(x, W/2, y, 76, ac, 9, 112, 250); awStar(x, W/2, y-22, 13, ac); x.fillStyle = ac; x.font = AW_HEAD(o.tag.length > 7 ? 17 : 22); awSpaced(x, o.tag, W/2, y+20, o.tag.length > 7 ? 2.5 : 4, "center");
+  return c;
+}
+
+// Top 3 — tall image for a community award: 1st, 2nd and 3rd as brush-edged bands of cover art, with the votes each got.
+function drawAwardPodium(o){
+  const W = 1080, ac = o.accent, P = o.places.slice(0, 3);
+  const BH = [380, 290, 240], BR = [W-40, W-150, W-260], GAP = 28, TOP = 300, FOOT = 96;
+  const H = TOP + P.reduce((s,_,i)=> s + BH[i], 0) + GAP*(P.length-1) + FOOT;
+  const [c, x] = awCanvas(W, H);
+  // backdrop: the winner's cover, blurred and darkened
+  x.fillStyle = "#0b1120"; x.fillRect(0,0,W,H); awBlur(x, P[0].cover, W, H, .6);
+  x.fillStyle = "rgba(10,15,30,.42)"; x.fillRect(0,0,W,H);
+  const gl = x.createRadialGradient(W/2, 150, 30, W/2, 150, 700); gl.addColorStop(0, rgba(ac,.20)); gl.addColorStop(1, rgba(ac,0)); x.fillStyle = gl; x.fillRect(0,0,W,H);
+  const v = x.createRadialGradient(W/2, H/2, H*.3, W/2, H/2, H*.8); v.addColorStop(0,"rgba(0,0,0,0)"); v.addColorStop(1,"rgba(0,0,0,.55)"); x.fillStyle = v; x.fillRect(0,0,W,H);
+  // header: "JOYSTICKD GAME AWARDS", then  2026 | CATEGORY
+  x.textAlign = "center"; awOverline(x, "JOYSTICKD GAME AWARDS", W/2, 84, W-160, "center", "#e6ebf4");
+  const yearS = String(o.year); x.font = AW_HEAD(138); const yW = x.measureText(yearS).width;
+  const cat = awFit(x, o.a.label.toUpperCase(), W - 140 - yW - 76, 2, [62,56,50,44,38,34], AW_HEAD); x.font = AW_HEAD(cat.z);
+  const cW = Math.max(...cat.l.map(t=> x.measureText(t).width)), gx = (W - (yW + 76 + cW))/2, midY = 190;
+  x.textAlign = "left"; x.font = AW_HEAD(138); x.lineJoin = "round";
+  x.fillStyle = rgba(ac,.14); x.fillText(yearS, gx, midY + 48); x.strokeStyle = ac; x.lineWidth = 3.5; x.strokeText(yearS, gx, midY + 48);
+  x.fillStyle = "rgba(255,255,255,.85)"; x.fillRect(gx + yW + 36, midY - 58, 3, 116);
+  x.fillStyle = "#fff"; x.font = AW_HEAD(cat.z); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 18;
+  const clh = cat.z*1.04, cy0 = midY - (cat.l.length-1)*clh/2 + cat.z*.35; cat.l.forEach((t,i)=> x.fillText(t, gx + yW + 76, cy0 + i*clh)); x.shadowColor = "transparent"; x.shadowBlur = 0;
+  // bands
+  let y = TOP;
+  P.forEach((p, i)=>{
+    const h = BH[i], R = BR[i], artL = Math.round(R*.36), rnd = (()=>{ let s = 97 + i*131; return ()=> (s = (s*16807) % 2147483647) / 2147483647; })();
+    // band outline: full-bleed on the left, a dry-brush edge on the right, slightly uneven top and bottom
+    const path = ()=>{ x.beginPath(); x.moveTo(-10, y + 6);
+      for (let px = 60; px < R - 40; px += 90) x.lineTo(px, y + rnd()*9);
+      { let a = rnd(), b = rnd();                                               // dry-brush edge: slow drift + fine bristle jitter, tucked in at the corners
+        for (let py = 0, k = 0; py <= h; py += 7, k++){ if (k % 6 === 0){ a = b; b = rnd(); } const t = (k % 6)/6, drift = a + (b - a)*(t*t*(3 - 2*t));
+          x.lineTo(R - 46 + drift*44 + rnd()*12 - (py < 20 || py > h-20 ? 22 : 0), y + py); } }
+      for (let px = R - 80; px > 60; px -= 90) x.lineTo(px, y + h - rnd()*9);
+      x.lineTo(-10, y + h - 6); x.closePath(); };
+    x.save(); x.shadowColor = "rgba(0,0,0,.55)"; x.shadowBlur = 34; x.shadowOffsetY = 14; x.fillStyle = "#06080e"; path(); x.fill(); x.restore();
+    x.save(); path(); x.clip();
+    x.fillStyle = "#06080e"; x.fillRect(0, y, W, h);
+    { const art = p.cover, dw = R - artL + 30, sc = Math.max(dw/art.width, h/art.height), sw = dw/sc, sh = h/sc; x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+      x.drawImage(art, (art.width - sw)/2, Math.max(0, (art.height - sh)*.30), sw, sh, artL, y, dw, h); }
+    const fade = x.createLinearGradient(artL - 4, 0, artL + 300, 0); fade.addColorStop(0, "rgba(6,8,14,1)"); fade.addColorStop(1, "rgba(6,8,14,0)"); x.fillStyle = fade; x.fillRect(artL - 6, y, 310, h);
+    if (i === 0){ const tint = x.createLinearGradient(0, y, 0, y + h); tint.addColorStop(0, rgba(ac,.10)); tint.addColorStop(1, rgba(ac,0)); x.fillStyle = tint; x.fillRect(0, y, artL + 200, h); }
+    x.restore();
+    // rank, title, votes
+    const numZ = [168, 132, 110][i], cyB = y + h/2; x.textAlign = "left";
+    x.font = AW_HEAD(numZ); x.fillStyle = i === 0 ? ac : "#fff"; x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 16; const numS = String(i+1), nW = x.measureText(numS).width; x.fillText(numS, 62, cyB + numZ*.35);
+    const tx = 62 + nW + 34, tmax = artL + 150 - tx, ti = awFit(x, p.g.title.toUpperCase(), tmax, 2, [[46,40,34,30,26],[40,34,30,26],[34,30,26,23]][i], AW_HEAD), tlh = ti.z*1.08;
+    const votesZ = [26, 23, 21][i], tagH = i === 0 ? 40 : 0, blockH = tagH + ti.l.length*tlh + votesZ + 10; let ty = cyB - blockH/2;
+    if (i === 0){ x.shadowColor = "transparent"; x.shadowBlur = 0; x.font = AW_HEAD(18); const tw = awSpacedW(x, "WINNER", 4); x.fillStyle = ac; x.beginPath(); x.roundRect(tx, ty, tw + 28, 30, 6); x.fill(); x.fillStyle = "#10131c"; awSpaced(x, "WINNER", tx + 14, ty + 21, 4, "left"); ty += tagH; x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 16; }
+    x.font = AW_HEAD(ti.z); x.fillStyle = "#fff"; ti.l.forEach((t,k)=> x.fillText(t, tx, ty + ti.z*.86 + k*tlh)); ty += ti.l.length*tlh;
+    x.font = AW_BODY(votesZ, 800); x.fillStyle = i === 0 ? ac : "#c7d0e0"; x.fillText(`${p.n} vote${p.n===1?"":"s"}`, tx, ty + votesZ + 4);
+    x.shadowColor = "transparent"; x.shadowBlur = 0;
+    y += h + GAP;
+  });
+  // footer
+  x.font = AW_BODY(18,600); x.fillStyle = "#8b98b5"; x.textAlign = "left"; x.fillText("joystickd.com", 54, H - 40);
+  x.textAlign = "center"; x.fillText(`${o.total} vote${o.total===1?"":"s"} cast`, W/2, H - 40);
+  awWordmark(x, W - 54, H - 38, 24, ac);
   return c;
 }
 
@@ -5601,6 +5670,7 @@ function wirePwUI(){
     try { await saveAwardOne(c, layout); } catch(e){ console.error(e); toast("Couldn't build the image"); } };
   $("#awardOneWide").onclick = ()=> goAwardOne("spotlight");
   $("#awardOneTall").onclick = ()=> goAwardOne("marquee");
+  $("#awardOnePodium").onclick = ()=> goAwardOne("podium");
   $("#awardsImgTall").onclick = ()=> goAwardsImg(2);
   $("#awardsImgWide").onclick = ()=> goAwardsImg(3);
   $("#pwSave").onclick = async ()=>{
