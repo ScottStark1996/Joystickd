@@ -688,6 +688,7 @@
 
   textarea,input[type=date]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;padding:12px 14px;font-size:15px}
   textarea{min-height:130px;resize:vertical;line-height:1.5}
+  #reviewText{overflow:hidden;resize:none}                                      /* grows with the writing instead of scrolling inside itself */
   textarea:focus,input:focus{outline:2px solid var(--gold);outline-offset:1px}
   .actions{display:flex;gap:10px;margin-top:22px;justify-content:flex-end}
   .actions .cta{margin:0}
@@ -4474,6 +4475,7 @@ function openSheet(g){
   $("#sheetTitle").textContent = l.game ? "Edit your log" : "Log this game";
   $("#sheetGame").textContent = g.year ? `${g.title} (${g.year})` : g.title;
   $("#reviewText").value = l.review || "";
+  requestAnimationFrame(()=>{ growReview(false); const sh = document.querySelector("#sheetWrap .sheet"); if (sh) sh.scrollTop = 0; });   // size the box to an existing review once the sheet is on screen, and start at the top
   $("#playedDate").value = l.date || (l.rating==null ? new Date().toISOString().slice(0,10) : "");
   $("#firstTrophyDate").value = l.firstTrophy || ""; $("#platDate").value = l.platDate || "";
   $("#deleteLog").hidden = !l.game;
@@ -6218,6 +6220,23 @@ async function pushOnSignOut(){                           // stop pushes to this
 }
 
 // ---- global nav ----------------------------------------------------------
+// The review box in the log sheet grows with what's written, so a long review is never typed through a five-line window
+// (a small box that scrolls inside a sheet that also scrolls is what made it jumpy on phones).
+function growReview(follow){
+  const t = document.getElementById("reviewText"); if (!t || !t.offsetParent) return;
+  const sheet = t.closest(".sheet"), keep = sheet ? sheet.scrollTop : 0;
+  t.style.height = "auto";                                                     // let it shrink too (deleting text)
+  t.style.height = Math.max(130, t.scrollHeight + 2) + "px";
+  if (!sheet) return;
+  sheet.scrollTop = keep;                                                      // re-measuring must not move the page
+  // typing at the end: keep the last line in view, above the keyboard
+  if (follow && document.activeElement === t && t.selectionEnd >= t.value.length - 1){
+    const vv = window.visualViewport, limit = (vv ? vv.offsetTop + vv.height : window.innerHeight) - 14, bottom = t.getBoundingClientRect().bottom;
+    if (bottom > limit) sheet.scrollTop += bottom - limit;
+  }
+}
+document.getElementById("reviewText").addEventListener("input", ()=> growReview(true));
+window.addEventListener("resize", ()=> growReview(false));
 // The magnifying glass in the top bar: from anywhere, jump to Home with the game search box focused.
 function openSearch(){
   view.tab = "games"; view.gameId = null; view.user = null; if (location.search) history.replaceState(null, "", location.pathname);
