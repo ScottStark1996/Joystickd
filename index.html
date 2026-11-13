@@ -283,7 +283,7 @@
   .award-tag{font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;background:var(--panel2);color:var(--plat);border:1px solid var(--line)}
   .award-tag.goty{background:var(--gold-dim);color:var(--gold);border-color:transparent}
   /* profile tabs + reviews */
-  .ptabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:22px;overflow-x:auto}
+  .ptabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:22px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
   .ptab{padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
   .ptab.on{color:var(--text);border-bottom-color:var(--gold)}
   .ptab b{color:var(--gold);margin-left:5px;font-size:12px}
@@ -678,6 +678,9 @@
   .sheet{background:var(--panel);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:22px 22px 28px;border:1px solid var(--line);border-bottom:0;max-height:92vh;overflow:auto}
   @media(min-width:640px){.sheet-wrap{align-items:center}.sheet{border-radius:22px;border-bottom:1px solid var(--line)}}
   .sheet h2{font-size:22px}
+  .sheet-xrow{position:sticky;top:10px;height:0;z-index:3;display:flex;justify-content:flex-end;pointer-events:none}
+  .sheet-x{pointer-events:auto;width:34px;height:34px;margin:-6px -8px 0 0;flex:none;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:14px;line-height:1;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+  .sheet-x:hover,.sheet-x:focus-visible{color:var(--text);outline:none}
   .sheet .g{color:var(--muted);font-size:14px;margin-top:2px}
   label{display:block;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
 
@@ -911,7 +914,8 @@
 
 <div class="sheet-wrap" id="t5Wrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="t5Title">
-    <h2 id="t5Title"></h2>
+    <div class="sheet-xrow"><button class="sheet-x" id="t5X" aria-label="Close" title="Close">✕</button></div>
+    <h2 id="t5Title" style="padding-right:40px"></h2>
     <div class="g" id="t5Sub"></div>
     <div id="t5Body" style="margin-top:6px"></div>
     <div class="actions">
@@ -3187,10 +3191,10 @@ function renderLogs(app, P, isMe){
     if (l && (l.review||"").trim()) openT5(gid, P, isMe);
     else { view.tab="games"; view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); }
   });
+  if (profileTab==="following" || profileTab==="followers") wireFollowActions(app);   // on anyone's profile: the names open profiles and Follow works
+  if (profileTab==="lists") wireLists(app, P, isMe);                                  // also on anyone's profile, so their lists open
   if (!isMe) return;
-  if (profileTab==="following" || profileTab==="followers") wireFollowActions(app);
   if (profileTab==="reports") wireReports(app);
-  if (profileTab==="lists") wireLists(app, P, isMe);
   app.querySelectorAll("[data-slot]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); const i=+b.dataset.slot;
     openPicker({ title:`Choose your #${i+1}`, current:top5[i], taken:id=>{ const u=top5.indexOf(id); return u>-1&&u!==i ? `#${u+1}` : null; },
       onPick:id=>{ top5[i]=id; toast(`Set as #${i+1}`); saveTop5(i, id); }, onClear:()=>{ top5[i]=null; toast("Slot cleared"); saveTop5(i, null); } }); });
@@ -3801,7 +3805,7 @@ function openT5(gid, P, isMe){
   $("#t5Wrap").classList.add("open");
 }
 function closeT5(){ $("#t5Wrap").classList.remove("open"); }
-$("#t5Close").onclick = closeT5;
+$("#t5Close").onclick = closeT5; $("#t5X").onclick = closeT5;
 $("#t5Wrap").addEventListener("click", e=>{ if(e.target.id==="t5Wrap") closeT5(); });
 
 // ---- game picker (shared by Top 5 and Awards) ------------------------------
