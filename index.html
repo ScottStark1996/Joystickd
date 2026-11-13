@@ -3925,6 +3925,20 @@ function drawAwardMarquee(o){
   return c;
 }
 
+// Outlined lettering without stroking the letters. (Stroking draws every contour inside the font's glyphs, and this
+// font builds digits like 2 and 5 from overlapping pieces, so stray lines showed up inside them.) Instead: paint the
+// text fattened by the line width, then cut the normal text out of the middle, which leaves a clean ring.
+function awOutlineText(x, text, px, py, font, size, color, lw, fillAlpha){
+  const S = x.getTransform().a || 1, pad = Math.ceil(lw) + 4;
+  x.save(); x.font = font; const w = x.measureText(text).width; x.restore();
+  const o = document.createElement("canvas"); o.width = Math.ceil((w + pad*2)*S); o.height = Math.ceil((size*1.4 + pad*2)*S);
+  const ox = o.getContext("2d"); ox.scale(S, S); ox.font = font; ox.textAlign = "left"; ox.textBaseline = "alphabetic"; ox.fillStyle = color;
+  const bx = pad, by = pad + size*1.05;
+  for (let k = 0; k < 28; k++){ const an = k/28*Math.PI*2; ox.fillText(text, bx + Math.cos(an)*lw, by + Math.sin(an)*lw); }
+  ox.globalCompositeOperation = "destination-out"; ox.fillStyle = "#000"; ox.fillText(text, bx, by);
+  x.save(); x.font = font; x.textAlign = "left"; x.fillStyle = rgba(color, fillAlpha); x.fillText(text, px, py);
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(o, px - bx, py - by, o.width/S, o.height/S); x.restore();
+}
 // Top 3 — tall image for a community award: 1st, 2nd and 3rd as brush-edged bands of cover art, with the votes each got.
 function drawAwardPodium(o){
   const W = 1080, ac = o.accent, P = o.places.slice(0, 3);
@@ -3941,8 +3955,7 @@ function drawAwardPodium(o){
   const yearS = String(o.year); x.font = AW_HEAD(138); const yW = x.measureText(yearS).width;
   const cat = awFit(x, o.a.label.toUpperCase(), W - 140 - yW - 76, 2, [62,56,50,44,38,34], AW_HEAD); x.font = AW_HEAD(cat.z);
   const cW = Math.max(...cat.l.map(t=> x.measureText(t).width)), gx = (W - (yW + 76 + cW))/2, midY = 190;
-  x.textAlign = "left"; x.font = AW_HEAD(138); x.lineJoin = "round";
-  x.fillStyle = rgba(ac,.14); x.fillText(yearS, gx, midY + 48); x.strokeStyle = ac; x.lineWidth = 3.5; x.strokeText(yearS, gx, midY + 48);
+  x.textAlign = "left"; awOutlineText(x, yearS, gx, midY + 48, AW_HEAD(138), 138, ac, 3.5, .14);
   x.fillStyle = "rgba(255,255,255,.85)"; x.fillRect(gx + yW + 36, midY - 58, 3, 116);
   x.fillStyle = "#fff"; x.font = AW_HEAD(cat.z); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 18;
   const clh = cat.z*1.04, cy0 = midY - (cat.l.length-1)*clh/2 + cat.z*.35; cat.l.forEach((t,i)=> x.fillText(t, gx + yW + 76, cy0 + i*clh)); x.shadowColor = "transparent"; x.shadowBlur = 0;
