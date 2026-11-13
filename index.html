@@ -1407,7 +1407,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard" };
 // Line-art patterns: a tile is a list of strokes/fills given as SVG path text, so the banner (an SVG background) and
 // saved images (canvas, via Path2D) are drawn from the very same data.
 //   op = [path, fill opacity (0 = none), stroke opacity (0 = none), line width, [x, y, rotation°] or null, dash pattern or null]
@@ -1478,21 +1478,104 @@ const FOREST = (()=>{
            stars: { w:180, h:70, ops: stars },
            moonAt: [30, 16] };                                                  // birds: this far in from the right and top edges
 })();
-const SCENES = { skyline: SKYLINE, forest: FOREST };
+// Cathedral: a placed scene like Skyline, but gothic. Two rows of spired towers, gabled halls with rose windows and
+// battlemented blocks run along the bottom edge (repeating sideways only); a full moon and a few crows sit in the top
+// right corner (the "moon" slot), with faint stars above. Built once from fixed seeds. Windows sit on an even grid
+// centred in each building, as on Skyline.
+const CATHEDRAL = (()=>{
+  const W = 430, H = 100, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const battl = (x, base, w, h, k, dp)=>{ const y = base - h, u = w/(2*k - 1); let d = `M${f(x)} ${f(base)}V${f(y)}h${f(u)}`; for (let i = 1; i < k; i++) d += `v${dp}h${f(u)}v${-dp}` + (i < k - 1 ? `h${f(u)}` : `H${f(x + w)}`); return d + `V${f(base)}Z`; };   // a block with merlons along the top (the last one ends exactly on the block's edge, so neighbours meet with no gap)
+  const lancet = (x, y, w, h)=> `M${f(x)} ${f(y)}v${-h}q${f(w/2)} ${f(-w*1.3)} ${w} 0v${h}z`;                                                                                              // a pointed-arch window standing on (x, y)
+  const row = (seed, o)=>{ const r = rng(seed), wr = rng(seed + 1000), spans = []; let x = 0, body = "", lit = "", unlit = "";
+    const burn = n => { for (let i = 0; i < n; i++) r(); };                     // keeps the building line-up exactly as it was drawn in the approved draft
+    const put = (d, chance)=>{ if (wr() < chance) lit += d; else unlit += d; };
+    const cols = (w, ww, step)=> Math.max(1, Math.floor((w - 8 - ww)/step) + 1), startX = (x0, w, n, ww, step)=> x0 + (w - ((n - 1)*step + ww))/2;   // same margin left and right
+    while (x < W){ let w = Math.round(o.minW + r()*(o.maxW - o.minW)); if (x + w > W - o.minW) w = W - x;
+      const bh = Math.round(o.minH + r()*(o.maxH - o.minH)), y = H - bh, kind = r(); spans.push([x, x + w]);
+      if (kind < o.spire && w >= 12){ const sh = Math.round(bh*(o.windows ? .5 + r()*.5 : .3 + r()*.35));                                              // tower with a spire and two pinnacles
+        body += `M${x} ${H}V${y}L${f(x+w*.14)} ${y-5}L${f(x+w*.28)} ${y}L${f(x+w/2)} ${y-sh}L${f(x+w*.72)} ${y}L${f(x+w*.86)} ${y-5}L${x+w} ${y}V${H}Z`;
+        if (o.windows){ burn(1); for (let wy = y + 26; wy < H - 6; wy += 13) burn(1);
+          if (y + 14 <= H - 3) put(lancet(x + w/2 - 1.5, y + 14, 3, 8), .7); for (let wy = y + 34; wy <= H - 3; wy += 13) put(lancet(x + w/2 - 1.5, wy, 3, 6), o.windows); } }
+      else if (kind < o.spire + o.gable && w >= 16){ body += `M${x} ${H}V${y+8}L${f(x+w/2)} ${y}L${x+w} ${y+8}V${H}Z`;                                  // gabled hall with a rose window
+        if (o.windows){ for (let wx = x + 5; wx + 3 < x + w - 3; wx += 7) burn(1);
+          if (y + 19 <= H - 2) lit += PA.circ(f(x + w/2), y + 15, 3.2);
+          if (y + 34 <= H - 3){ const n = cols(w, 3, 7), sx = startX(x, w, n, 3, 7); for (let c = 0; c < n; c++) put(lancet(sx + c*7, y + 34, 3, 8), o.windows); } } }
+      else { body += battl(x, H, w, bh - 6, Math.max(2, Math.round(w/7)), 2.6);                                                                         // battlemented block
+        if (o.windows){ for (let wy = y + 16; wy < H - 6; wy += 12) for (let wx = x + 4; wx + 3 < x + w - 2; wx += 7) burn(1);
+          const n = cols(w, 2.6, 7), sx = startX(x, w, n, 2.6, 7); for (let wy = y + 22; wy <= H - 3; wy += 12) for (let c = 0; c < n; c++) put(lancet(sx + c*7, wy, 2.6, 5), o.windows*.8); } }
+      x += w; }
+    return { body, lit, unlit, spans }; };
+  const far = row(7, { minW:16, maxW:30, minH:30, maxH:58, spire:.5, gable:.2 }), near = row(31, { minW:14, maxW:30, minH:16, maxH:44, spire:.34, gable:.26, windows:.45 });
+  const sr = rng(11), stars = []; for (let i = 0; i < 10; i++) stars.push([PA.circ(+(sr()*180).toFixed(1), +(sr()*70).toFixed(1), +(.6 + sr()*.8).toFixed(2)), +(.16 + sr()*.2).toFixed(2), 0, 0, null]);
+  return { sky:   { w:W, h:H, ops:[[far.body, .10, 0, 0, null], [near.body, .24, 0, 0, null], [near.unlit, .12, 0, 0, null], [near.lit, .62, 0, 0, null]] },
+           moon:  { w:150, h:80, ops:[[PA.circ(110, 40, 40), .05, 0, 0, null], [PA.circ(110, 40, 25), .15, 0, 0, null], ["M4 16q5 -6 9 0q4 -6 9 0M30 8q4 -5 7 0q3 -5 7 0M44 22q3 -4 6 0q3 -4 6 0", 0, .42, 1.3, [30, 10, 0]]] },
+           stars: { w:180, h:70, ops: stars },
+           moonAt: [18, 4],                                                     // moon and crows: this far in from the right and top edges
+           spans: near.spans };                                                 // where each front building starts and ends (used by the tests)
+})();
+// Graveyard: a placed scene like the others. A small chapel with lit windows and an iron fence stand on the far hill,
+// rows of old leaning stones and a bare tree in front (repeating sideways only); a crescent moon and three bats sit in
+// the top right corner (the "moon" slot), with faint stars above. Built once from fixed seeds.
+const GRAVEYARD = (()=>{
+  const W = 430, H = 100, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const hills = (base, amps, ph) => x => base - amps.reduce((t, a, i)=> t + a*Math.sin(2*Math.PI*(i+1)*x/W + ph[i]), 0);   // rolling ground that repeats exactly every W
+  const ground = g => { let d = `M0 ${H}V${f(g(0))}`; for (let x = 5; x <= W; x += 5) d += `L${x} ${f(g(x))}`; return d + `V${H}Z`; };
+  // gravestone outlines, standing on (0,0) and sunk 2 below it; each is a list of closed shapes
+  const dome = []; for (let t = 1; t < 8; t++) dome.push([-4*Math.cos(t*Math.PI/8), -8 - 4*Math.sin(t*Math.PI/8)]);
+  const STONES = { round:   [[[-4,2],[-4,-8], ...dome, [4,-8],[4,2]]],
+                   cross:   [[[-1.3,2],[-1.3,-14],[1.3,-14],[1.3,2]], [[-4.6,-8.6],[-4.6,-11],[4.6,-11],[4.6,-8.6]]],
+                   obelisk: [[[-4,2],[-4,-2],[-2.4,-2],[-1.7,-15],[0,-18],[1.7,-15],[2.4,-2],[4,-2],[4,2]]],
+                   square:  [[[-4.6,2],[-4.6,-8],[-3,-8],[-3,-10.4],[3,-10.4],[3,-8],[4.6,-8],[4.6,2]]],
+                   pointed: [[[-3.8,2],[-3.8,-8],[0,-12.5],[3.8,-8],[3.8,2]]] }, KINDS = Object.keys(STONES);
+  const stone = (kind, x, y, sc, rot)=>{ const c = Math.cos(rot*Math.PI/180), sn = Math.sin(rot*Math.PI/180);                // sized, leaned and set in place
+    return STONES[kind].map(sh=> sh.map(([px, py], i)=> `${i ? "L" : "M"}${f(x + (px*c - py*sn)*sc)} ${f(y + (px*sn + py*c)*sc)}`).join("") + "Z").join(""); };
+  // a row of stones along the ground; ones that hang over a tile edge are repeated on the far side so the strip joins cleanly
+  const stones = (g, seed, n, sMin, sMax, skip)=>{ const r = rng(seed); let d = "";
+    for (let i = 0; i < n; i++){ const x = (i + .15 + r()*.7)*W/n, kind = KINDS[Math.floor(r()*KINDS.length)], sc = sMin + r()*(sMax - sMin), rot = Math.round((r() - .5)*22);
+      if (skip.some(([a, b])=> x > a && x < b)) continue;
+      d += stone(kind, x, g(x), sc, rot); if (x < 9*sc) d += stone(kind, x + W, g(x), sc, rot); if (x > W - 9*sc) d += stone(kind, x - W, g(x), sc, rot); }
+    return d; };
+  const g1 = hills(66, [5, 2.5], [1, 2.6]), g2 = hills(87, [3.5, 2], [3.3, .8]);
+  // iron fence along the far hill: evenly spaced spear-topped posts and two rails
+  const FH = 9, posts = 62, gap = W/posts; let fence = "", r1 = `M0 ${f(g1(0) - FH*.72)}`, r2 = `M0 ${f(g1(0) - FH*.22)}`;
+  for (let i = 0; i < posts; i++){ const x = f((i + .5)*gap), y = g1(x); fence += `M${x} ${f(y+2)}V${f(y-FH)}M${f(x-1.3)} ${f(y-FH+2.4)}L${x} ${f(y-FH-1.2)}L${f(x+1.3)} ${f(y-FH+2.4)}`; }
+  for (let x = 5; x <= W; x += 5){ r1 += `L${x} ${f(g1(x) - FH*.72)}`; r2 += `L${x} ${f(g1(x) - FH*.22)}`; }
+  // the chapel: nave with a gable, a bell tower with a pointed roof and a cross, two lit arched windows
+  const cx = 300, cy = f(g1(cx) + 3), k = 1.35, X = v => f(cx + v*k), Y = v => f(cy - v*k);
+  const chapel = `M${X(-16)} ${cy}V${Y(16)}L${X(-4)} ${Y(25)}L${X(8)} ${Y(16)}V${cy}ZM${X(8)} ${cy}V${Y(30)}L${X(13)} ${Y(42)}L${X(18)} ${Y(30)}V${cy}ZM${X(12.4)} ${Y(41)}V${Y(49)}H${X(13.6)}V${Y(41)}ZM${X(10.4)} ${Y(45.4)}V${Y(46.6)}H${X(15.6)}V${Y(45.4)}Z`;
+  const lit = `M${X(-6.4)} ${Y(5)}V${Y(11)}Q${X(-4)} ${Y(15)} ${X(-1.6)} ${Y(11)}V${Y(5)}ZM${X(11.4)} ${Y(21)}V${Y(26)}Q${X(13)} ${Y(29)} ${X(14.6)} ${Y(26)}V${Y(21)}Z`;
+  const ts = 1.25, t = v => f(v*ts), tree = `M0 2C${t(1.5)} ${t(-10)} ${t(-2.5)} ${t(-18)} 0 ${t(-30)}M${t(-.4)} ${t(-13)}l${t(8)} ${t(-8)}l${t(1)} ${t(-7)}M${t(7.6)} ${t(-21)}l${t(6)} ${t(-1)}M${t(-.8)} ${t(-19)}l${t(-7)} ${t(-6)}l${t(-5)} ${t(-1)}M${t(-7.8)} ${t(-25)}l${t(-1)} ${t(-6)}M0 ${t(-26)}l${t(5)} ${t(-7)}M0 ${t(-30)}l${t(-3)} ${t(-6)}`;
+  let mist = ""; for (let y = 22; y < H; y += 8) mist += `M0 ${y}H${W}V${H}H0Z`;                                 // stacked faint bands: a haze that thickens toward the ground
+  const BAT = "M0 0C2 -3 5 -3 7 -1L8 -3L9 -1.2L10 -3L11 -1C13 -3 16 -3 18 0C16 -1 14.5 0 14 2C13 .5 11.5 .5 11 2C10 .8 8 .8 7 2C6.5 .5 5 .5 4 2C3.5 0 2 -1 0 0Z";
+  const sr = rng(11), stars = []; for (let i = 0; i < 9; i++) stars.push([PA.circ(+(sr()*180).toFixed(1), +(sr()*70).toFixed(1), +(.6 + sr()*.8).toFixed(2)), +(.16 + sr()*.2).toFixed(2), 0, 0, null]);
+  return { sky:   { w:W, h:H, ops:[[mist, .011, 0, 0, null], [ground(g1), .08, 0, 0, null], [fence + r1 + r2, 0, .16, 1.1, null], [chapel, .17, 0, 0, null], [lit, .6, 0, 0, null],
+                                   [stones(g1, 41, 16, .55, .8, [[272, 332]]), .10, 0, 0, null], [tree, 0, .26, 1.8, [78, f(g2(78)), 0]], [ground(g2) + stones(g2, 9, 17, .95, 1.5, [[68, 88]]), .24, 0, 0, null]] },
+           moon:  { w:124, h:50, ops:[["M28.6 5.2A16.9 16.9 0 1 0 39 31.2A13.7 13.7 0 0 1 28.6 5.2Z", .30, 0, 0, [80, 2, 0]], [BAT, .40, 0, 0, [4, 20, -8]], [BAT, .34, 0, 0, [34, 10, 6]], [BAT, .30, 0, 0, [46, 30, -4]]] },
+           stars: { w:180, h:70, ops: stars },
+           moonAt: [20, 12] };                                                  // crescent and bats: this far in from the right and top edges
+})();
+const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD };
 const pathArtSvg = (art, accent) => `<svg xmlns="http://www.w3.org/2000/svg" width="${art.w}" height="${art.h}" viewBox="0 0 ${art.w} ${art.h}">${art.ops.map(([d, f, st, lw, tr, dash])=>
   `<path d="${d}"${tr ? ` transform="translate(${tr[0]} ${tr[1]})${tr[2] ? ` rotate(${tr[2]})` : ""}"` : ""} fill="${f ? accent : "none"}"${f ? ` fill-opacity="${f}"` : ""}${st ? ` stroke="${accent}" stroke-opacity="${st}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash.join(" ")}"` : ""}` : ""}/>`).join("")}</svg>`;
-// boxed: keep each copy inside its own tile (as a CSS background does). Needed when shapes hang over the tile edge and
-// are repeated on the far side to make the join seamless (the forest's trees) — otherwise they'd be painted twice there.
-function paintPathArt(x, W, H, art, accent, boxed){
+function paintPathArt(x, W, H, art, accent){
   const paths = art.ops.map(op=> new Path2D(op[0])); x.lineCap = "round"; x.lineJoin = "round";
-  for (let py = 0; py < H; py += art.h) for (let px = 0; px < W; px += art.w){
-    if (boxed){ x.save(); x.beginPath(); x.rect(px, py, Math.min(art.w, W - px), art.h); x.clip(); }
-    art.ops.forEach(([d, f, st, lw, tr, dash], i)=>{
-      x.save(); x.translate(px + (tr ? tr[0] : 0), py + (tr ? tr[1] : 0)); if (tr && tr[2]) x.rotate(tr[2]*Math.PI/180);
-      if (f){ x.fillStyle = rgba(accent, f); x.fill(paths[i]); }
-      if (st){ x.strokeStyle = rgba(accent, st); x.lineWidth = lw; x.setLineDash(dash || []); x.stroke(paths[i]); }
-      x.restore(); });
-    if (boxed) x.restore(); }
+  for (let py = 0; py < H; py += art.h) for (let px = 0; px < W; px += art.w) art.ops.forEach(([d, f, st, lw, tr, dash], i)=>{
+    x.save(); x.translate(px + (tr ? tr[0] : 0), py + (tr ? tr[1] : 0)); if (tr && tr[2]) x.rotate(tr[2]*Math.PI/180);
+    if (f){ x.fillStyle = rgba(accent, f); x.fill(paths[i]); }
+    if (st){ x.strokeStyle = rgba(accent, st); x.lineWidth = lw; x.setLineDash(dash || []); x.stroke(paths[i]); }
+    x.restore(); });
+}
+// One row of a scene strip (buildings, trees) across the width W. Every copy of a layer is joined into a single shape and
+// painted once, so there is no hairline where two copies meet (saved images are not always a whole number of pixels per
+// unit) and shapes that hang over a tile edge and reappear on the far side (the forest's trees) are not painted twice.
+function paintPathRow(x, W, art, accent){
+  if (!Path2D.prototype.addPath || typeof DOMMatrix === "undefined") return paintPathArt(x, W, 1, art, accent);
+  x.save(); x.beginPath(); x.rect(0, -4000, W, 4000 + art.h); x.clip(); x.lineCap = "round"; x.lineJoin = "round";
+  art.ops.forEach(([d, f, st, lw, tr, dash])=>{ const one = new Path2D(d), all = new Path2D();
+    for (let px = 0; px < W; px += art.w) all.addPath(one, new DOMMatrix().translate(px + (tr ? tr[0] : 0), tr ? tr[1] : 0).rotate(tr && tr[2] || 0));
+    if (f){ x.fillStyle = rgba(accent, f); x.fill(all); }
+    if (st){ x.strokeStyle = rgba(accent, st); x.lineWidth = lw; x.setLineDash(dash || []); x.stroke(all); } });
+  x.restore();
 }
 // Waves = seigaiha, the traditional overlapping-scales wave: each scale is a set of rings (size × opacity), hidden where the rows in front sit on top of it.
 const WAVES = { r:26, line:1.5, rings:[[1,.30],[.74,.22],[.48,.17],[.22,.13]] };
@@ -1597,11 +1680,11 @@ function paintPattern(x, W, H, pattern, accent, opts){   // opts (placed pattern
                             else { x.moveTo(px+sh[2], py+sh[3]); for (let i=4; i<sh.length; i+=2) x.lineTo(px+sh[i], py+sh[i+1]); x.closePath(); } });
                           x.fill(); }); } break;
     case "space":     paintPathArt(x, W, H, PATH_ARTS[pattern], accent); break;
-    case "skyline": case "forest":
+    case "skyline": case "forest": case "cathedral": case "graveyard":
                       { const S = SCENES[pattern], I = (opts && opts.inset) || 0, fillOnly = !!(opts && opts.part === "fill");
                         // stars everywhere above the rooftops / treeline (never among the windows); no crescent or birds on saved images
                         x.save(); if (!fillOnly){ x.beginPath(); x.rect(0, 0, W, H - I - S.sky.h + 12); x.clip(); } paintPathArt(x, W, H, S.stars, accent); x.restore();
-                        if (!fillOnly){ x.save(); x.translate(I, H - I - S.sky.h); paintPathArt(x, W - 2*I, 1, S.sky, accent, pattern === "forest"); x.restore(); } } break;
+                        if (!fillOnly){ x.save(); x.translate(I, H - I - S.sky.h); paintPathRow(x, W - 2*I, S.sky, accent); x.restore(); } } break;
     case "waves":     { // one tile painted back row to front (each scale first clears what it sits on), then repeated
                         const r = WAVES.r, S = Math.max(1, Math.round(Math.abs(x.getTransform().a) || 1)), tile = document.createElement("canvas"); tile.width = 2*r*S; tile.height = r*S;
                         const tx = tile.getContext("2d"); tx.scale(S, S); tx.lineWidth = WAVES.line;
@@ -1704,7 +1787,7 @@ function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImag
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${v.w}" height="${v.h}"><g fill="${t.accent}">${vectorShapes(v, forImage).map(sh=> sh[0]==="c" ? `<circle cx="${sh[2]}" cy="${sh[3]}" r="${sh[4]}" opacity="${sh[1]}"/>` : `<polygon points="${sh.slice(2).join(" ")}" opacity="${sh[1]}"/>`).join("")}</g></svg>`;
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${v.w}px ${v.h}px`]; }
     case "space":     { const v = PATH_ARTS[t.pattern]; return [`url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(v, t.accent))}')`, `${v.w}px ${v.h}px`]; }
-    case "skyline": case "forest":
+    case "skyline": case "forest": case "cathedral": case "graveyard":
                       { const u = a => `url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(a, t.accent))}')`, sz = a => `${a.w}px ${a.h}px`, S = SCENES[t.pattern];
                         // layers: buildings along the bottom, one band of stars along the top (kept clear of the buildings, so no stray dots among the windows),
                         // and on the banner a crescent in the corner (left off saved images, where the wordmark sits there)
