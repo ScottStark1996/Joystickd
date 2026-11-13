@@ -46,6 +46,13 @@
   .brand span{color:var(--gold)}
   .tabs{display:flex;gap:4px;margin-left:auto}
   .tab{padding:8px 12px;border-radius:999px;color:var(--muted);font-weight:600;font-size:14px}
+  /* "more tabs this way": a fade + chevron pinned to the right edge of the tab strip, shown only while tabs are hidden there */
+  .tabs-more{position:sticky;right:0;flex:0 0 44px;margin-left:-44px;align-self:stretch;display:flex;align-items:center;justify-content:flex-end;padding:0 1px 2px 0;
+    font-size:22px;font-weight:800;line-height:1;color:var(--text);background:linear-gradient(90deg, rgba(14,21,38,0), rgba(14,21,38,.8) 50%, var(--bg) 78%)}
+  .tabs-more:not(.show){display:none}                                          /* hidden = not there at all, so it never affects how the tabs are spaced */
+  .hicons{display:flex;align-items:center;flex-shrink:0}
+  .hsearch{padding:8px;border-radius:50%;color:var(--muted);display:inline-flex}
+  .hsearch:hover{color:var(--text)}
   .tab.active{background:var(--panel2);color:var(--text)}
   .tab b{color:var(--gold);margin-left:4px}
 
@@ -696,7 +703,19 @@
     .game h1{font-size:32px}
     .bar{padding:12px 14px}
     .tab{padding:7px 10px;font-size:13px}
+    /* Phones: two rows. Logo + search / bell / settings on top, the four tabs in one strip underneath (all visible, no scrolling). */
+    .bar{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"brand icons" "tabs tabs";align-items:center;column-gap:8px;row-gap:9px;padding:10px 14px}
+    .brand{grid-area:brand;font-size:22px}
+    .hicons{grid-area:icons;justify-self:end;min-width:0}
+    .hicons .bell,.hicons .gear,.hsearch{padding:6px;margin-left:4px}
+    .hicons .bell svg,.hicons .gear svg,.hsearch svg{width:20px;height:20px}
+    .hicons .authbtn{margin-left:6px;max-width:120px;font-size:13px}
+    .tabs{grid-area:tabs;margin:0;gap:2px;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+    .tab{padding:7px 12px;font-size:13.5px;flex:0 0 auto}
+    .tabs-more{background:linear-gradient(90deg, rgba(22,31,53,0), rgba(22,31,53,.85) 50%, var(--panel) 78%);border-radius:0 999px 999px 0}   /* safety net on very narrow phones */
   }
+  @media(max-width:380px){.tab{padding:7px 8px;font-size:13px}}
+  @media(max-width:340px){.tab{padding:7px 6px;font-size:12.5px}.brand{font-size:20px}}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -706,14 +725,18 @@
   <div class="bar">
     <div class="brand">JOYSTICK<span>D</span></div>
     <nav class="tabs">
-      <button class="tab active" data-tab="games">Games</button>
+      <button class="tab active" data-tab="games">Home</button>
       <button class="tab" data-tab="awards">Awards</button>
       <button class="tab" data-tab="logs">Profile<b id="logCount"></b></button>
       <button class="tab" data-tab="community">Community</button>
+      <button class="tabs-more" id="tabsMore" type="button" tabindex="-1" aria-label="Show more tabs">›</button>
     </nav>
+    <div class="hicons">
+    <button class="hsearch" id="searchBtn" aria-label="Search for a game" title="Search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></button>
     <button class="bell" id="bellBtn" hidden aria-label="Notifications"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 22a2.3 2.3 0 0 0 2.3-2.3H9.7A2.3 2.3 0 0 0 12 22zm7-5.5v-1l-1.6-1.7V9.9c0-3-1.6-5.5-4.4-6.2V3a1 1 0 1 0-2 0v.7C8.2 4.4 6.6 6.9 6.6 9.9v3.9L5 15.5v1h14z"/></svg><b id="bellCount" hidden></b></button>
     <button class="authbtn" id="authBtn">Sign in</button>
     <button class="gear" id="gearBtn" hidden aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.7 7.7 0 0 0-1.7-1l-.4-2.7h-4l-.4 2.7c-.6.2-1.2.6-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.8 1.7 1l.4 2.7h4l.4-2.7c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.5-2.3-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+    </div>
   </div>
 </header>
 
@@ -2202,6 +2225,7 @@ function render(){
   applyPageBg(null);
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b.dataset.tab===view.tab));
   const n = Object.keys(logs).length; $("#logCount").textContent = n ? n : "";
+  syncTabsMore();                                                               // after the count, which changes the strip's width
   if (view.gameId) return renderGame(app);
   if (view.tab==="logs") return renderProfile(app);
   if (view.tab==="awards") return renderAwards(app);
@@ -2255,7 +2279,29 @@ function renderGrid(app){
 
 // ---- home page -------------------------------------------------------------
 const YEAR = new Date().getFullYear();
-let home = { loaded:false, loading:false, topYear:[], friendLogs:[], friendPopular:[], latest:[], error:null };
+let home = { loaded:false, loading:false, topYear:[], topYearOf:YEAR, topSrc:"oc", friendLogs:[], friendPopular:[], latest:[], error:null };
+// "Highest rated <year>" on the home page: the same critic ranking as Years → Critic highest, best first.
+// OpenCritic scores only when there are enough of them; early in a year it falls back to last year's list.
+const HOME_TOP_N = 20, HOME_TOP_MIN = 6;
+const homeScore = g => g.oc?.score ?? g.critic ?? -1;
+function homeTopPick(list){
+  const oc = (list||[]).filter(g=> g.oc?.score!=null);
+  const use = oc.length >= HOME_TOP_MIN ? oc : (list||[]);                       // not enough OpenCritic-scored games yet → keep the mixed ranking
+  return { src: oc.length >= HOME_TOP_MIN ? "oc" : "mixed",
+           games: [...use].sort((a,b)=> homeScore(b)-homeScore(a) || (b.oc?.count ?? b.criticCount ?? 0)-(a.oc?.count ?? a.criticCount ?? 0)).slice(0, HOME_TOP_N) };
+}
+async function loadHomeTop(){
+  let first = null;
+  for (const y of [YEAR, YEAR-1]){
+    const { data, error } = await explorePage({ y, ord:"chigh" }, 0);
+    if (error) throw new Error(error.message || String(error));
+    const pick = homeTopPick((Array.isArray(data) ? data : []).map(g=> cacheGame(g)));
+    if (pick.games.length >= HOME_TOP_MIN) return { ...pick, year: y };
+    if (!first) first = { ...pick, year: y };
+  }
+  return first;                                                                 // neither year has enough yet: show what this year has
+}
+const homeTopCap = g => g.oc?.score!=null ? `OpenCritic ${g.oc.score}` : g.critic!=null ? `Critic ${g.critic} \u00b7 IGDB` : (g.year ?? "");
 // Open the expanded review sheet for a feed item (someone else's log, with the stats/awards they chose to show).
 function openFeedReview(f){
   const P = { id:f.userId, username:f.user, logs:{ [f.gameId]: f.log }, ballot:f.ballot||{} };
@@ -2309,17 +2355,19 @@ async function loadHome(){
     if (!LIVE){
       home.topYear = SAMPLE.filter(g=>g.year===YEAR).sort((a,b)=>(b.critic||0)-(a.critic||0));
       if (!home.topYear.length) home.topYear = [...SAMPLE].sort((a,b)=>(b.year-a.year)||((b.critic||0)-(a.critic||0))).slice(0,8);
+      home.topYearOf = YEAR; home.topSrc = "mixed";
       home.friendLogs = []; home.friendPopular = [];
     } else {
       const ids = me ? followingIds() : [];
       // One round trip for everything that depends on nothing else; the enrichments (award tags, hearts,
       // comment counts) come after a first paint, so the screen fills as soon as the lists land.
       const [top, fl, lrRes] = await Promise.all([
-        igdb("popular",{year:YEAR}).catch(e=>{ home.error=String(e.message||e); return []; }),
+        // critic ranking from the database; if that fails, the old IGDB "popular this year" list keeps the row alive
+        loadHomeTop().catch(async e=>{ console.error(e); const old = await igdb("popular",{year:YEAR}).catch(e2=>{ home.error=String(e2.message||e2); return []; }); return { src:"igdb", games: old.slice(0, HOME_TOP_N), year: YEAR }; }),
         ids.length ? sb.from("logs").select("*").in("user_id", ids).order("created_at",{ascending:false, nullsFirst:false}).limit(200) : Promise.resolve({data:[]}),
         sb.rpc("latest_reviews", { lim: 15 }).then(r=>r, e=>({ data:null, error:e })),
       ]);
-      home.topYear = top.slice(0,20);
+      home.topYear = top.games; home.topYearOf = top.year; home.topSrc = top.src;
       const rows = fl.data || [];
       rows.forEach(r=>cacheGame(r.game));
       home.friendLogs = rows.slice(0,10).map(r=>({ user:follows.names[r.user_id]||"someone", userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot:{} }));
@@ -2661,8 +2709,8 @@ function renderHome(app){
   body.innerHTML = `
     ${home.loading && !home.loaded ? `<div class="empty"><div class="spinner"></div>Loading…</div>` : `
     <section class="hsec">
-      <h2>Highest rated ${YEAR}<span>Critic scores via IGDB</span></h2>
-      ${home.error ? `<code class="err">${esc(home.error)}</code>` : home.topYear.length ? row(home.topYear) : `<div class="empty small">Nothing yet.</div>`}
+      <h2>${home.topSrc==="igdb" ? "Popular" : "Highest rated"} ${home.topYearOf || YEAR}<span>${home.topSrc==="oc" ? "Critic scores via OpenCritic" : home.topSrc==="igdb" ? "Via IGDB" : "Critic scores"}</span></h2>
+      ${home.error ? `<code class="err">${esc(home.error)}</code>` : home.topYear.length ? row(home.topYear, home.topSrc==="igdb" ? null : homeTopCap) : `<div class="empty small">Nothing yet.</div>`}
     </section>
     <section class="hsec">
       <h2>New from people you follow<span>Latest 10 logs</span></h2>
@@ -6105,6 +6153,28 @@ async function pushOnSignOut(){                           // stop pushes to this
 }
 
 // ---- global nav ----------------------------------------------------------
+// The magnifying glass in the top bar: from anywhere, jump to Home with the game search box focused.
+function openSearch(){
+  view.tab = "games"; view.gameId = null; view.user = null; if (location.search) history.replaceState(null, "", location.pathname);
+  render();
+  const chip = document.querySelector('#searchMode [data-smode="games"]'); if (searchMode !== "games" && chip) chip.click();   // search = find a game
+  window.scrollTo(0, 0);
+  const s = document.getElementById("search"); if (s){ s.focus(); try { s.select(); } catch(e){} }
+}
+document.getElementById("searchBtn").onclick = openSearch;
+// The chevron at the right edge of the top tabs: visible only while there are tabs hidden past that edge.
+function syncTabsMore(){
+  const t = document.querySelector(".tabs"), m = document.getElementById("tabsMore"); if (!t || !m) return;
+  m.classList.toggle("show", t.scrollWidth - t.clientWidth - t.scrollLeft > 6);
+}
+(function(){
+  const t = document.querySelector(".tabs"), m = document.getElementById("tabsMore"); if (!t || !m) return;
+  t.addEventListener("scroll", syncTabsMore, { passive:true });
+  window.addEventListener("resize", syncTabsMore);
+  if (window.ResizeObserver) new ResizeObserver(syncTabsMore).observe(t);       // the strip changes width when the bell / count / sign-in button appear
+  m.onclick = e=>{ e.stopPropagation(); t.scrollTo({ left: t.scrollWidth, behavior: "smooth" }); };
+  syncTabsMore();
+})();
 document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{
   const again = b.dataset.tab==="games" && onHome();
   view.tab=b.dataset.tab; view.gameId=null; view.user=null; if (location.search) history.replaceState(null,"",location.pathname);
