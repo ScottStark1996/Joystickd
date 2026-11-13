@@ -1407,7 +1407,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard", underwater:"Underwater", fogtown:"Foggy town", lakeside:"Lakeside" };
 // Line-art patterns: a tile is a list of strokes/fills given as SVG path text, so the banner (an SVG background) and
 // saved images (canvas, via Path2D) are drawn from the very same data.
 //   op = [path, fill opacity (0 = none), stroke opacity (0 = none), line width, [x, y, rotation°] or null, dash pattern or null]
@@ -1554,7 +1554,149 @@ const GRAVEYARD = (()=>{
            stars: { w:180, h:70, ops: stars },
            moonAt: [20, 12] };                                                  // crescent and bats: this far in from the right and top edges
 })();
-const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD };
+// Underwater: a placed scene like the others. Tall kelp sways over a seabed of coral (branching coral, sea fans, brain
+// coral, tube sponges) with schools of fish above it and a shark far off in the gloom (repeating sideways only); another
+// shark cruises through the top right corner (the "moon" slot), and bubbles take the place of stars. Fixed seeds.
+const UNDERWATER = (()=>{
+  const W = 430, H = 116, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const hills = (base, amps, ph) => x => base - amps.reduce((t, a, i)=> t + a*Math.sin(2*Math.PI*(i+1)*x/W + ph[i]), 0);   // rolling seabed that repeats exactly every W
+  const ground = g => { let d = `M0 ${H}V${f(g(0))}`; for (let x = 5; x <= W; x += 5) d += `L${x} ${f(g(x))}`; return d + `V${H}Z`; };
+  const ring = (cx, cy, r) => `M${f(cx-r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2*r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2*r)} 0Z`;
+  // creatures, nose at (x, y): d = 1 faces left, -1 faces right; sc = size
+  const shark = (x, y, sc, d)=>{ const X = v => f(x + v*sc*d), Y = v => f(y + v*sc);
+    return `M${X(0)} ${Y(0)}C${X(8)} ${Y(-6)} ${X(20)} ${Y(-8)} ${X(30)} ${Y(-7)}L${X(37)} ${Y(-17)}L${X(41)} ${Y(-6.5)}C${X(48)} ${Y(-5)} ${X(54)} ${Y(-3)} ${X(58)} ${Y(-2)}L${X(67)} ${Y(-11)}L${X(63.5)} ${Y(-.5)}L${X(67)} ${Y(6.5)}L${X(58)} ${Y(2)}C${X(54)} ${Y(3.2)} ${X(50)} ${Y(4.4)} ${X(46)} ${Y(5)}L${X(47)} ${Y(8.5)}L${X(42)} ${Y(5.6)}C${X(38)} ${Y(6.2)} ${X(34)} ${Y(6.6)} ${X(30)} ${Y(6.6)}L${X(26)} ${Y(14)}L${X(21)} ${Y(6.2)}C${X(14)} ${Y(5.4)} ${X(6)} ${Y(3.4)} ${X(0)} ${Y(0)}Z`; };
+  const fish = (x, y, sc, d, tall)=>{ const X = v => f(x + v*sc*d), Y = v => f(y + v*sc);
+    return tall ? `M${X(0)} ${Y(0)}C${X(2)} ${Y(-5)} ${X(5)} ${Y(-7)} ${X(7)} ${Y(-11)}C${X(9)} ${Y(-6)} ${X(11)} ${Y(-3)} ${X(13)} ${Y(-.6)}L${X(17)} ${Y(-4.6)}V${Y(4.6)}L${X(13)} ${Y(.6)}C${X(11)} ${Y(3)} ${X(9)} ${Y(6)} ${X(7)} ${Y(11)}C${X(5)} ${Y(7)} ${X(2)} ${Y(5)} ${X(0)} ${Y(0)}Z`
+                : `M${X(0)} ${Y(0)}C${X(3)} ${Y(-4)} ${X(9)} ${Y(-4)} ${X(12)} ${Y(0)}L${X(16)} ${Y(-3.6)}V${Y(3.6)}L${X(12)} ${Y(0)}C${X(9)} ${Y(4)} ${X(3)} ${Y(4)} ${X(0)} ${Y(0)}Z`; };
+  const school = list => list.map(([x, y, sc, d, tall])=> fish(x, y, sc, d, tall)).join("");
+  // reef pieces, standing on (x, y) and sunk 2 below it
+  const PIECE = {
+    branch: (x, y, k)=>{ const X = v => f(x + v*k), Y = v => f(y + v*k); return `M${X(0)} ${f(y+2)}V${Y(-11)}M${X(0)} ${Y(-5)}L${X(-6)} ${Y(-11)}V${Y(-17)}M${X(0)} ${Y(-8)}L${X(6)} ${Y(-13)}V${Y(-21)}M${X(-6)} ${Y(-12)}L${X(-10.5)} ${Y(-15)}V${Y(-19)}M${X(6)} ${Y(-14)}L${X(10.5)} ${Y(-16.5)}V${Y(-21)}`; },
+    fan:    (x, y, k)=> `M${f(x-10*k)} ${f(y-5*k)}A${f(10*k)} ${f(10*k)} 0 0 1 ${f(x+10*k)} ${f(y-5*k)}L${f(x+1.3*k)} ${f(y+2)}H${f(x-1.3*k)}Z`,
+    ribs:   (x, y, k)=> [[-7,-11.5],[-2.6,-14],[2.6,-14],[7,-11.5]].map(([a, b])=> `M${f(x)} ${f(y)}L${f(x+a*k)} ${f(y+b*k)}`).join(""),
+    dome:   (x, y, k)=> `M${f(x-9*k)} ${f(y+2)}V${f(y)}A${f(9*k)} ${f(7*k)} 0 0 1 ${f(x+9*k)} ${f(y)}V${f(y+2)}Z`,
+    dots:   (x, y, k)=> ring(x-4*k, y-2.6*k, .9*k) + ring(x, y-4.4*k, .9*k) + ring(x+4*k, y-2.6*k, .9*k) + ring(x-1.6*k, y-1.2*k, .7*k) + ring(x+2.4*k, y-1*k, .7*k),
+    tubes:  (x, y, k)=> [[-6,12,4.4],[-1,18,5],[4.6,9,4]].map(([a, h, w])=> `M${f(x+a*k)} ${f(y+2)}V${f(y-h*k)}a${f(w*k/2)} ${f(w*k/2)} 0 0 1 ${f(w*k)} 0V${f(y+2)}Z`).join("") };
+  const kelp = (x, y, k, n, lean)=>{ let stem = `M${f(x)} ${f(y+2)}`, leaves = "", yy = y;                         // a swaying stem with a leaf on each bend
+    for (let i = 0; i < n; i++){ const q = (i % 2 ? -1 : 1)*lean; stem += `C${f(x+5*k*q)} ${f(yy-3*k)} ${f(x+5*k*q)} ${f(yy-7*k)} ${f(x)} ${f(yy-10*k)}`;
+      leaves += `M${f(x+3.6*k*q)} ${f(yy-5*k)}q${f(6*k*q)} ${f(-3*k)} ${f(8*k*q)} ${f(-8*k)}q${f(-6*k*q)} ${f(k)} ${f(-8*k*q)} ${f(8*k)}Z`; yy -= 10*k; }
+    return { stem, leaves }; };
+  // a stretch of reef along the seabed g; pieces that hang over a tile edge are repeated on the far side so the strip joins cleanly
+  const reef = (g, seed, n, kMin, kMax, skip)=>{ const r = rng(seed), o = { solid:"", branch:"", fan:"", ribs:"", dots:"" };
+    for (let i = 0; i < n; i++){ const x0 = (i + .15 + r()*.7)*W/n, kind = r(), k = kMin + r()*(kMax - kMin); if (skip.some(([a, b])=> x0 > a && x0 < b)) continue;
+      const xs = [x0]; if (x0 < 12*k) xs.push(x0 + W); if (x0 > W - 12*k) xs.push(x0 - W);
+      xs.forEach(x=>{ const y = g(x0);
+        if (kind < .3) o.branch += PIECE.branch(x, y, k);
+        else if (kind < .52){ o.fan += PIECE.fan(x, y, k); o.ribs += PIECE.ribs(x, y, k); }
+        else if (kind < .77){ o.solid += PIECE.dome(x, y, k); o.dots += PIECE.dots(x, y, k); }
+        else o.solid += PIECE.tubes(x, y, k); }); }
+    return o; };
+  const g1 = hills(92, [6, 3], [2, .4]), g2 = hills(106, [3, 2], [.4, 2.2]);
+  const stand = (g, list, k)=>{ const o = { stem:"", leaves:"" }; list.forEach(([x, n, lean])=>{ const q = kelp(x, g(x), k, n, lean); o.stem += q.stem; o.leaves += q.leaves; }); return o; };
+  const kelpFar = stand(g1, [[34,5,1],[52,6,-1],[206,6,1],[224,4,-1],[388,5,-1]], 1), kelpNear = stand(g2, [[126,6,1],[140,4,-1],[310,7,-1],[326,5,1]], 1.35);
+  const far = reef(g1, 33, 14, .7, 1, [[26,58],[198,230],[380,396]]), near = reef(g2, 47, 15, 1, 1.5, [[118,148],[302,334]]);
+  const fishes = school([[150,52,1.2,1],[170,43,1.05,1],[177,61,1.15,1],[197,50,1,1],[205,37,.95,1],[217,63,1.25,1,true],[236,47,.9,1],[190,72,.9,1],[244,60,1.05,1,true]])
+               + school([[60,72,1.05,-1],[44,62,.95,-1],[30,76,.9,-1],[70,58,.9,-1],[18,66,.8,-1]]);
+  const trail = ring(262, 84, 1.6) + ring(265, 76, 1.1) + ring(260, 69, 2) + ring(264, 59, 1.3) + ring(261, 48, 1.7);
+  const br = rng(21), bubbles = []; for (let i = 0; i < 9; i++) bubbles.push([ring(5 + br()*170, 5 + br()*60, +(1 + br()*1.6).toFixed(2)), 0, +(.2 + br()*.2).toFixed(2), .9, null]);
+  return { sky:   { w:W, h:H, ops:[[shark(300, 22, .75, -1), .10, 0, 0, null], [ground(g1), .08, 0, 0, null], [kelpFar.stem, 0, .10, 1.8, null], [kelpFar.leaves, .08, 0, 0, null],
+                                   [far.solid, .10, 0, 0, null], [far.branch, 0, .10, 2.2, null], [far.fan, .06, 0, 0, null], [far.ribs, 0, .12, 1, null], [far.dots, .13, 0, 0, null],
+                                   [fishes, .28, 0, 0, null], [trail, 0, .32, .9, null],
+                                   [ground(g2) + near.solid, .24, 0, 0, null], [kelpNear.stem, 0, .24, 2.4, null], [kelpNear.leaves, .18, 0, 0, null],
+                                   [near.branch, 0, .25, 3.2, null], [near.fan, .15, 0, 0, null], [near.ribs, 0, .30, 1, null], [near.dots, .32, 0, 0, null]] },
+           moon:  { w:100, h:44, ops:[[shark(92, 24, 1.15, -1), .16, 0, 0, null]] },
+           stars: { w:180, h:70, ops: bubbles },
+           moonAt: [18, 12] };                                                  // the corner shark: this far in from the right and top edges
+})();
+// Soft fog for the scene strips. Only flat shapes can be drawn, so softness is built by stacking: each bank is a lumpy
+// cloud (three overlapping lobes), drawn several times over, each copy a little smaller, so it is thin at the edges and
+// thickens toward the middle. Returns one layer per copy. banks = [centre x, centre y, half-width, half-height]; W = tile
+// width (banks that drift over a tile edge are repeated on the far side so the strip joins cleanly).
+function fogLayers(W, banks, alpha, copies = 5){
+  const lobe = (cx, cy, rx, ry)=> `M${+(cx-rx).toFixed(1)} ${+cy.toFixed(1)}a${+rx.toFixed(1)} ${+ry.toFixed(1)} 0 1 0 ${+(2*rx).toFixed(1)} 0a${+rx.toFixed(1)} ${+ry.toFixed(1)} 0 1 0 ${+(-2*rx).toFixed(1)} 0Z`;
+  return Array.from({ length: copies }, (_, k)=>{ const sh = 1 - k*.16; let d = "";
+    banks.forEach(([cx, cy, rx, ry])=> [[0, 0, 1, 1], [-.46, .22, .6, .78], [.42, -.16, .64, .84]].forEach(([dx, dy, sx, sy])=>{ const x = cx + dx*rx, y = cy + dy*ry, a = rx*sx*sh, b = ry*sy*sh;
+      [0, W, -W].forEach(o=>{ if (x + o + a > 0 && x + o - a < W) d += lobe(x + o, y, a, b); }); }));
+    return [d, alpha, 0, 0, null]; });
+}
+// A ground haze that thickens smoothly toward the bottom of a strip: many thin stacked bands.
+function hazeBands(W, H, from, step){ let d = ""; for (let y = from; y < H; y += step) d += `M0 ${y}H${W}V${H}H0Z`; return d; }
+// Foggy town: a placed scene like the others. An empty small-town street runs along the bottom edge (repeating sideways
+// only): low shopfronts and houses with mostly dark windows, a water tower behind them, utility poles carrying street
+// lamps and sagging lines, and banks of fog drifting through. Nothing sits in the corner; drifting flakes take the place
+// of stars. Built once from fixed seeds. Windows sit on an even grid centred in each building.
+const FOGTOWN = (()=>{
+  const W = 430, H = 112, base = H - 8, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const ring = (cx, cy, r) => `M${f(cx-r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2*r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2*r)} 0Z`;
+  // the far row of rooftops, and a water tower
+  let far = ""; { const r = rng(41); let x = 0; while (x < W){ let w = Math.round(26 + r()*30); if (x + w > W - 26) w = W - x; const h = Math.round(44 + r()*26), y = base - h;
+    far += r() < .4 ? `M${x} ${base}V${y+9}L${f(x+w/2)} ${y}L${x+w} ${y+9}V${base}Z` : `M${x} ${base}V${y}H${x+w}V${base}Z`; x += w; } }
+  far += `M318 ${base}V${base-80}h3V${base}ZM343 ${base}V${base-80}h3V${base}ZM312 ${base-80}v-16h40v16ZM312 ${base-96}L332 ${base-106}L352 ${base-96}Z`;
+  // the street front: gabled houses and flat-roofed shops (some with an awning line), a few windows still lit
+  let body = "", trim = "", unlit = "", lit = ""; const spans = []; { const r = rng(13); let x = 0;
+    while (x < W){ let w = Math.round(34 + r()*26); if (x + w > W - 34) w = W - x; const h = Math.round(36 + r()*20), y = base - h, kind = r(); spans.push([x, x + w]);
+      if (kind < .3) body += `M${x} ${base}V${y+10}L${f(x+w/2)} ${y}L${x+w} ${y+10}V${base}Z`;
+      else { body += `M${x} ${base}V${y}H${x+w}V${base}Z`; trim += `M${x+1} ${y-2}H${x+w-1}`; if (kind > .62) trim += `M${x+3} ${base-14}H${x+w-3}`; }
+      const cols = Math.max(1, Math.floor((w - 12)/11) + 1), sx = x + (w - ((cols-1)*11 + 5))/2, top = kind < .3 ? y + 13 : y + 6;                       // same margin left and right
+      for (let wy = top; wy + 7 <= base - 15; wy += 12) for (let c = 0; c < cols; c++){ const d = `M${f(sx + c*11)} ${wy}h5v7h-5z`; if (r() < .12) lit += d; else unlit += d; }
+      x += w; } }
+  // utility poles with two sagging lines, each carrying a street lamp
+  const PH = 62, px = [0, 1, 2].map(i=> (i + .5)*W/3); let poles = "", wires = "", posts = "", heads = "", halo = "";
+  px.forEach(x=>{ poles += `M${f(x)} ${base+2}V${base-PH}M${f(x-6)} ${base-PH+3}H${f(x+6)}M${f(x-4.5)} ${base-PH+7}H${f(x+4.5)}`; });
+  for (let i = -1; i < 3; i++){ const a = i < 0 ? px[2] - W : px[i], b = i < 2 ? px[i+1] : px[0] + W, y = base - PH + 3; [-5.5, 5.5].forEach(o=>{ wires += `M${f(a+o)} ${y}Q${f((a+b)/2 + o)} ${y+9} ${f(b+o)} ${y}`; }); }
+  [[70, 1], [214, -1], [356, 1]].forEach(([x, dir])=>{ const top = base - 40; posts += `M${x} ${base+2}V${top}q0 -5 ${5*dir} -5h${3*dir}`; heads += `M${x + (dir > 0 ? 6 : -11)} ${f(top-5.6)}h5v2.6h-5z`; halo += ring(x + 8.5*dir, top - 3, 13) + ring(x + 8.5*dir, top - 3, 6); });
+  const fr = rng(31), flakes = []; for (let i = 0; i < 14; i++) flakes.push([PA.circ(+(4 + fr()*172).toFixed(1), +(4 + fr()*62).toFixed(1), +(.6 + fr()*.9).toFixed(2)), +(.14 + fr()*.2).toFixed(2), 0, 0, null]);
+  // fog: high wisps over the rooftops, a bank between the far roofs and the street front, and thicker banks rolling along the street
+  const wisps = fogLayers(W, [[150, 20, 95, 5], [372, 30, 80, 4.5]], .008, 4), midFog = fogLayers(W, [[70, 46, 120, 11], [300, 40, 130, 12]], .013),
+        streetFog = fogLayers(W, [[30, 88, 120, 12], [205, 84, 135, 14], [380, 90, 115, 11]], .017);
+  return { sky:   { w:W, h:H, ops:[...wisps, [far, .09, 0, 0, null], ...midFog, [body, .24, 0, 0, null], [trim, 0, .26, 1.6, null], [unlit, .10, 0, 0, null], [lit, .50, 0, 0, null],
+                                   [poles, 0, .26, 1.6, null], [wires, 0, .18, .8, null], [halo, .09, 0, 0, null], [posts, 0, .38, 1.6, null], [heads, .80, 0, 0, null],
+                                   ...streetFog, [`M0 ${base}H${W}V${H}H0Z`, .26, 0, 0, null], [hazeBands(W, H, 62, 3), .0045, 0, 0, null]] },
+           moon:  null,                                                          // nothing in the corner on this one
+           stars: { w:180, h:70, ops: flakes },
+           moonAt: [0, 0],
+           spans };                                                             // where each front building starts and ends (used by the tests)
+})();
+// Lakeside: a placed scene like the others. A still lake in the fog: a far shore of pines, ripples on the water, and a
+// boardwalk running straight out from the near bank (narrowing as it goes) to a rowboat tied at its far end; a lamp where
+// the pier meets the bank, a bench and two bare trees (repeating sideways only). Nothing in the corner; drifting flakes
+// take the place of stars. Built once from fixed seeds.
+const LAKESIDE = (()=>{
+  const W = 430, H = 108, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const hills = (base, amps, ph) => x => base - amps.reduce((t, a, i)=> t + a*Math.sin(2*Math.PI*(i+1)*x/W + ph[i]), 0);
+  const line = (g, bottom)=>{ let d = `M0 ${bottom}V${f(g(0))}`; for (let x = 5; x <= W; x += 5) d += `L${x} ${f(g(x))}`; return d + `V${bottom}Z`; };
+  const ring = (cx, cy, r) => `M${f(cx-r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2*r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2*r)} 0Z`;
+  const pine = (x, base, h, w, tiers)=>{ const top = base - h, tr = h*.12, th = (h - tr)/tiers, R = [], L = [];
+    for (let i = 1; i <= tiers; i++){ const y = top + th*i, half = (w/2)*Math.pow(i/tiers, .85), inn = half*.46; R.push(`L${f(x+half)} ${f(y)}`); L.unshift(`L${f(x-half)} ${f(y)}`);
+      if (i < tiers){ R.push(`L${f(x+inn)} ${f(y - th*.16)}`); L.unshift(`L${f(x-inn)} ${f(y - th*.16)}`); } }
+    return `M${f(x)} ${f(top)}${R.join("")}L${f(x+1.2)} ${f(base-tr)}V${f(base+3)}H${f(x-1.2)}V${f(base-tr)}${L.join("")}Z`; };
+  const tree = k => { const t = v => f(v*k); return `M0 2C${t(1.5)} ${t(-10)} ${t(-2.5)} ${t(-18)} 0 ${t(-30)}M${t(-.4)} ${t(-13)}l${t(8)} ${t(-8)}l${t(1)} ${t(-7)}M${t(7.6)} ${t(-21)}l${t(6)} ${t(-1)}M${t(-.8)} ${t(-19)}l${t(-7)} ${t(-6)}l${t(-5)} ${t(-1)}M${t(-7.8)} ${t(-25)}l${t(-1)} ${t(-6)}M0 ${t(-26)}l${t(5)} ${t(-7)}M0 ${t(-30)}l${t(-3)} ${t(-6)}`; };
+  const shore = hills(52, [3, 2], [1.3, .2]), bank = hills(96, [2.5, 1.5], [2.7, 1.9]);
+  // far shore with pines (ones that hang over a tile edge are repeated on the far side)
+  let far = line(shore, 60); { const r = rng(9); for (let x = r()*14; x < W; x += 9 + r()*12){ const h = 12 + r()*14, w = h*.46; far += pine(x, shore(x), h, w, 3); if (x < w/2) far += pine(x + W, shore(x), h, w, 3); if (x > W - w/2) far += pine(x - W, shore(x), h, w, 3); } }
+  // the pier, seen from the bank: t runs from 0 at the shore to 1 at the far end, drifting a little left as it goes
+  const cx = 250, y0 = 97, y1 = 68, w0 = 54, w1 = 20, PL = t => cx - (w0 + (w1 - w0)*t)/2 - 14*t, PR = t => PL(t) + (w0 + (w1 - w0)*t), PY = t => y0 + (y1 - y0)*t;
+  const deck = `M${f(PL(0))} ${y0}L${f(PL(1))} ${y1}H${f(PR(1))}L${f(PR(0))} ${y0}Z`;
+  let planks = "", posts = ""; for (let i = 1; i < 9; i++){ const t = 1 - Math.pow(1 - i/9, 1.6); planks += `M${f(PL(t))} ${f(PY(t))}H${f(PR(t))}`; }
+  [0, .34, .62, .84, 1].forEach(t=>{ const h = 9 - 5*t; posts += `M${f(PL(t))} ${f(PY(t)+1)}v${f(-h)}M${f(PR(t))} ${f(PY(t)+1)}v${f(-h)}`; });
+  const ropes = `M${f(PL(0))} ${f(PY(0)-8)}L${f(PL(1))} ${f(PY(1)-3.4)}M${f(PR(0))} ${f(PY(0)-8)}L${f(PR(1))} ${f(PY(1)-3.4)}`;
+  const bx = f(PL(1) - 30), by = y1 + 1, boat = `M${bx} ${by}q2 6 8 6h14q6 0 8 -6Z`, tackle = `M${f(bx+7)} ${by-1}l12 5M${f(bx+30)} ${by}L${f(PL(1))} ${y1-3}`;      // an oar and the mooring line
+  // ripples, kept clear of the pier and the boat
+  let ripples = ""; { const r = rng(4), keep = [PL(1) - 40, PR(0) + 4]; for (let i = 0; i < 30; i++){ const y = 62 + r()*26, x = r()*W, l = 8 + r()*18; if (x + l > keep[0] && x < keep[1]) continue;
+    ripples += `M${f(x)} ${f(y)}h${f(l)}`; if (x + l > W) ripples += `M${f(x - W)} ${f(y)}h${f(l)}`; } }
+  const lx = Math.round(PR(0)) + 8, lb = f(bank(300)), ltop = f(lb - 34), post = `M${lx} ${f(lb+2)}V${ltop}q0 -5 -5 -5h-3`, head = `M${lx-11} ${f(ltop-5.6)}h5v2.6h-5z`, halo = ring(lx - 8.5, ltop - 3, 13) + ring(lx - 8.5, ltop - 3, 6);
+  const by2 = f(bank(100)), bench = `M92 ${f(by2-9)}h26M94 ${f(by2-9)}v9M116 ${f(by2-9)}v9M92 ${f(by2-15)}h26M93 ${f(by2-15)}v6M117 ${f(by2-15)}v6`;
+  const farFog = fogLayers(W, [[110, 55, 125, 9], [340, 51, 110, 10]], .014), nearFog = fogLayers(W, [[70, 82, 115, 9], [385, 86, 115, 9]], .013);
+  const fr = rng(31), flakes = []; for (let i = 0; i < 14; i++) flakes.push([PA.circ(+(4 + fr()*172).toFixed(1), +(4 + fr()*62).toFixed(1), +(.6 + fr()*.9).toFixed(2)), +(.14 + fr()*.2).toFixed(2), 0, 0, null]);
+  return { sky:   { w:W, h:H, ops:[[far, .09, 0, 0, null], [`M0 58H${W}V${H}H0Z`, .05, 0, 0, null], ...farFog, [ripples, 0, .14, 1, null], [halo, .09, 0, 0, null],
+                                   [boat, .32, 0, 0, null], [tackle, 0, .32, 1.1, null], [deck, .20, 0, 0, null], [planks, 0, .20, 1, null], [posts, 0, .40, 1.8, null], [ropes, 0, .26, 1, null], ...nearFog,
+                                   [tree(1.3), 0, .26, 1.8, [40, f(bank(40)), 0]], [tree(1.05), 0, .24, 1.6, [392, f(bank(392)), 0]], [line(bank, H), .24, 0, 0, null], [bench, 0, .30, 1.6, null],
+                                   [post, 0, .38, 1.6, null], [head, .80, 0, 0, null], [hazeBands(W, H, 40, 3), .0045, 0, 0, null]] },
+           moon:  null,                                                          // nothing in the corner on this one
+           stars: { w:180, h:70, ops: flakes },
+           moonAt: [0, 0] };
+})();
+const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD, underwater: UNDERWATER, fogtown: FOGTOWN, lakeside: LAKESIDE };
 const pathArtSvg = (art, accent) => `<svg xmlns="http://www.w3.org/2000/svg" width="${art.w}" height="${art.h}" viewBox="0 0 ${art.w} ${art.h}">${art.ops.map(([d, f, st, lw, tr, dash])=>
   `<path d="${d}"${tr ? ` transform="translate(${tr[0]} ${tr[1]})${tr[2] ? ` rotate(${tr[2]})` : ""}"` : ""} fill="${f ? accent : "none"}"${f ? ` fill-opacity="${f}"` : ""}${st ? ` stroke="${accent}" stroke-opacity="${st}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash.join(" ")}"` : ""}` : ""}/>`).join("")}</svg>`;
 function paintPathArt(x, W, H, art, accent){
@@ -1680,7 +1822,7 @@ function paintPattern(x, W, H, pattern, accent, opts){   // opts (placed pattern
                             else { x.moveTo(px+sh[2], py+sh[3]); for (let i=4; i<sh.length; i+=2) x.lineTo(px+sh[i], py+sh[i+1]); x.closePath(); } });
                           x.fill(); }); } break;
     case "space":     paintPathArt(x, W, H, PATH_ARTS[pattern], accent); break;
-    case "skyline": case "forest": case "cathedral": case "graveyard":
+    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside":
                       { const S = SCENES[pattern], I = (opts && opts.inset) || 0, fillOnly = !!(opts && opts.part === "fill");
                         // stars everywhere above the rooftops / treeline (never among the windows); no crescent or birds on saved images
                         x.save(); if (!fillOnly){ x.beginPath(); x.rect(0, 0, W, H - I - S.sky.h + 12); x.clip(); } paintPathArt(x, W, H, S.stars, accent); x.restore();
@@ -1787,11 +1929,11 @@ function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImag
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${v.w}" height="${v.h}"><g fill="${t.accent}">${vectorShapes(v, forImage).map(sh=> sh[0]==="c" ? `<circle cx="${sh[2]}" cy="${sh[3]}" r="${sh[4]}" opacity="${sh[1]}"/>` : `<polygon points="${sh.slice(2).join(" ")}" opacity="${sh[1]}"/>`).join("")}</g></svg>`;
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${v.w}px ${v.h}px`]; }
     case "space":     { const v = PATH_ARTS[t.pattern]; return [`url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(v, t.accent))}')`, `${v.w}px ${v.h}px`]; }
-    case "skyline": case "forest": case "cathedral": case "graveyard":
+    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside":
                       { const u = a => `url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(a, t.accent))}')`, sz = a => `${a.w}px ${a.h}px`, S = SCENES[t.pattern];
                         // layers: buildings along the bottom, one band of stars along the top (kept clear of the buildings, so no stray dots among the windows),
                         // and on the banner a crescent in the corner (left off saved images, where the wordmark sits there)
-                        const L = [[S.sky, "repeat-x", "left bottom"], [S.stars, "repeat-x", "left top"]]; if (!forImage) L.push([S.moon, "no-repeat", `right ${S.moonAt[0]}px top ${S.moonAt[1]}px`]);
+                        const L = [[S.sky, "repeat-x", "left bottom"], [S.stars, "repeat-x", "left top"]]; if (!forImage && S.moon) L.push([S.moon, "no-repeat", `right ${S.moonAt[0]}px top ${S.moonAt[1]}px`]);
                         return [L.map(l=> u(l[0])).join(","), L.map(l=> sz(l[0])).join(","), L.map(l=> l[1]).join(","), L.map(l=> l[2]).join(",")]; }
     case "waves":     { const r = WAVES.r, b = r + 2;
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${2*r}" height="${r}" viewBox="0 0 ${2*r} ${r}"><defs><mask id="m" maskUnits="userSpaceOnUse" x="${-b}" y="${-b}" width="${2*b}" height="${2*b}"><rect x="${-b}" y="${-b}" width="${2*b}" height="${2*b}" fill="#fff"/><circle cx="${-r}" cy="${r/2}" r="${r}"/><circle cx="${r}" cy="${r/2}" r="${r}"/><circle cx="0" cy="${r}" r="${r}"/></mask>`
