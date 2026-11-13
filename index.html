@@ -4090,7 +4090,12 @@ function logCard(l, g, ballot, isMe, uid){
 }
 
 // ---- community tab -----------------------------------------------------------
-let stats = { rows:null, loading:false }, commSort = "high", commMin = 1, commShown = 30;
+let stats = { rows:null, loading:false }, commSort = "high", commShown = 30;
+// Minimums on the Community tab. Starting points: 10+ ratings for Highest / Lowest rated, 5+ reports for the four platinum
+// difficulty / length chips. Once someone picks a minimum themselves, that choice applies to all of those chips.
+const COMM_MIN_RATE = 10, COMM_MIN_PLAT = 5;
+let commMinPick = null;
+const COMM_PLAT_SORTS = ["hardest","easiest","longest","shortest"];
 let commCaps = (()=>{ try { return localStorage.getItem("jd_commCaps") !== "0"; } catch(e){ return true; } })();   // show "7 ratings" under community cards
 async function loadStats(){
   if (!LIVE || stats.loading) return; stats.loading = true;
@@ -4161,6 +4166,7 @@ function renderCommunity(app){
     $("#commLatestRetry") && ($("#commLatestRetry").onclick = ()=> loadCommLatest(Math.max(COMM_LATEST_STEP, commLatest.asked)));
     return;
   }
+  const commMin = commMinPick ?? (COMM_PLAT_SORTS.includes(commSort) ? COMM_MIN_PLAT : COMM_MIN_RATE);
   let list = stats.rows.filter(r=> (commSort==="high"||commSort==="low") ? r.rating_count>=commMin : true);
   if (commSort==="plat") list = list.filter(r=>r.platinum_count>0);
   if (commSort==="reviewed") list = list.filter(r=>r.review_count>0);
@@ -4180,14 +4186,16 @@ function renderCommunity(app){
       <div class="genres">${commChips}</div>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end;flex:1">
         <button class="gchip ${commCaps?"on":""}" id="commCaps" title="Show or hide the counts under each game">${commCaps ? "Counts on" : "Counts off"}</button>
-        ${(()=>{ const ratingSort = commSort==="high"||commSort==="low", platSort = ["hardest","easiest","longest","shortest"].includes(commSort);
+        ${(()=>{ const ratingSort = commSort==="high"||commSort==="low", platSort = COMM_PLAT_SORTS.includes(commSort);
           return (ratingSort || platSort) ? `<label class="sortwrap">${ratingSort ? "Min ratings" : "Min reports"} <select id="commMin">${[1,5,10,100,1000].map(n=>`<option value="${n}" ${commMin===n?"selected":""}>${n.toLocaleString()}+</option>`).join("")}</select></label>` : ""; })()}
       </div>
     </div>
     ${list.length ? `<div class="grid">${list.map(r=>{ const g=getGame(r.game_id)||r.game; return commCard(g, r); }).join("")}</div>${commShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="commMore">Show more (${total-commShown} left)</button></div>` : ""}`
-      : `<div class="empty small">Nothing here yet — it fills in as people log games.</div>`}`);
+      : `<div class="empty small">${(()=>{ const rating = commSort==="high"||commSort==="low", plat = COMM_PLAT_SORTS.includes(commSort);
+          const any = rating ? stats.rows.some(r=> r.rating_count>=1) : plat ? stats.rows.some(r=> (commSort==="hardest"||commSort==="easiest") ? (r.avg_plat_diff!=null && +(r.plat_diff_count||0)>=1) : (r.avg_plat_hours!=null && +(r.plat_hours_count||0)>=1)) : false;
+          return any && commMin > 1 ? `No games have ${commMin.toLocaleString()}+ ${rating ? "ratings" : "reports"} yet. Try a lower minimum.` : "Nothing here yet — it fills in as people log games."; })()}</div>`}`);
   wireCommChips();
-  $("#commMin") && ($("#commMin").onchange = e=>{ commMin=+e.target.value; commShown=30; render(); });
+  $("#commMin") && ($("#commMin").onchange = e=>{ commMinPick = +e.target.value; commShown=30; render(); });
   $("#commCaps").onclick = ()=>{ commCaps = !commCaps; try { localStorage.setItem("jd_commCaps", commCaps ? "1" : "0"); } catch(e){} render(); };
   $("#commMore") && ($("#commMore").onclick = ()=>{ commShown+=30; render(); });
 }
