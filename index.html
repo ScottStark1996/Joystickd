@@ -704,18 +704,19 @@
     .bar{padding:12px 14px}
     .tab{padding:7px 10px;font-size:13px}
     /* Phones: two rows. Logo + search / bell / settings on top, the four tabs in one strip underneath (all visible, no scrolling). */
-    .bar{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"brand icons" "tabs tabs";align-items:center;column-gap:8px;row-gap:9px;padding:10px 14px}
+    /* Kept tight: in the iPhone app the status-bar area already gives the room above the logo, so the top padding shrinks there (2px); in a phone browser it stays 10px. */
+    .bar{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"brand icons" "tabs tabs";align-items:center;column-gap:8px;row-gap:6px;padding:calc(10px - min(8px, env(safe-area-inset-top, 0px))) 14px 8px}
     .brand{grid-area:brand;font-size:22px}
     .hicons{grid-area:icons;justify-self:end;min-width:0}
-    .hicons .bell,.hicons .gear,.hsearch{padding:6px;margin-left:4px}
+    .hicons .bell,.hicons .gear,.hsearch{padding:5px;margin-left:5px}
     .hicons .bell svg,.hicons .gear svg,.hsearch svg{width:20px;height:20px}
     .hicons .authbtn{margin-left:6px;max-width:120px;font-size:13px}
-    .tabs{grid-area:tabs;margin:0;gap:2px;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
-    .tab{padding:7px 12px;font-size:13.5px;flex:0 0 auto}
+    .tabs{grid-area:tabs;margin:0;gap:2px;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px}
+    .tab{padding:4px 12px;font-size:13.5px;line-height:18px;flex:0 0 auto}
     .tabs-more{background:linear-gradient(90deg, rgba(22,31,53,0), rgba(22,31,53,.85) 50%, var(--panel) 78%);border-radius:0 999px 999px 0}   /* safety net on very narrow phones */
   }
-  @media(max-width:380px){.tab{padding:7px 8px;font-size:13px}}
-  @media(max-width:340px){.tab{padding:7px 6px;font-size:12.5px}.brand{font-size:20px}}
+  @media(max-width:380px){.tab{padding:4px 8px;font-size:13px}}
+  @media(max-width:340px){.tab{padding:4px 6px;font-size:12.5px}.brand{font-size:20px}}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
