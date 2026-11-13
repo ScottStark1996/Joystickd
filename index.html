@@ -255,6 +255,12 @@
   .segb{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
   .segb.on{background:var(--panel2);color:var(--text)}
   .award-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .award-rus{display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-top:3px}
+  .award-ru{font-size:12px;line-height:1.35;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .award-ru b{display:inline-block;min-width:27px;font-weight:700;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;opacity:.8}
+  .award-ru[role=button]{cursor:pointer;padding:2px 0}
+  .award-ru[role=button]:hover,.award-ru[role=button]:focus-visible{color:var(--text);outline:none}
+  .award-ru.add{opacity:.75}
   .award-save{margin-left:auto;flex-shrink:0;width:36px;height:36px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);font-size:17px;line-height:1;cursor:pointer}
   .award-save:hover,.award-save:focus-visible{color:var(--gold);border-color:var(--gold-dim);outline:none}
   div.award:hover{transform:none;border-color:var(--line)}
@@ -493,7 +499,7 @@
   .slock{text-align:center;padding:36px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
   .slock h3{font-size:20px;margin:8px 0 6px}.slock p{color:var(--muted);font-size:14px;max-width:420px;margin:0 auto 16px}
   /* Pro: profile look (accent / pattern / tint) and avatar frames */
-  .profile-head.themed{padding:16px 16px 18px;margin:-6px -16px 6px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz)}
+  .profile-head.themed{padding:16px 16px 18px;margin:-6px -16px 6px;border-radius:18px;border:1px solid var(--pline);background-color:var(--ptint);background-image:var(--ppat);background-size:var(--ppsz);background-repeat:var(--pprep,repeat);background-position:var(--pppos,0 0)}
   @media(max-width:640px){.profile-head.themed{margin-left:-12px;margin-right:-12px}}
   .profile-head.themed h1{color:var(--acc)}
   .ptabs.themed .ptab.on{border-bottom-color:var(--acc)}.ptabs.themed .ptab b{color:var(--acc)}
@@ -1125,6 +1131,7 @@
 <div class="sheet-wrap" id="pickWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
     <h2 id="pickTitle">Choose a game</h2>
+    <div class="hint" id="pickNote" hidden style="margin:6px 0 12px"></div>
     <input class="search" id="pickSearch" placeholder="Search games" style="margin-top:14px;margin-bottom:10px">
     <div class="pick-list" id="pickList"></div>
     <div class="actions">
@@ -1396,7 +1403,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline" };
 // Line-art patterns: a tile is a list of strokes/fills given as SVG path text, so the banner (an SVG background) and
 // saved images (canvas, via Path2D) are drawn from the very same data.
 //   op = [path, fill opacity (0 = none), stroke opacity (0 = none), line width, [x, y, rotation°] or null, dash pattern or null]
@@ -1415,6 +1422,30 @@ const PATH_ARTS = {
     ...[[14,14,1.3,.34],[76,12,1,.26],[196,12,1.2,.30],[130,14,.9,.22],[234,56,1.1,.28],[12,70,1,.24],[60,124,1.2,.30],[140,96,1,.24],[176,76,.9,.22],[226,128,1.1,.26],[40,86,.9,.20],[92,100,1,.22]].map(([x,y,r,a])=> [PA.circ(x,y,r), a, 0, 0, null]),
   ]; })() },
 };
+// Skyline: unlike the tiled patterns, this one is placed. A row of buildings runs along the bottom edge (repeating
+// sideways only), a crescent sits in the top right corner, and stars fill the rest. Built once from a fixed seed, so it
+// is identical for everyone and on every device. Windows sit on an even grid centred in each building; lit ones are bright.
+const SKYLINE = (()=>{
+  const W = 430, H = 78, rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const row = (seed, o)=>{ const r = rng(seed); let x = 0, body = "", tops = "", unlit = "", lit = "";
+    while (x < W){ let w = Math.round(o.minW + r()*(o.maxW - o.minW)); if (x + w > W - o.minW) w = W - x;
+      const h = Math.round(o.minH + r()*(o.maxH - o.minH)), y = H - h, kind = r(); let top = y;
+      if (o.details && kind < .16 && w >= 16){ const st = Math.round(w*.22); body += `M${x} ${H}V${y+8}H${x+st}V${y}H${x+w-st}V${y+8}H${x+w}V${H}Z`; top = y + 8; }          // stepped crown
+      else if (o.details && kind < .28 && w >= 14){ body += `M${x} ${H}V${y+6}L${x+w/2} ${y}L${x+w} ${y+6}V${H}Z`; top = y + 6; }                                     // pitched roof
+      else body += `M${x} ${H}V${y}H${x+w}V${H}Z`;
+      if (o.details && r() < .3) tops += `M${x + Math.round(w*.5)} ${y}v${-Math.round(6 + r()*10)}`;                                                                   // antenna
+      if (o.details && r() < .14 && w >= 18) tops += `M${x+4} ${y}v-5h7v5`;                                                                                            // rooftop box
+      if (o.windows){ const cols = Math.floor((w - 8)/5) + 1, gridW = (cols - 1)*5 + 2, sx = x + Math.round((w - gridW)/2);                                            // same margin left and right
+        for (let wy = top + 5; wy + 3 <= H - 4; wy += 6) for (let c = 0; c < cols; c++){ const d = `M${sx + c*5} ${wy}h2v3h-2z`; if (r() < o.windows) lit += d; else unlit += d; } }
+      x += w; }
+    return { body, tops, unlit, lit }; };
+  const far = row(5, { minW:16, maxW:34, minH:26, maxH:60 }), near = row(23, { minW:12, maxW:30, minH:12, maxH:44, windows:.4, details:true });
+  const sr = rng(11), stars = []; for (let i = 0; i < 14; i++) stars.push([PA.circ(+(sr()*180).toFixed(1), +(sr()*70).toFixed(1), +(.6 + sr()*.8).toFixed(2)), +(.18 + sr()*.2).toFixed(2), 0, 0, null]);
+  return { sky:   { w:W, h:H, ops:[[far.body, .10, 0, 0, null], [near.body, .24, 0, 0, null], [near.tops, 0, .30, 1.2, null], [near.unlit, .13, 0, 0, null], [near.lit, .62, 0, 0, null]] },
+           moon:  { w:34, h:34, ops:[["M22 4A13 13 0 1 0 30 24A10.5 10.5 0 0 1 22 4Z", .30, 0, 0, null]] },
+           stars: { w:180, h:70, ops: stars },
+           moonAt: [22, 14] };                                                  // crescent: this far in from the right and top edges
+})();
 const pathArtSvg = (art, accent) => `<svg xmlns="http://www.w3.org/2000/svg" width="${art.w}" height="${art.h}" viewBox="0 0 ${art.w} ${art.h}">${art.ops.map(([d, f, st, lw, tr, dash])=>
   `<path d="${d}"${tr ? ` transform="translate(${tr[0]} ${tr[1]})${tr[2] ? ` rotate(${tr[2]})` : ""}"` : ""} fill="${f ? accent : "none"}"${f ? ` fill-opacity="${f}"` : ""}${st ? ` stroke="${accent}" stroke-opacity="${st}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash.join(" ")}"` : ""}` : ""}/>`).join("")}</svg>`;
 function paintPathArt(x, W, H, art, accent){
@@ -1510,7 +1541,7 @@ function cardThemeFor(uid, P){
   return { bg: b.bg, panel: b.panel, panel2: b.panel2, line: b.line, accent: t ? t.card.accent : "#f0b429", style: t ? t.card.style : "solid", score: t ? (t.score||"gradient") : "gradient", pattern: t ? (t.card.pattern||"none") : "none", textBox: t ? t.card.textBox !== false : true, isDefault: !t || (t.card.bg==="navy" && t.card.accent==="#f0b429" && t.card.style==="solid" && (t.card.pattern||"none")==="none") };
 }
 // Canvas twin of patternCss(): the same five header patterns, drawn in the accent color at low alpha.
-function paintPattern(x, W, H, pattern, accent){
+function paintPattern(x, W, H, pattern, accent, opts){   // opts (placed patterns only): inset = how far the visible panel is in from the canvas edge; part "fill" = just the repeating layer
   if (!pattern || pattern==="none") return;
   x.save();
   switch (pattern){
@@ -1528,6 +1559,10 @@ function paintPattern(x, W, H, pattern, accent){
                             else { x.moveTo(px+sh[2], py+sh[3]); for (let i=4; i<sh.length; i+=2) x.lineTo(px+sh[i], py+sh[i+1]); x.closePath(); } });
                           x.fill(); }); } break;
     case "space":     paintPathArt(x, W, H, PATH_ARTS[pattern], accent); break;
+    case "skyline":   { const S = SKYLINE, I = (opts && opts.inset) || 0, fillOnly = !!(opts && opts.part === "fill");
+                        // stars everywhere above the rooftops (never among the windows); no crescent on saved images
+                        x.save(); if (!fillOnly){ x.beginPath(); x.rect(0, 0, W, H - I - S.sky.h + 12); x.clip(); } paintPathArt(x, W, H, S.stars, accent); x.restore();
+                        if (!fillOnly){ x.save(); x.translate(I, H - I - S.sky.h); paintPathArt(x, W - 2*I, 1, S.sky, accent); x.restore(); } } break;
     case "waves":     { // one tile painted back row to front (each scale first clears what it sits on), then repeated
                         const r = WAVES.r, S = Math.max(1, Math.round(Math.abs(x.getTransform().a) || 1)), tile = document.createElement("canvas"); tile.width = 2*r*S; tile.height = r*S;
                         const tx = tile.getContext("2d"); tx.scale(S, S); tx.lineWidth = WAVES.line;
@@ -1557,7 +1592,7 @@ function paintCardBg(x, W, H, ct, coverImg){
     const g = x.createRadialGradient(W*0.15, 40, 10, W*0.15, 40, W*0.9); g.addColorStop(0, rgba(ct.accent, .28)); g.addColorStop(0.5, rgba(ct.accent, .06)); g.addColorStop(1, "rgba(0,0,0,0)");
     x.fillStyle = g; x.fillRect(0,0,W,H);
   }
-  paintPattern(x, W, H, ct.pattern, ct.accent);
+  paintPattern(x, W, H, ct.pattern, ct.accent, { inset: 20 });                  // the panel sits 20 in from the edge: a placed pattern (Skyline) lines up with it
   x.restore();
   x.strokeStyle = ct.line; x.lineWidth = 1; x.beginPath(); x.roundRect(20,20,W-40,H-40,18); x.stroke();
 }
@@ -1630,6 +1665,11 @@ function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImag
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${v.w}" height="${v.h}"><g fill="${t.accent}">${vectorShapes(v, forImage).map(sh=> sh[0]==="c" ? `<circle cx="${sh[2]}" cy="${sh[3]}" r="${sh[4]}" opacity="${sh[1]}"/>` : `<polygon points="${sh.slice(2).join(" ")}" opacity="${sh[1]}"/>`).join("")}</g></svg>`;
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${v.w}px ${v.h}px`]; }
     case "space":     { const v = PATH_ARTS[t.pattern]; return [`url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(v, t.accent))}')`, `${v.w}px ${v.h}px`]; }
+    case "skyline":   { const u = a => `url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(a, t.accent))}')`, sz = a => `${a.w}px ${a.h}px`, S = SKYLINE;
+                        // layers: buildings along the bottom, one band of stars along the top (kept clear of the buildings, so no stray dots among the windows),
+                        // and on the banner a crescent in the corner (left off saved images, where the wordmark sits there)
+                        const L = [[S.sky, "repeat-x", "left bottom"], [S.stars, "repeat-x", "left top"]]; if (!forImage) L.push([S.moon, "no-repeat", `right ${S.moonAt[0]}px top ${S.moonAt[1]}px`]);
+                        return [L.map(l=> u(l[0])).join(","), L.map(l=> sz(l[0])).join(","), L.map(l=> l[1]).join(","), L.map(l=> l[2]).join(",")]; }
     case "waves":     { const r = WAVES.r, b = r + 2;
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${2*r}" height="${r}" viewBox="0 0 ${2*r} ${r}"><defs><mask id="m" maskUnits="userSpaceOnUse" x="${-b}" y="${-b}" width="${2*b}" height="${2*b}"><rect x="${-b}" y="${-b}" width="${2*b}" height="${2*b}" fill="#fff"/><circle cx="${-r}" cy="${r/2}" r="${r}"/><circle cx="${r}" cy="${r/2}" r="${r}"/><circle cx="0" cy="${r}" r="${r}"/></mask>`
                           + `<g id="s" mask="url(#m)" fill="none" stroke="${t.accent}" stroke-width="${WAVES.line}">${WAVES.rings.map(([k,o])=> `<circle r="${(r*k - WAVES.line/2).toFixed(2)}" opacity="${o}"/>`).join("")}</g></defs>${wavesCentres(r).map(([cx,cy])=> `<use href="#s" x="${cx}" y="${cy}"/>`).join("")}</svg>`;
@@ -1640,8 +1680,8 @@ function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImag
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${p.w}px ${p.h}px`]; }
     default: return ["none", "auto"]; } }
 // Inline style for a themed profile header (null = default look)
-function headStyle(t){ if (!t) return ""; const [img, size] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
-  return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
+function headStyle(t){ if (!t) return ""; const [img, size, prep, ppos] = patternCss(t); const tint = t.tint==="off" ? "transparent" : rgba(t.accent, t.tint==="bold" ? .17 : .07);
+  return `style="--acc:${t.accent};--ptint:${tint};--ppat:${img};--ppsz:${size};${prep ? `--pprep:${prep};--pppos:${ppos};` : ""}--pline:${rgba(t.accent, t.tint==="off" ? 0 : .28)}"`; }
 const nameStyle = (uid, P) => { const t = themeFor(uid, P); return t && t.nameColor ? nameFxStyle(t) : ""; };
 const scoreStyleFor = (uid, P) => { const t = uid ? themeFor(uid, P) : null; return t && SCORE_STYLES[t.score] ? t.score : "gradient"; };
 const frameForUser = uid => frameOf(themeFor(uid));
@@ -1693,8 +1733,8 @@ function paintCardStyle(){
   const t = cardDraft, b = PAGE_BGS[t.card.bg], acc = t.card.accent;
   const bgCss = t.card.style==="glow" ? `radial-gradient(circle at 15% 10%, ${rgba(acc,.3)}, ${rgba(acc,.05)} 45%, transparent 70%), ${b.panel}`
               : t.card.style==="cover" ? `linear-gradient(${rgba(b.bg,.55)},${rgba(b.bg,.55)}), linear-gradient(135deg,#3b4a7a,#7a3b5a 60%,#2a6a5a)` : b.panel;
-  const [patImg, patSz] = patternCss({ accent: acc, pattern: t.card.pattern||"none" }, true);
-  const patCss = patImg==="none" ? "" : `background-image:${patImg};background-size:${patSz};`;
+  const [patImg, patSz, patRep, patPos] = patternCss({ accent: acc, pattern: t.card.pattern||"none" }, true);
+  const patCss = patImg==="none" ? "" : `background-image:${patImg};background-size:${patSz};${patRep ? `background-repeat:${patRep};background-position:${patPos};` : ""}`;
   $("#cardPrev").innerHTML = `<div style="background:${b.bg};padding:12px"><div style="background:${bgCss};border:1px solid ${b.line};border-radius:14px;padding:14px 16px;font-size:12px;position:relative;overflow:hidden;isolation:isolate"><div style="position:absolute;inset:0;z-index:-1;${patCss}pointer-events:none"></div>
       <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Outfit;font-size:16px">${esc(getGame(Object.keys(logs)[0]||1)?.title || "Game title")}</b><span style="font-family:Outfit;font-weight:800">JOYSTICK<span style="color:${acc}">D</span></span></div>
       <div style="color:var(--muted);margin-top:2px">2026 \u00b7 Developer</div>
@@ -2851,11 +2891,12 @@ async function loadOtherProfile(username){
   const L2 = {}; (L.data||[]).forEach(r=>{ L2[r.game_id]=rowToLog(r); cacheGame(r.game); });
   const T2 = [null,null,null,null,null]; (T.data||[]).forEach(r=>{ T2[r.slot]=r.game_id; cacheGame(r.game); });
   const B2 = {}; (B.data||[]).forEach(r=>{ (B2[r.year] ||= {})[r.category]=r.game_id; cacheGame(r.game); });
+  const RU = await sb.from("ballot_runners").select("*").eq("user_id", p.id), R2 = {}; (RU.data||[]).forEach(r=>{ ((R2[r.year] ||= {})[r.category] ||= {})[r.place] = r.game_id; cacheGame(r.game); });
   const fc = await followCounts(p.id);
   await refreshGames(Object.keys(L2).map(Number));
   let excluded = null; if (me?.isAdmin){ const { data: ex } = await sb.rpc("is_excluded", { target:p.id }); excluded = !!ex; }
   notePro(p);
-  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, proUntil:p.pro_until||null, theme:p.theme||null, shelves: Array.isArray(p.shelves) ? p.shelves : [], logs:L2, top5:T2, ballot:B2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
+  return { id:p.id, username:p.username, bio:p.bio||"", founder:!!p.founder, badgeLayout:p.badge_layout||null, emblemUrl:p.emblem_url||null, emblemName:p.emblem_name||null, emblemDesc:p.emblem_desc||null, hidePlats:!!p.hide_plats, proUntil:p.pro_until||null, theme:p.theme||null, shelves: Array.isArray(p.shelves) ? p.shelves : [], logs:L2, top5:T2, ballot:B2, runners:R2, counts:fc, wishlist:W2, excluded, lists: LS.error ? [] : (LS.data||[]) };
 }
 async function renderProfile(app){
   const wantOther = LIVE && view.user && view.user.toLowerCase()!==me?.username?.toLowerCase();
@@ -2982,7 +3023,7 @@ function profileStats(P, isMe){
     ${tens.length ? `<section class="ssec"><h2>${isMe?"Your":"Their"} 10s</h2><div class="g">${tens.length} game${tens.length===1?"":"s"} ${isMe?"you":"they"} called perfect</div><div class="slist">${tens.sort((a,b)=> bestDate(L[b]).localeCompare(bestDate(L[a]))).map(chip).join("")}</div></section>` : ""}`;
 }
 // My own profile as the same shape renderLogs / saveProfileImage expect for anyone else.
-const myProfileObj = () => ({ id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, shelves: me?.shelves||[], logs, top5, ballot: ballots.me, wishlist, lists: myLists });
+const myProfileObj = () => ({ id: me?.id, username: me?.username || "Hellgates666", bio: me?.bio || "", founder: !!me?.founder, badgeLayout: me?.badgeLayout||null, emblemUrl: me?.emblemUrl||null, emblemName: me?.emblemName||null, emblemDesc: me?.emblemDesc||null, hidePlats: !!me?.hidePlats, proUntil: me?.proUntil||null, theme: me?.theme||null, shelves: me?.shelves||[], logs, top5, ballot: ballots.me, runners: myRunners, wishlist, lists: myLists });
 function renderLogs(app, P, isMe){
   const logs = P.logs, top5 = P.top5;
   { const t = themeFor(P.id, P); if (t && t.bg !== "navy") applyPageBg(t.bg); }
@@ -3093,7 +3134,7 @@ function renderLogs(app, P, isMe){
   else if (profileTab==="followers") body = followListTab(P, isMe, "followers");
   else if (profileTab==="reports") body = reportsTab();
   else if (profileTab==="stats") body = isPro(P) ? profileStats(P, isMe) : `<div class="slock"><div style="font-size:34px">\uD83D\uDCCA</div><h3>Your stats <span class="protag">Pro</span></h3><p>Games per year, rating spread, genres and developers, platinum hours, streaks, your 10s \u2014 everything your logs add up to.</p><button class="cta" id="statsPro">See Joystickd Pro</button></div>`;
-  else body = profileAwards(P.ballot, isMe);
+  else body = profileAwards(P.ballot, isMe, P.runners);
 
   paintSame(app, `
     ${(()=>{ const t = themeFor(P.id, P), card = t && (t.tint!=="off" || t.pattern!=="none"); return `<div class="profile-head${card?" themed":""}" ${headStyle(t)}>`; })()}
@@ -3769,6 +3810,7 @@ let pick = null, pickList = [];
 function openPicker(opts){
   pick = opts;
   $("#pickTitle").textContent = opts.title;
+  $("#pickNote").hidden = !opts.note; $("#pickNote").textContent = opts.note || "";
   $("#pickSearch").value = ""; $("#pickSearch").placeholder = LIVE ? "Search IGDB" : "Search games";
   $("#clearPick").hidden = !opts.current;
   pickList = defaultPickList();
@@ -3813,10 +3855,13 @@ function openAwardOne(ctx){
   const a = AWARDS.find(k=> k.key===ctx.key); if (!a) return;
   awardOneCtx = ctx;
   $("#awardOneTitle").textContent = `Save “${a.label}” as an image`;
-  const top3 = !!ctx.community;                                                 // the Top 3 layout is for community results (a personal pick has no runners-up)
+  // The Top 3 layout: community results (with votes), or a personal pick that has a 2nd (and maybe 3rd) place.
+  const d = awardOneData(ctx), n = d && d.places ? d.places.length : 0, top3 = ctx.community ? n > 0 : n > 1;
   $("#awardOnePodium").hidden = !top3; $("#awardOneTall").classList.toggle("ghost", top3);
-  $("#awardOneSub").textContent = top3 ? "Pick a layout. Spotlight is wide (16:9), Marquee is a tall poster (4:5), and Top 3 shows first, second and third place with their votes."
-    : "Pick a layout. Spotlight is wide (16:9); Marquee is a tall poster (4:5).";
+  $("#awardOnePodium").textContent = ctx.community ? "Top 3 (with votes)" : `Top ${n}`;
+  $("#awardOneSub").textContent = !top3 ? "Pick a layout. Spotlight is wide (16:9); Marquee is a tall poster (4:5)."
+    : ctx.community ? "Pick a layout. Spotlight is wide (16:9), Marquee is a tall poster (4:5), and Top 3 shows first, second and third place with their votes."
+    : `Pick a layout. Spotlight is wide (16:9), Marquee is a tall poster (4:5), and Top ${n} shows the winner with ${n > 2 ? "the 2nd and 3rd place picks" : "the 2nd place pick"}.`;
   $("#awardOneWrap").classList.add("open");
 }
 // The little save control on an award card (it can sit inside a tappable card, so it swallows its own taps).
@@ -3836,7 +3881,9 @@ function awardOneData(ctx){
   }
   const P = ctx.P || {}, id = ((P.ballot||{})[year]||{})[a.key], g = id && getGame(id); if (!g) return null;
   const mineP = !!me && P.id===me.id, name = P.username || "";
-  return { a, g, year, over: name ? `${name.toUpperCase()}\u2019S ${year} GAME AWARDS` : `MY ${year} GAME AWARDS`, tag: mineP || !P.id ? "MY PICK" : "THEIR PICK", meta: g.year ? String(g.year) : "", file:`joystickd-${name.toLowerCase()}-${year}-${a.key}` };
+  return { a, g, year, over: name ? `${name.toUpperCase()}\u2019S ${year} GAME AWARDS` : `MY ${year} GAME AWARDS`, tag: mineP || !P.id ? "MY PICK" : "THEIR PICK", meta: g.year ? String(g.year) : "", file:`joystickd-${name.toLowerCase()}-${year}-${a.key}`,
+    personal: true, overPod: name ? `${name.toUpperCase()}\u2019S GAME AWARDS` : "MY GAME AWARDS", tagPod: mineP || !P.id ? "MY WINNER" : "THEIR WINNER",
+    places: [id, ...[2,3].map(pl=> runnersOf(P.runners, year, a.key)[pl])].map(gid=> gid && getGame(gid)).filter(Boolean).map(pg=>({ g:pg, n:null })) };   // winner, then 2nd and 3rd if chosen (no votes: they're one person's picks)
 }
 async function saveAwardOne(ctx, layout){
   const d = awardOneData(ctx); if (!d){ toast("Nothing to save for that award yet"); return; }
@@ -3853,7 +3900,7 @@ async function saveAwardOne(ctx, layout){
   } else { d.cover = await art(d.g); c = layout==="marquee" ? drawAwardMarquee(d) : drawAwardSpotlight(d); }
   const blob = await new Promise(res=> c.toBlob(res, "image/png"));
   if (!blob){ toast("Couldn't create the image"); return; }
-  await deliverImage(blob, `${d.file}-${layout==="marquee" ? "poster" : layout==="podium" ? "top3" : "wide"}.png`.replace(/[^a-z0-9.\-]+/g, "-"));
+  await deliverImage(blob, `${d.file}-${layout==="marquee" ? "poster" : layout==="podium" ? (d.personal ? "top"+d.places.length : "top3") : "wide"}.png`.replace(/[^a-z0-9.\-]+/g, "-"));
 }
 // Stand-in art for a game with no cover: a dark card with the title's first letter.
 function awardPlaceholderCover(g, ct){
@@ -3995,7 +4042,7 @@ function drawAwardPodium(o){
   const gl = x.createRadialGradient(W/2, 150, 30, W/2, 150, 700); gl.addColorStop(0, rgba(ac,.20)); gl.addColorStop(1, rgba(ac,0)); x.fillStyle = gl; x.fillRect(0,0,W,H);
   const v = x.createRadialGradient(W/2, H/2, H*.3, W/2, H/2, H*.8); v.addColorStop(0,"rgba(0,0,0,0)"); v.addColorStop(1,"rgba(0,0,0,.55)"); x.fillStyle = v; x.fillRect(0,0,W,H);
   // header: "JOYSTICKD GAME AWARDS", then  2026 | CATEGORY
-  x.textAlign = "center"; awOverline(x, "JOYSTICKD GAME AWARDS", W/2, 84, W-160, "center", "#e6ebf4");
+  x.textAlign = "center"; awOverline(x, o.personal ? o.overPod : "JOYSTICKD GAME AWARDS", W/2, 84, W-160, "center", "#e6ebf4");
   const yearS = String(o.year); x.font = AW_HEAD(138); const yW = x.measureText(yearS).width;
   const cat = awFit(x, o.a.label.toUpperCase(), W - 140 - yW - 76, 2, [62,56,50,44,38,34], AW_HEAD); x.font = AW_HEAD(cat.z);
   const cW = Math.max(...cat.l.map(t=> x.measureText(t).width)), gx = (W - (yW + 76 + cW))/2, midY = 190;
@@ -4027,16 +4074,17 @@ function drawAwardPodium(o){
     const numZ = [168, 132, 110][i], cyB = y + h/2; x.textAlign = "left";
     x.font = AW_HEAD(numZ); x.fillStyle = i === 0 ? ac : "#fff"; x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 16; const numS = String(i+1), nW = x.measureText(numS).width; x.fillText(numS, 62, cyB + numZ*.35);
     const tx = 62 + nW + 34, tmax = artL + 150 - tx, ti = awFit(x, p.g.title.toUpperCase(), tmax, 2, [[46,40,34,30,26],[40,34,30,26],[34,30,26,23]][i], AW_HEAD), tlh = ti.z*1.08;
-    const votesZ = [26, 23, 21][i], tagH = i === 0 ? 40 : 0, blockH = tagH + ti.l.length*tlh + votesZ + 10; let ty = cyB - blockH/2;
-    if (i === 0){ x.shadowColor = "transparent"; x.shadowBlur = 0; x.font = AW_HEAD(18); const tw = awSpacedW(x, "WINNER", 4); x.fillStyle = ac; x.beginPath(); x.roundRect(tx, ty, tw + 28, 30, 6); x.fill(); x.fillStyle = "#10131c"; awSpaced(x, "WINNER", tx + 14, ty + 21, 4, "left"); ty += tagH; x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 16; }
+    const hasVotes = p.n != null, votesZ = [26, 23, 21][i], tagH = i === 0 ? 40 : 0, blockH = tagH + ti.l.length*tlh + (hasVotes ? votesZ + 10 : 0); let ty = cyB - blockH/2;
+    const tagS = o.personal ? o.tagPod : "WINNER";
+    if (i === 0){ x.shadowColor = "transparent"; x.shadowBlur = 0; x.font = AW_HEAD(18); const tw = awSpacedW(x, tagS, 4); x.fillStyle = ac; x.beginPath(); x.roundRect(tx, ty, tw + 28, 30, 6); x.fill(); x.fillStyle = "#10131c"; awSpaced(x, tagS, tx + 14, ty + 21, 4, "left"); ty += tagH; x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 16; }
     x.font = AW_HEAD(ti.z); x.fillStyle = "#fff"; ti.l.forEach((t,k)=> x.fillText(t, tx, ty + ti.z*.86 + k*tlh)); ty += ti.l.length*tlh;
-    x.font = AW_BODY(votesZ, 800); x.fillStyle = i === 0 ? ac : "#c7d0e0"; x.fillText(`${p.n} vote${p.n===1?"":"s"}`, tx, ty + votesZ + 4);
+    if (hasVotes){ x.font = AW_BODY(votesZ, 800); x.fillStyle = i === 0 ? ac : "#c7d0e0"; x.fillText(`${p.n} vote${p.n===1?"":"s"}`, tx, ty + votesZ + 4); }
     x.shadowColor = "transparent"; x.shadowBlur = 0;
     y += h + GAP;
   });
   // footer
   x.font = AW_BODY(18,600); x.fillStyle = "#8b98b5"; x.textAlign = "left"; x.fillText("joystickd.com", 54, H - 40);
-  x.textAlign = "center"; x.fillText(`${o.total} vote${o.total===1?"":"s"} cast`, W/2, H - 40);
+  x.textAlign = "center"; x.fillText(o.personal ? "Personal picks" : `${o.total} vote${o.total===1?"":"s"} cast`, W/2, H - 40);
   awWordmark(x, W - 54, H - 38, 24, ac);
   return c;
 }
@@ -4064,6 +4112,11 @@ const AWARDS = [
 // (sample mode only) so the community tally has something to show until accounts exist.
 let ballots = { me:{} };
 const myBallot = y => (ballots.me[y] ||= {});
+// Runners-up: an optional 2nd and 3rd place per category, kept apart from the ballot (their own table), so they can never
+// count toward community results — only the winner in ballots does. myRunners[year][category] = { 2: gameId, 3: gameId }
+let myRunners = {};
+const runnersOf = (R, y, key) => ((R || {})[y] || {})[key] || {};
+const ORD = { 2:"2nd", 3:"3rd" };
 if (!LIVE){
   const byYear = {}; SAMPLE.forEach(g=> (byYear[g.year] ||= []).push(g.id));
   ["demo1","demo2","demo3","demo4","demo5"].forEach((u,ui)=>{
@@ -4095,13 +4148,23 @@ let awardMode = "community";                  // "community" | "mine"
 function yearSelect(id, y){ const ys=[]; for(let v=new Date().getFullYear()+1; v>=1985; v--) ys.push(v);
   return `<label class="sortwrap">Year <select id="${id}">${ys.map(v=>`<option ${v===y?"selected":""}>${v}</option>`).join("")}</select></label>`; }
 
+// The quiet 2nd / 3rd place lines under a pick. opts.runners = { 2: gameId, 3: gameId }; with opts.runnersEdit they are
+// tappable (and an "+ 2nd place" / "+ 3rd place" prompt shows for the next free place). They sit inside a tappable card,
+// so they are spans that swallow their own taps, like the save control.
+function awardRunners(a, opts){
+  const r = opts.runners || {}, ed = !!opts.runnersEdit, out = [];
+  [2,3].forEach(pl=>{ const g = r[pl] && getGame(r[pl]);
+    if (g) out.push(`<span class="award-ru"${ed ? ` role="button" tabindex="0" data-awru="${a.key}:${pl}" title="Change your ${ORD[pl]} place"` : ""}><b>${ORD[pl]}</b>${esc(g.title)}</span>`);
+    else if (ed && !r[pl] && (pl===2 || r[2])) out.push(`<span class="award-ru add" role="button" tabindex="0" data-awru="${a.key}:${pl}" title="Add a ${ORD[pl]} place, just for your own list">+ ${ORD[pl]} place</span>`); });
+  return out.length ? `<span class="award-rus">${out.join("")}</span>` : "";
+}
 function awardCard(a, i, g, sub, editable, opts={}){
   const title = g && opts.gameLink
     ? `<button class="award-game" data-awgame="${g.id}">${esc(g.title)}</button>`
     : `<span class="award-game">${g ? esc(g.title) : (editable ? "Pick a game" : "No votes yet")}</span>`;
   return `<${editable?"button":"div"} class="award ${i===0?"goty":""} ${g?"filled":""}" ${editable?`data-award="${a.key}"`:""}${opts.expandKey?` data-awexpand="${opts.expandKey}"`:""}>
     <span class="award-cover" style="${g ? coverStyle(g) : ""}">${g ? "" : (editable ? "+" : "")}</span>
-    <span class="award-text"><span class="award-cat">${a.label}</span>${title}${sub ? `<span class="award-sub">${sub}</span>` : ""}</span>
+    <span class="award-text"><span class="award-cat">${a.label}</span>${title}${sub ? `<span class="award-sub">${sub}</span>` : ""}${g ? awardRunners(a, opts) : ""}</span>
     ${g && opts.save ? `<span class="award-save" role="button" tabindex="0" data-awsave="${a.key}" title="Save this award as an image" aria-label="Save ${esc(a.label)} as an image">\u2913</span>` : ""}
   </${editable?"button":"div"}>`;
 }
@@ -4129,9 +4192,10 @@ async function renderAwards(app){
       <button class="segb ${mine?"on":""}" data-mode="mine">My ballot${picked?` (${picked})`:""}</button>
     </div>
     ${!open ? `<div class="lockbox">🔒 Voting for ${awardYear} opens on <b>${opensText}</b>, so the year's releases get a fair shake first.${mine ? "" : " Results will tally once ballots are in."}</div>` : ""}
+    ${mine && open ? `<div class="hint" id="runnersHint" style="margin:-4px 2px 12px">Only your winner counts toward the community results. 2nd and 3rd place are just for you and your profile.</div>` : ""}
     <div class="awards">
       ${AWARDS.map((a,i)=>{
-        if (mine){ const g=ballot[a.key]&&getGame(ballot[a.key]); return awardCard(a,i,g, open ? null : "🔒 Voting not open yet", open, { save:true }); }
+        if (mine){ const g=ballot[a.key]&&getGame(ballot[a.key]); return awardCard(a,i,g, open ? null : "🔒 Voting not open yet", open, { save:true, runners: runnersOf(myRunners, awardYear, a.key), runnersEdit: open }); }
         const t=tally(awardYear,a.key), w=t[0], g=w&&getGame(w.id);
         const expanded = w && awardsExpanded.has(a.key);
         const sub = w ? `${w.n} vote${w.n===1?"":"s"}${ballot[a.key]===w.id ? " · your pick" : ""}${t.length>1 && !expanded ? ` · tap for top ${Math.min(t.length,3)}` : ""}` : "";
@@ -4145,21 +4209,29 @@ async function renderAwards(app){
   $("#myAwardsImg") && ($("#myAwardsImg").onclick = ()=>{ if (!me) return; openAwardsImg({ id: me.id, username: me.username, ballot: ballots.me }, awardYear); });
   app.querySelectorAll("[data-mode]").forEach(b=> b.onclick = ()=>{ if (b.dataset.mode==="mine" && !requireAuth()) return; awardMode=b.dataset.mode; render(); });
   app.querySelectorAll("[data-awexpand]").forEach(d=> d.onclick = e=>{
-    if (e.target.closest("[data-awgame], [data-awsave]")) return;
+    if (e.target.closest("[data-awgame], [data-awsave], [data-awru]")) return;
     const k=d.dataset.awexpand;
     awardsExpanded.has(k) ? awardsExpanded.delete(k) : awardsExpanded.add(k);
     render();
   });
   app.querySelectorAll("[data-awgame]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="games"; view.gameId=+b.dataset.awgame; gameTab="overview"; render(); window.scrollTo(0,0); });
-  wireAwardSaves(app, key=> mine ? { key, year: awardYear, P: { id: me?.id, username: me?.username || "", ballot: ballots.me } } : { key, year: awardYear, community: true });
+  wireAwardSaves(app, key=> mine ? { key, year: awardYear, P: { id: me?.id, username: me?.username || "", ballot: ballots.me, runners: myRunners } } : { key, year: awardYear, community: true });
+  app.querySelectorAll("[data-awru]").forEach(el=>{ const go = e=>{ e.preventDefault(); e.stopPropagation();
+      if (!votingOpen(awardYear) || !requireAuth()) return;
+      const [key, pl] = el.dataset.awru.split(":"), place = +pl, a = AWARDS.find(x=> x.key===key), y = awardYear, ongoing = key==="multi", cur = runnersOf(myRunners, y, key)[place];
+      openPicker({ title:`${ORD[place]} place · ${a.label}`, note:"Just for your own list and profile. It doesn\u2019t count toward the community results.",
+        year: ongoing ? null : y, maxYear: ongoing ? y : null, current: cur, taken: id=> id===myBallot(y)[key] ? "Your winner" : null,
+        onPick: id=>{ setRunner(y, key, place, id); toast(`${ORD[place]} place set`); },
+        onClear: ()=>{ setRunner(y, key, place, null); toast("Cleared"); } }); };
+    el.onclick = go; el.onkeydown = e=>{ if (e.key==="Enter" || e.key===" ") go(e); }; });
   app.querySelectorAll("[data-award]").forEach(b=> b.onclick = ()=>{
     if (!votingOpen(awardYear)){ toast(`Voting for ${awardYear} opens ${opensText}`); return; }
     if (!requireAuth()) return;
     const key=b.dataset.award, a=AWARDS.find(x=>x.key===key), y=awardYear;
     const ongoing = key==="multi";   // ongoing multiplayer games can be from any earlier year
     openPicker({ title:`${a.label} · ${y}`, year: ongoing ? null : y, maxYear: ongoing ? y : null, current:ballot[key],
-      onPick:id=>{ myBallot(y)[key]=id; toast(`${a.label} set`); saveBallot(y, key, id); },
-      onClear:()=>{ delete myBallot(y)[key]; toast("Cleared"); saveBallot(y, key, null); } });
+      onPick:id=>{ setWinner(y, key, id); toast(`${a.label} set`); },
+      onClear:()=>{ setWinner(y, key, null); toast("Cleared"); } });
   });
 }
 
@@ -4174,7 +4246,7 @@ const awardTag = (w, isMe=true) => `<span class="award-tag ${w.key==="goty"?"got
 
 // Read-only view of one user's ballot, used on the profile page.
 let profileAwardYear = null;
-function profileAwards(ballot, isMe){
+function profileAwards(ballot, isMe, runners){
   const years = Object.keys(ballot).filter(y=>Object.keys(ballot[y]).length).map(Number).sort((a,b)=>b-a);
   if (!years.length) return `<div class="empty small">${isMe ? "No award picks yet. Choose them in the Awards tab." : "No award picks yet."}</div>`;
   if (!years.includes(profileAwardYear)) profileAwardYear = years[0];
@@ -4182,7 +4254,7 @@ function profileAwards(ballot, isMe){
   return `
     <div class="pa-head">${years.map(y=>`<button class="gchip ${y===profileAwardYear?"on":""}" data-payear="${y}">${y}</button>`).join("")}<button class="cta ghost sm" data-awardsimg="${profileAwardYear}" style="margin-left:auto">Save as image</button></div>
     <div class="awards compact">
-      ${AWARDS.filter(a=>b[a.key]).map((a,i)=>{ const g=getGame(b[a.key]); return awardCard(a, a.key==="goty"?0:1, g, null, false, { save:true }); }).join("")}
+      ${AWARDS.filter(a=>b[a.key]).map((a,i)=>{ const g=getGame(b[a.key]); return awardCard(a, a.key==="goty"?0:1, g, null, false, { save:true, runners: runnersOf(runners, profileAwardYear, a.key) }); }).join("")}
     </div>`;
 }
 
@@ -4777,7 +4849,7 @@ function fitCanvasToFormat(c, W, H, S, ct, fmt){
   const OW = W, OH = Math.round(W / A);
   const out = document.createElement("canvas"); out.width = Math.round(OW*S); out.height = Math.round(OH*S); const x = out.getContext("2d"); x.scale(S, S);
   ct = ct || cardThemeFor(me?.id, me);
-  x.fillStyle = ct.bg; x.fillRect(0,0,OW,OH); paintPattern(x, OW, OH, ct.pattern, ct.accent);
+  x.fillStyle = ct.bg; x.fillRect(0,0,OW,OH); paintPattern(x, OW, OH, ct.pattern, ct.accent, { part: "fill" });   // behind the card: only the repeating layer (the card carries the skyline itself)
   let dw = W, dh = H; if (H > OH){ const k = OH/H; dw = W*k; dh = OH; }
   const dx = (OW-dw)/2, dy = (OH-dh)/2;
   x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(c, dx, dy, dw, dh);
@@ -5683,6 +5755,27 @@ async function deleteLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id)
 async function saveTop5(slot, id){ if (!LIVE||!me) return;
   const { error } = id ? await sb.from("top5").upsert({user_id:me.id, slot, game_id:id, game:getGame(id)}) : await sb.from("top5").delete().match({user_id:me.id, slot});
   if (error) dbFail(error); }
+async function saveRunner(year, category, place, id){ if (!LIVE||!me) return;
+  const { error } = id ? await sb.from("ballot_runners").upsert({user_id:me.id, year, category, place, game_id:id, game:getGame(id)}) : await sb.from("ballot_runners").delete().match({user_id:me.id, year, category, place});
+  if (error) dbFail(error); }
+// Set (id) or clear (null) one of my runner-up places. Picking the game from the other place swaps the two, and 3rd moves up
+// when 2nd goes, so there's never a 3rd without a 2nd. Only the places that actually changed are saved.
+function setRunner(y, key, place, id){
+  const r = ((myRunners[y] ||= {})[key] ||= {}), was = { 2:r[2], 3:r[3] }, other = place===2 ? 3 : 2;
+  if (id){ if (r[other]===id){ if (r[place]) r[other] = r[place]; else delete r[other]; } r[place] = id; } else delete r[place];
+  if (!r[2] && r[3]){ r[2] = r[3]; delete r[3]; }
+  [2,3].forEach(p=>{ if (r[p] !== was[p]) saveRunner(y, key, p, r[p] || null); });
+}
+// Change my winner for a category (id, or null to clear), keeping the runners-up sensible: a runner-up promoted to winner
+// trades places with the old winner, and clearing the winner clears the runners-up with it.
+function setWinner(y, key, id){
+  const b = myBallot(y), old = b[key], r = runnersOf(myRunners, y, key);
+  if (id){ const from = r[2]===id ? 2 : r[3]===id ? 3 : 0;
+    if (from) setRunner(y, key, from, old && old!==id ? old : null);
+    b[key] = id; }
+  else { delete b[key]; if (r[3]) setRunner(y, key, 3, null); if (r[2]) setRunner(y, key, 2, null); }
+  saveBallot(y, key, id || null);
+}
 async function saveBallot(year, category, id){ if (!LIVE||!me) return;
   const { error } = id ? await sb.from("ballots").upsert({user_id:me.id, year, category, game_id:id, game:getGame(id)}) : await sb.from("ballots").delete().match({user_id:me.id, year, category});
   if (error) dbFail(error); }
@@ -6071,6 +6164,8 @@ async function loadMyData(){
     sb.from("wishlist").select("*").eq("user_id", me.id),
     sb.from("lists").select("*").eq("user_id", me.id).order("updated_at",{ascending:false}),
   ]);
+  const RU = await sb.from("ballot_runners").select("*").eq("user_id", me.id);       // on its own, so a problem here can't hold up everything else
+  myRunners = {}; (RU.data||[]).forEach(r=>{ ((myRunners[r.year] ||= {})[r.category] ||= {})[r.place] = r.game_id; cacheGame(r.game); });
   if (P.data){ me.username = P.data.username; me.isAdmin = !!P.data.is_admin; avatars[me.id] = P.data.avatar_url; me.bio = P.data.bio || ""; me.founder = !!P.data.founder; me.badgeLayout = P.data.badge_layout||null; me.emblemUrl = P.data.emblem_url||null; me.emblemName = P.data.emblem_name||null; me.emblemDesc = P.data.emblem_desc||null; me.hidePlats = !!P.data.hide_plats; me.proUntil = P.data.pro_until||null; me.proSource = P.data.pro_source||null; me.theme = P.data.theme||null; me.shelves = Array.isArray(P.data.shelves) ? P.data.shelves : []; me.shelves.forEach(sh=> (sh.games||[]).forEach(g=> g && cacheGame(g))); notePro(P.data); }
   wishlist = {}; (W.data||[]).forEach(r=>{ wishlist[r.game_id]=r.added_at; cacheGame(r.game); });
   myLists = LS.error ? [] : (LS.data||[]); myLists.forEach(l=> (l.games||[]).forEach(cacheGame));
@@ -6083,7 +6178,7 @@ async function loadMyData(){
   await loadNotifs();
   refreshGames(Object.keys(logs).map(Number)).then(()=>{ if (view.tab==="logs") render(); });
 }
-function clearMyData(){ logs={}; top5=[null,null,null,null,null]; ballots.me={}; follows={rows:[], names:{}}; wishlist={}; myLists=[]; listView=null; blocks=new Set(); }
+function clearMyData(){ myRunners = {}; logs={}; top5=[null,null,null,null,null]; ballots.me={}; follows={rows:[], names:{}}; wishlist={}; myLists=[]; listView=null; blocks=new Set(); }
 
 // ---- blocks ----------------------------------------------------------------
 // blocks: ids of users I've blocked. Blocking severs follows both ways (done
