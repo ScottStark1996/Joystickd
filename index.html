@@ -703,7 +703,7 @@
     .game h1{font-size:32px}
     .bar{padding:12px 14px}
     .tab{padding:7px 10px;font-size:13px}
-    /* Phones: two rows. Logo + search / bell / settings on top, the four tabs in one strip underneath (all visible, no scrolling). */
+    /* Phones: two rows. Logo + search / bell / settings on top, the four tabs spread across underneath (all visible, no scrolling). */
     /* Kept tight: in the iPhone app the status-bar area already gives the room above the logo, so the top padding shrinks there (2px); in a phone browser it stays 10px. */
     .bar{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"brand icons" "tabs tabs";align-items:center;column-gap:8px;row-gap:6px;padding:calc(10px - min(8px, env(safe-area-inset-top, 0px))) 14px 8px}
     .brand{grid-area:brand;font-size:22px}
@@ -711,9 +711,8 @@
     .hicons .bell,.hicons .gear,.hsearch{padding:5px;margin-left:5px}
     .hicons .bell svg,.hicons .gear svg,.hsearch svg{width:20px;height:20px}
     .hicons .authbtn{margin-left:6px;max-width:120px;font-size:13px}
-    .tabs{grid-area:tabs;margin:0;gap:2px;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px}
+    .tabs{grid-area:tabs;margin:0;gap:2px;justify-content:space-between}          /* no outline: only the tab you're on gets a pill */
     .tab{padding:5px 12px;font-size:13.5px;line-height:19px;flex:0 0 auto}
-    .tabs-more{background:linear-gradient(90deg, rgba(22,31,53,0), rgba(22,31,53,.85) 50%, var(--panel) 78%);border-radius:0 999px 999px 0}   /* safety net on very narrow phones */
   }
   @media(max-width:380px){.tab{padding:5px 8px;font-size:13px}}
   @media(max-width:340px){.tab{padding:5px 6px;font-size:12.5px}.brand{font-size:20px}}
@@ -2328,6 +2327,19 @@ function feedCard(f, idx, kind){
           </div>
         </article>`;
 }
+// Which list a feed card belongs to: "l" latest on Home, "c" latest reviews on Community, otherwise people you follow.
+const feedList = k => k==="l" ? home.latest : k==="c" ? commLatest.items : home.friendLogs;
+// Buttons on feed cards (name, heart, open log, read more, comments, report) — shared by Home and Community.
+function wireFeedCards(app){
+  app.querySelectorAll("[data-user]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="logs"; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
+  app.querySelectorAll("[data-hlike]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.hlike.indexOf(":"); toggleLike(+b.dataset.hlike.slice(0,i), b.dataset.hlike.slice(i+1)); });
+  app.querySelectorAll("[data-fopen]").forEach(b=>{ b.onclick = ()=>{ const [k,i]=b.dataset.fopen.split(":"); const f=feedList(k)[+i]; if (f) openFeedReview(f); };
+    if (b.getAttribute("role")==="button") b.onkeydown = e=>{ if (e.key==="Enter" || e.key===" "){ e.preventDefault(); b.click(); } }; });
+  app.querySelectorAll("[data-fexpand]").forEach(b=> b.onclick = ()=>{ const k=b.dataset.fexpand; if (feedExpanded.has(k)) feedExpanded.delete(k); else feedExpanded.add(k); const y=window.scrollY; render(); window.scrollTo(0,y); });
+  wireComments(app);
+  app.querySelectorAll("[data-freport]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.freport.indexOf(":"); const gid=+b.dataset.freport.slice(0,i), uid=b.dataset.freport.slice(i+1), g=getGame(gid);
+    openReport({ type:"review", gid, targetUser:uid, label:`Review of ${g?.title||"a game"} by ${follows.names[uid]||"a user"}` }); });
+}
 const feedExpanded = new Set();      // feed cards whose long review is expanded ("f:3", "l:0")
 const invalidateHome = ()=>{ home.loaded=false; feedExpanded.clear(); };
 // Refresh the home page in place (button, pull-down on the app, re-tapping Games, or coming back to the app).
@@ -2350,6 +2362,13 @@ const onHome = ()=> view.tab==="games" && !view.gameId && !view.query.trim();
     if (go){ pill.textContent="Refreshing…"; refreshHome(); setTimeout(()=>pill.classList.remove("show"), 900); } else pill.classList.remove("show"); };
   document.addEventListener("touchend", end, {passive:true}); document.addEventListener("touchcancel", end, {passive:true});
 })();
+// One row from latest_reviews() → a feed item (also notes the writer's name/avatar and the review's like count).
+function latestRowToFeed(r){
+  cacheGame(r.game); revNames[r.user_id]=r.username; avatars[r.user_id]=r.avatar_url||null;
+  const ballot={}; (r.awards||[]).forEach(a=> ((ballot[a.year] ||= {})[a.category] = r.game_id));
+  likesCache[r.game_id] = [...(likesCache[r.game_id]||[]).filter(k=>k.review_user!==r.user_id), ...Array.from({length:r.like_count||0},(_,i)=>({ user_id:(r.liked_by_me && i===0 && me) ? me.id : "·"+i, review_user:r.user_id }))];
+  return { user:r.username, userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot };
+}
 async function loadHome(){
   if (home.loading) return; home.loading = true; home.error = null;
   try {
@@ -2375,10 +2394,7 @@ async function loadHome(){
       // Latest written reviews across the whole site (server filters blocked users)
       try {
         const { data: lr, error: lrErr } = lrRes;
-        home.latest = lrErr ? [] : (lr||[]).map(r=>{ cacheGame(r.game); revNames[r.user_id]=r.username; avatars[r.user_id]=r.avatar_url||null;
-          const ballot={}; (r.awards||[]).forEach(a=> ((ballot[a.year] ||= {})[a.category] = r.game_id));
-          likesCache[r.game_id] = [...(likesCache[r.game_id]||[]).filter(k=>k.review_user!==r.user_id), ...Array.from({length:r.like_count||0},(_,i)=>({ user_id:(r.liked_by_me && i===0 && me) ? me.id : "·"+i, review_user:r.user_id }))];
-          return { user:r.username, userId:r.user_id, gameId:r.game_id, log:rowToLog(r), when:r.created_at || r.updated_at, ballot }; });
+        home.latest = lrErr ? [] : (lr||[]).map(latestRowToFeed);
       } catch(e){ home.latest = []; }
       const counts = {}; rows.forEach(r=>{ const c=(counts[r.game_id] ||= {id:r.game_id, n:0, rated:0, sum:0}); c.n++; if (r.rating!=null){ c.rated++; c.sum+=+r.rating; } });
       home.friendPopular = Object.values(counts).sort((a,b)=> b.n-a.n || (b.sum/(b.rated||1))-(a.sum/(a.rated||1))).slice(0,20).map(c=>({ game:getGame(c.id), n:c.n, avg: c.rated ? (c.sum/c.rated).toFixed(1) : null })).filter(x=>x.game);
@@ -2730,14 +2746,7 @@ function renderHome(app){
   $("#heroJoin") && ($("#heroJoin").onclick = ()=> openAuth("signup"));
   $("#heroIn") && ($("#heroIn").onclick = ()=> openAuth("signin"));
   $("#homeRefresh") && ($("#homeRefresh").onclick = ()=> refreshHome());
-  app.querySelectorAll("[data-user]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="logs"; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
-  app.querySelectorAll("[data-hlike]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.hlike.indexOf(":"); toggleLike(+b.dataset.hlike.slice(0,i), b.dataset.hlike.slice(i+1)); });
-  app.querySelectorAll("[data-fopen]").forEach(b=>{ b.onclick = ()=>{ const [k,i]=b.dataset.fopen.split(":"); const f=(k==="l" ? home.latest : home.friendLogs)[+i]; if (f) openFeedReview(f); };
-    if (b.getAttribute("role")==="button") b.onkeydown = e=>{ if (e.key==="Enter" || e.key===" "){ e.preventDefault(); b.click(); } }; });
-  app.querySelectorAll("[data-fexpand]").forEach(b=> b.onclick = ()=>{ const k=b.dataset.fexpand; if (feedExpanded.has(k)) feedExpanded.delete(k); else feedExpanded.add(k); const y=window.scrollY; render(); window.scrollTo(0,y); });
-  wireComments(app);
-  app.querySelectorAll("[data-freport]").forEach(b=> b.onclick = ()=>{ const i=b.dataset.freport.indexOf(":"); const gid=+b.dataset.freport.slice(0,i), uid=b.dataset.freport.slice(i+1), g=getGame(gid);
-    openReport({ type:"review", gid, targetUser:uid, label:`Review of ${g?.title||"a game"} by ${follows.names[uid]||"a user"}` }); });
+  wireFeedCards(app);
   app.querySelectorAll("[data-morerev]").forEach(b=>{
     const t=b.previousElementSibling;
     if (t && t.scrollHeight > t.clientHeight + 2) b.hidden=false;
@@ -4090,6 +4099,37 @@ async function loadStats(){
   stats.rows.forEach(r=>cacheGame(r.game));
   if (view.tab==="community" || (view.tab==="games" && (searchMode==="genres" || searchMode==="years") && !view.gameId)) render();
 }
+// "Latest reviews" on the Community tab: the same feed as Home's latest reviews, with Show more for older ones.
+// It asks latest_reviews() for a longer list each time (the database applies its own rules, e.g. blocks); if the
+// database hands back fewer than asked for, that is the end (or its own upper limit) and the button goes away.
+const COMM_LATEST_STEP = 20, COMM_LATEST_MAX = 300;
+let commLatest = { items:[], asked:0, loading:false, more:false, at:0, err:null };
+async function loadCommLatest(want, quiet){                                   // quiet = called while the page is being drawn: don't redraw until the answer is in
+  if (!LIVE || commLatest.loading) return;
+  want = Math.min(COMM_LATEST_MAX, Math.max(COMM_LATEST_STEP, want));
+  commLatest.loading = true; commLatest.err = null;
+  const redraw = ()=>{ if (view.tab==="community" && commSort==="latest" && !view.gameId) render(); };
+  if (!quiet) redraw();
+  try {
+    const { data, error } = await sb.rpc("latest_reviews", { lim: want });
+    if (error) throw new Error(error.message || String(error));
+    const rows = Array.isArray(data) ? data : [];
+    commLatest.items = rows.map(latestRowToFeed).filter(f=> !isBlocked(f.userId));
+    commLatest.asked = want; commLatest.more = rows.length >= want && want < COMM_LATEST_MAX; commLatest.at = Date.now();
+    loadFeedCommentCounts(commLatest.items);
+  } catch(e){ console.error(e); commLatest.err = String(e.message || e); }
+  commLatest.loading = false; redraw();
+}
+function commLatestBody(){
+  const c = commLatest;
+  if (!c.at && !c.loading && !c.err) loadCommLatest(COMM_LATEST_STEP, true);
+  else if (c.at && Date.now() - c.at > 120000 && !c.loading){ c.at = Date.now(); loadCommLatest(c.asked, true); }   // quietly refresh a stale list, keeping its length
+  if (!c.items.length) return c.err ? `<div class="empty small">Couldn\u2019t load reviews right now. <button class="linklike" id="commLatestRetry">Try again</button></div>`
+    : (c.loading || !c.at) ? `<div class="empty"><div class="spinner"></div>Loading\u2026</div>` : `<div class="empty small">No reviews yet.</div>`;
+  return `<div class="reviews">${c.items.map((f,i)=> feedCard(f, i, "c")).join("")}</div>
+    ${c.err ? `<div class="empty small" style="margin-top:14px">Couldn\u2019t load more right now.</div>` : ""}
+    ${c.more || c.err ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="commLatestMore" ${c.loading?"disabled":""}>${c.loading ? "Loading\u2026" : "Show more"}</button></div>` : ""}`;
+}
 const COMM_SORTS = {
   high: {label:"Highest rated",    fn:(a,b)=> (b.avg_rating??-1)-(a.avg_rating??-1) || b.rating_count-a.rating_count},
   low:  {label:"Lowest rated",     fn:(a,b)=> (a.avg_rating??99)-(b.avg_rating??99) || b.rating_count-a.rating_count},
@@ -4105,6 +4145,22 @@ function renderCommunity(app){
   if (!LIVE){ app.innerHTML = `<div class="empty"><h2>Community</h2>Needs the live database.</div>`; return; }
   if (!stats.rows){ loadStats(); app.innerHTML = `<div class="empty"><div class="spinner"></div>Loading…</div>`; return; }
   if (stats.at && Date.now() - stats.at > 120000 && !stats.loading){ stats.at = Date.now(); loadStats(); }   // quietly refresh stale numbers
+  const commChips = `<button class="gchip ${commSort==="latest"?"on":""}" data-csort="latest">Latest reviews</button>` + Object.entries(COMM_SORTS).map(([k,v])=>`<button class="gchip ${commSort===k?"on":""}" data-csort="${k}">${v.label}</button>`).join("");
+  const wireCommChips = ()=> app.querySelectorAll("[data-csort]").forEach(b=> b.onclick = ()=>{ commSort=b.dataset.csort; commShown=30; render(); });
+  if (commSort==="latest"){
+    paintSame(app, `
+    <div class="awards-head">
+      <div><h1>Community</h1><div class="stats">The newest reviews from everyone on Joystickd</div></div>
+    </div>
+    <div class="filters">
+      <div class="genres">${commChips}</div>
+    </div>
+    ${commLatestBody()}`);
+    wireCommChips(); wireFeedCards(app);
+    $("#commLatestMore") && ($("#commLatestMore").onclick = ()=> loadCommLatest(commLatest.asked + COMM_LATEST_STEP));
+    $("#commLatestRetry") && ($("#commLatestRetry").onclick = ()=> loadCommLatest(Math.max(COMM_LATEST_STEP, commLatest.asked)));
+    return;
+  }
   let list = stats.rows.filter(r=> (commSort==="high"||commSort==="low") ? r.rating_count>=commMin : true);
   if (commSort==="plat") list = list.filter(r=>r.platinum_count>0);
   if (commSort==="reviewed") list = list.filter(r=>r.review_count>0);
@@ -4121,7 +4177,7 @@ function renderCommunity(app){
       <div><h1>Community</h1><div class="stats">What everyone on Joystickd is playing and rating</div></div>
     </div>
     <div class="filters">
-      <div class="genres">${Object.entries(COMM_SORTS).map(([k,v])=>`<button class="gchip ${commSort===k?"on":""}" data-csort="${k}">${v.label}</button>`).join("")}</div>
+      <div class="genres">${commChips}</div>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end;flex:1">
         <button class="gchip ${commCaps?"on":""}" id="commCaps" title="Show or hide the counts under each game">${commCaps ? "Counts on" : "Counts off"}</button>
         ${(()=>{ const ratingSort = commSort==="high"||commSort==="low", platSort = ["hardest","easiest","longest","shortest"].includes(commSort);
@@ -4130,7 +4186,7 @@ function renderCommunity(app){
     </div>
     ${list.length ? `<div class="grid">${list.map(r=>{ const g=getGame(r.game_id)||r.game; return commCard(g, r); }).join("")}</div>${commShown < total ? `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="commMore">Show more (${total-commShown} left)</button></div>` : ""}`
       : `<div class="empty small">Nothing here yet — it fills in as people log games.</div>`}`);
-  app.querySelectorAll("[data-csort]").forEach(b=> b.onclick = ()=>{ commSort=b.dataset.csort; commShown=30; render(); });
+  wireCommChips();
   $("#commMin") && ($("#commMin").onchange = e=>{ commMin=+e.target.value; commShown=30; render(); });
   $("#commCaps").onclick = ()=>{ commCaps = !commCaps; try { localStorage.setItem("jd_commCaps", commCaps ? "1" : "0"); } catch(e){} render(); };
   $("#commMore") && ($("#commMore").onclick = ()=>{ commShown+=30; render(); });
