@@ -2624,6 +2624,17 @@ async function shareUrl(url, title, copiedMsg){
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1800); }
 
 // ---- render --------------------------------------------------------------
+// Opening a game page from a list, and coming back from it. The game page shows over whichever tab you are on, so Back
+// returns to that tab (Awards, a profile, Community...) and to the spot you had scrolled to, instead of jumping Home.
+let gameReturnY = null;
+function openGame(id, tabName){
+  if (!view.gameId) gameReturnY = window.scrollY;                               // remember the spot only when leaving a list (not when hopping game to game)
+  view.gameId = id; gameTab = tabName || "overview"; render(); window.scrollTo(0,0);
+}
+function closeGame(){
+  const y = gameReturnY; gameReturnY = null; view.gameId = null; render();
+  if (y){ const go = ()=> window.scrollTo(0, y); requestAnimationFrame(go); setTimeout(()=>{ if (!view.gameId && Math.abs(window.scrollY - y) > 4) go(); }, 250); }   // again shortly after, for pages that fill in a moment later
+}
 function render(){
   const app = $("#app");
   applyPageBg(null);
@@ -3504,7 +3515,7 @@ function renderLogs(app, P, isMe){
     if (e.target.closest("[data-slot]")) return;   // the edit chip handles itself
     const gid=+b.dataset.t5view, l=P.logs[gid];
     if (l && (l.review||"").trim()) openT5(gid, P, isMe);
-    else { view.tab="games"; view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); }
+    else openGame(gid);
   });
   if (profileTab==="following" || profileTab==="followers") wireFollowActions(app);   // on anyone's profile: the names open profiles and Follow works
   if (profileTab==="lists") wireLists(app, P, isMe);                                  // also on anyone's profile, so their lists open
@@ -4097,9 +4108,9 @@ async function drawAwardsImage({ picks, cols, title, sub, ct, file }){
 function openT5(gid, P, isMe){
   const g = getGame(gid), l = P.logs[gid];
   if (!g) return;
-  if (!l){ $("#t5Wrap").classList.remove("open"); view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); return; }
+  if (!l){ $("#t5Wrap").classList.remove("open"); openGame(gid); return; }
   $("#t5Title").innerHTML = `<button class="t5-title" id="t5TitleBtn">${esc(g.title)}</button>`;
-  $("#t5TitleBtn").onclick = ()=>{ closeT5(); view.tab="games"; view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); };
+  $("#t5TitleBtn").onclick = ()=>{ closeT5(); openGame(gid); };
   $("#t5Sub").innerHTML = `<button class="linklike" data-t5user="${esc(P.username)}"${nameStyle(P.id, P)}>${esc(P.username)}</button>${proTag(P.id)}'s log${g.year ? ` · ${g.year}` : ""}`;
   $("#t5Sub").querySelector("[data-t5user]").onclick = ()=>{ closeT5(); view.tab="logs"; view.gameId=null; view.user=P.username; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(P.username)); render(); window.scrollTo(0,0); };
   const myL = !isMe ? logs[gid] : null;
@@ -4131,7 +4142,7 @@ function openT5(gid, P, isMe){
   $("#t5Save").hidden = !(l.review||"").trim();
   $("#t5Save").onclick = ()=> chooseReviewImage(g, l, { id: P.id, username: P.username, ballot: P.ballot || {} });
   $("#t5Open").hidden = view.gameId===gid;
-  $("#t5Open").onclick = ()=>{ closeT5(); view.gameId=gid; gameTab="overview"; render(); window.scrollTo(0,0); };
+  $("#t5Open").onclick = ()=>{ closeT5(); openGame(gid); };
   $("#t5Wrap").classList.add("open");
 }
 function closeT5(){ $("#t5Wrap").classList.remove("open"); }
@@ -4547,7 +4558,7 @@ async function renderAwards(app){
     awardsExpanded.has(k) ? awardsExpanded.delete(k) : awardsExpanded.add(k);
     render();
   });
-  app.querySelectorAll("[data-awgame]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); view.tab="games"; view.gameId=+b.dataset.awgame; gameTab="overview"; render(); window.scrollTo(0,0); });
+  app.querySelectorAll("[data-awgame]").forEach(b=> b.onclick = e=>{ e.stopPropagation(); openGame(+b.dataset.awgame); });
   wireAwardSaves(app, key=> mine ? { key, year: awardYear, P: { id: me?.id, username: me?.username || "", ballot: ballots.me, runners: myRunners } } : { key, year: awardYear, community: true });
   app.querySelectorAll("[data-awru]").forEach(el=>{ const go = e=>{ e.preventDefault(); e.stopPropagation();
       if (!votingOpen(awardYear) || !requireAuth()) return;
@@ -4793,15 +4804,15 @@ async function renderGame(app){
   let g = getGame(view.gameId);
   if (!g){
     app.innerHTML = `<button class="back" id="back">← Back</button><div class="empty"><div class="spinner"></div>Loading…</div>`;
-    $("#back").onclick = ()=>{ view.gameId=null; render(); };
+    $("#back").onclick = closeGame;
     try { g = await fetchGame(view.gameId); } catch(e){}
     if (view.gameId!==(g?.id)) return;
-    if (!g){ app.innerHTML = `<button class="back" id="back">← Back</button><div class="empty"><h2>Couldn't load this game</h2></div>`; $("#back").onclick=()=>{view.gameId=null;render();}; return; }
+    if (!g){ app.innerHTML = `<button class="back" id="back">← Back</button><div class="empty"><h2>Couldn't load this game</h2></div>`; $("#back").onclick = closeGame; return; }
   }
   const needReviews = LIVE && gameTab==="reviews" && (!gameReviewsState[g.id] || (!gameReviewsState[g.id].local && gameReviewsState[g.id].sort!==reviewSort));
   if (LIVE && (!communityCache[g.id] || needReviews)){
     app.innerHTML = `<button class="back" id="back">← Back</button><div class="empty"><div class="spinner"></div>Loading…</div>`;
-    $("#back").onclick = ()=>{ view.gameId=null; render(); };
+    $("#back").onclick = closeGame;
     await Promise.all([loadCommunity(g.id), loadCritic(g)]); if (view.gameId!==g.id) return;
     if (gameTab==="reviews" && !gameReviewsState[g.id]?.local && gameReviewsState[g.id]?.sort!==reviewSort){ await loadGameReviews(g.id, reviewSort); if (view.gameId!==g.id) return; }
   }
@@ -4885,7 +4896,7 @@ async function renderGame(app){
         `}
       </div>
     </div>`;
-  $("#back").onclick = ()=>{ view.gameId=null; render(); };
+  $("#back").onclick = closeGame;
   app.querySelectorAll("[data-gtab]").forEach(b=> b.onclick = ()=>{ gameTab=b.dataset.gtab; render(); });
   app.querySelectorAll("[data-like]").forEach(b=> b.onclick = ()=> toggleLike(g.id, b.dataset.like));
   app.querySelectorAll(".crev [data-user]").forEach(b=> b.onclick = ()=>{ view.tab="logs"; view.gameId=null; view.user=b.dataset.user; otherProfile=null; profileTab="overview"; history.replaceState(null,"",location.pathname+"?u="+encodeURIComponent(b.dataset.user)); render(); window.scrollTo(0,0); });
@@ -6829,7 +6840,7 @@ function syncTabsMore(){
 })();
 document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{
   const again = b.dataset.tab==="games" && onHome();
-  view.tab=b.dataset.tab; view.gameId=null; view.user=null; if (location.search) history.replaceState(null,"",location.pathname);
+  view.tab=b.dataset.tab; view.gameId=null; view.user=null; gameReturnY = null; if (location.search) history.replaceState(null,"",location.pathname);
   if (again){ window.scrollTo({top:0, behavior:"smooth"}); refreshHome(); return; }
   render(); });
 document.addEventListener("click", e=>{
@@ -6837,7 +6848,7 @@ document.addEventListener("click", e=>{
   if (si){ e.preventDefault(); e.stopPropagation(); const id=+si.dataset.saveimg, g=getGame(id); if (g && logs[id]) chooseReviewImage(g, logs[id]); return; }
   const ed=e.target.closest("[data-editlog]");
   if (ed){ e.preventDefault(); e.stopPropagation(); if (requireAuth()){ const g=getGame(+ed.dataset.editlog); if (g) openSheet(g); } return; }
-  const c=e.target.closest("[data-open]"); if(c){ view.gameId=+c.dataset.open; gameTab="overview"; gameRevShown=20; render(); window.scrollTo(0,0);} });
+  const c=e.target.closest("[data-open]"); if(c){ gameRevShown=20; openGame(+c.dataset.open); } });
 
 // Inside the iOS app: when a joystickd.com link opens the app, navigate to it.
 if (window.Capacitor?.Plugins?.App?.addListener){
