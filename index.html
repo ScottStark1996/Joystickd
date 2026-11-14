@@ -2106,7 +2106,7 @@ async function textOk(surface, txt){
 async function igdbLocal(action, p){
   try {
     if (action === "search"){ const q = String(p.q||"").trim().slice(0,80); if (!q) return null;
-      const { data, error } = await sb.rpc("search_games", { q, lim: 45 }); return (!error && Array.isArray(data) && data.length >= 3) ? data : null; }
+      const { data, error } = await sb.rpc("search_games", { q, lim: p.lim || SEARCH_PAGE }); return (!error && Array.isArray(data) && data.length >= 3) ? data : null; }
     if (action === "popular"){ const { data, error } = await sb.rpc("popular_games", { y: Number(p.year||0), lim: 40 }); return (!error && Array.isArray(data) && data.length) ? data : null; }
     if (action === "game" || action === "games"){
       const ids = action === "game" ? [Number(p.id)] : (p.ids||[]).map(Number).filter(Boolean).slice(0,100);
@@ -2168,10 +2168,26 @@ const getGame = id => gameCache[id] || logs[id]?.game || null;
 SAMPLE.forEach(cacheGame);
 
 // Search / browse — one function for live and sample modes.
-async function searchGames(q){
-  if (!LIVE){ const s=q.toLowerCase(); return SAMPLE.filter(g=>g.title.toLowerCase().includes(s)||g.genres.some(x=>x.toLowerCase().includes(s))); }
-  return q.trim() ? igdb("search",{q}) : igdb("popular");
+// A search shows SEARCH_PAGE games; "Show more" asks for the same search with a longer list (up to SEARCH_MAX).
+let SEARCH_PAGE = 45, SEARCH_MAX = 180;
+async function searchGames(q, lim = SEARCH_PAGE){
+  if (!LIVE){ const s=q.toLowerCase(); return SAMPLE.filter(g=>g.title.toLowerCase().includes(s)||g.genres.some(x=>x.toLowerCase().includes(s))).slice(0, lim); }
+  return q.trim() ? igdb("search",{q, lim}) : igdb("popular");
 }
+// "Show more" under a search. `m` remembers the search it belongs to: { q, lim, more, loading, err }. The longer
+// list comes straight from the database; games already on screen stay where they are and the new ones go after them.
+const searchMoreState = (q, list) => ({ q, lim: SEARCH_PAGE, more: !!q.trim() && list.length >= SEARCH_PAGE, loading: false, err: null });
+async function searchMore(m, have){
+  const lim = Math.min(m.lim + SEARCH_PAGE, SEARCH_MAX);
+  const list = LIVE ? await igdbLocal("search", { q: m.q, lim }) : await searchGames(m.q, lim);
+  if (!list) throw new Error("The search didn\u2019t answer.");
+  list.forEach(cacheGame);
+  const seen = new Set(have.map(g=> g.id)), extra = list.filter(g=> !seen.has(g.id));
+  m.lim = lim; m.more = extra.length > 0 && list.length >= lim && lim < SEARCH_MAX;
+  return extra;
+}
+const searchMoreBtn = (id, m) => !(m && (m.more || m.loading || m.err)) ? ""
+  : `<div style="text-align:center;margin-top:18px"><button class="cta ghost" id="${id}" ${m.loading ? "disabled" : ""}>${m.loading ? "Loading\u2026" : "Show more"}</button>${m.err ? `<div class="hint" style="margin-top:8px">Couldn\u2019t load more right now \u2014 tap to try again.</div>` : ""}</div>`;
 async function fetchGame(id){
   if (getGame(id)) return getGame(id);
   if (!LIVE) return null;
@@ -2522,6 +2538,7 @@ let otherProfile = null;             // {username, logs, top5, ballot} for someo
 let draft = {gameId:null, rating:null, subs:{}};
 let gridList = [];       // games currently shown in the grid
 let gridLoading = false, gridError = null;
+let gridMore = null;     // "Show more" for the search on screen (see searchMoreState)
 
 // ---- helpers -------------------------------------------------------------
 const $ = s => document.querySelector(s);
@@ -2678,8 +2695,8 @@ const loadGrid = debounce(async ()=>{
   const q = view.query;
   gridLoading = true; if (!gridList.length) drawGrid();
   gridError = null;
-  try { const list = await searchGames(q); if (view.query===q){ gridList = list; } }
-  catch(e){ gridList = []; gridError = String(e.message||e); console.error(e); }
+  try { const list = await searchGames(q); if (view.query===q){ gridList = list; gridMore = searchMoreState(q, list); } }
+  catch(e){ gridList = []; gridMore = null; gridError = String(e.message||e); console.error(e); }
   gridLoading = false; if (!view.gameId && view.tab==="games") drawGrid();
 }, LIVE ? 350 : 0);
 
@@ -3188,7 +3205,8 @@ function drawGrid(){
   if (SORTS[view.sort].fn) list = [...list].sort(SORTS[view.sort].fn);
   const body = scaffold(app);
   $("#heroSlot").innerHTML = "";
-  body.innerHTML = `
+  const more = gridMore && gridMore.q === view.query && !gridError && list.length ? searchMoreBtn("gridMore", gridMore) : "";
+  paintList(body, `
     <div class="filters" style="justify-content:flex-end">
       <label class="sortwrap">Sort
         <select id="sort">${Object.entries(SORTS).map(([k,v])=>`<option value="${k}" ${view.sort===k?"selected":""}>${v.label}</option>`).join("")}</select>
@@ -3196,11 +3214,20 @@ function drawGrid(){
     </div>
     ${gridError ? `<div class="empty"><h2>Couldn't reach the game database</h2><code class="err">${esc(gridError)}</code></div>`
       : gridLoading && !gridList.length ? `<div class="empty"><div class="spinner"></div>Loading games…</div>`
-      : list.length ? `<div class="grid">${list.map(card).join("")}</div>`
+      : list.length ? `<div class="grid">${list.map(card).join("")}</div>${more}`
       : `<div class="empty"><h2>No matches</h2>${view.query ? "Try a different title." : "Try a different genre."}</div>`}
-    `;
+    `);
   if (!gridList.length && !gridLoading && !gridError) loadGrid();
   $("#sort").onchange = e=>{ view.sort=e.target.value; drawGrid(); };
+  const mb = $("#gridMore"); if (mb) mb.onclick = gridShowMore;
+}
+async function gridShowMore(){
+  const m = gridMore; if (!m || m.loading) return;
+  const here = ()=> gridMore === m && view.query === m.q && !view.gameId && view.tab === "games";
+  m.loading = true; m.err = null; drawGrid();
+  try { const extra = await searchMore(m, gridList); if (gridMore === m && view.query === m.q) gridList = gridList.concat(extra); }
+  catch(e){ m.err = String(e.message||e); console.error(e); }
+  m.loading = false; if (here()) drawGrid();
 }
 
 const PAGE = 20;
@@ -4163,14 +4190,15 @@ $("#t5Wrap").addEventListener("click", e=>{ if(e.target.id==="t5Wrap") closeT5()
 
 // ---- game picker (shared by Top 5 and Awards) ------------------------------
 // openPicker({title, current, taken, year, onPick, onClear})
-let pick = null, pickList = [];
+let pick = null, pickList = [], pickMore = null;
+let pickSeen = [];       // every game the picker's search has returned so far, whether it fits the picker or not
 function openPicker(opts){
   pick = opts;
   $("#pickTitle").textContent = opts.title;
   $("#pickNote").hidden = !opts.note; $("#pickNote").textContent = opts.note || "";
   $("#pickSearch").value = ""; $("#pickSearch").placeholder = LIVE ? "Search IGDB" : "Search games";
   $("#clearPick").hidden = !opts.current;
-  pickList = defaultPickList();
+  pickList = defaultPickList(); pickMore = null; pickSeen = [];
   drawPickList(opts.year ? `${opts.year} releases only — search for any ${opts.year} game` : opts.maxYear ? `Ongoing games: anything released in ${opts.maxYear} or earlier` : (LIVE ? "Your logged games — or search for any game" : ""));
   $("#pickWrap").classList.add("open");
   $("#pickSearch").focus();
@@ -4181,21 +4209,36 @@ function defaultPickList(){
 }
 const loadPick = debounce(async ()=>{
   const q = $("#pickSearch").value;
-  if (!q.trim()){ pickList = defaultPickList(); return drawPickList(); }
-  drawPickList("Searching…");
-  try { pickList = await searchGames(q); } catch(e){ pickList=[]; }
-  pickList = pickList.filter(pickAllowed);
-  if ($("#pickSearch").value===q) drawPickList(!pickList.length ? (pick.year ? `No ${pick.year} releases match.` : pick.maxYear ? `No games released by ${pick.maxYear} match.` : "") : "");
+  if (!q.trim()){ pickList = defaultPickList(); pickMore = null; return drawPickList(); }
+  pickMore = null; drawPickList("Searching…");
+  let found = [];
+  try { found = await searchGames(q); } catch(e){ found = []; }
+  if ($("#pickSearch").value !== q) return;
+  pickSeen = found; pickList = found.filter(pickAllowed); pickMore = searchMoreState(q, found);
+  drawPickList(pickNote());
 }, LIVE ? 350 : 0);
+const pickNote = ()=> pickList.length ? "" : (pick.year ? `No ${pick.year} releases match.` : pick.maxYear ? `No games released by ${pick.maxYear} match.` : "");
 function drawPickList(note=""){
+  const more = pickMore && pickMore.q === $("#pickSearch").value ? searchMoreBtn("pickMore", pickMore) : "";
   $("#pickList").innerHTML = (note ? `<div class="hint" style="padding:4px 10px 8px">${note}</div>` : "") + (pickList.map(g=>{
     const usedLabel = pick.taken?.(g.id), l=logs[g.id];
     return `<button class="pick" data-pick="${g.id}" ${usedLabel?"disabled":""}>
       <span class="pick-cover" style="${coverStyle(g)}"></span>
       <span class="pick-n">${esc(g.title)}<small>${g.year ?? ""}${l?" · rated "+l.rating:""}</small></span>
       ${usedLabel ? `<span class="pick-used">${esc(usedLabel)}</span>` : ""}
-    </button>`; }).join("") || (note ? "" : `<div class="empty small">No matches.</div>`));
+    </button>`; }).join("") || (note || more ? "" : `<div class="empty small">No matches.</div>`)) + (more ? `<div style="padding-bottom:14px">${more}</div>` : "");
   $("#pickList").querySelectorAll("[data-pick]").forEach(b=> b.onclick = ()=>{ pick.onPick(+b.dataset.pick); closePicker(); render(); });
+  const mb = $("#pickMore"); if (mb) mb.onclick = pickShowMore;
+}
+// The picker only lists games that fit (the right year, say), so the next batch is filtered the same way; the
+// button stays while the search itself still has more to give, even if a batch added nothing that fits.
+async function pickShowMore(){
+  const m = pickMore; if (!m || m.loading) return;
+  const box = $("#pickList"), y = box.scrollTop;
+  m.loading = true; m.err = null; drawPickList(pickNote()); box.scrollTop = y;
+  try { const extra = await searchMore(m, pickSeen); if (pickMore === m){ pickSeen = pickSeen.concat(extra); pickList = pickList.concat(extra.filter(pickAllowed)); } }
+  catch(e){ m.err = String(e.message||e); console.error(e); }
+  m.loading = false; if (pickMore === m){ drawPickList(pickNote()); box.scrollTop = y; }
 }
 function closePicker(){ $("#pickWrap").classList.remove("open"); }
 $("#pickSearch").addEventListener("input", loadPick);
