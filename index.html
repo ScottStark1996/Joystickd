@@ -617,7 +617,7 @@
   .avgnote{float:right;font-family:Manrope;font-weight:600;font-size:13px;color:var(--muted)}
   .avgnote b{font-family:Outfit;font-weight:800;font-size:20px;margin-left:2px}
   .avgnote small{font-size:12px;font-weight:500}
-  .bio{margin:8px 0 0;font-size:14px;line-height:1.5;color:#c4cddd;max-width:56ch}
+  .bio{margin:8px 0 0;font-size:14px;line-height:1.5;color:#c4cddd;max-width:56ch;white-space:pre-line}
   .bio.muted{color:var(--muted)}
   .bio-edit{font-size:12px;color:var(--muted);text-decoration:none;margin-left:6px}
   .bio-edit:hover{color:var(--gold)}
@@ -1075,7 +1075,7 @@
 <div class="sheet-wrap" id="bioWrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bioTitle">
     <h2 id="bioTitle">Your bio</h2>
-    <div class="g">A line or two about you — what you play, what you're hunting.</div>
+    <div class="g">A few lines about you — what you play, what you're hunting. Line breaks are kept, up to 4 lines.</div>
     <textarea id="bioText" class="txt" maxlength="160" style="min-height:80px;margin-top:14px" placeholder="e.g. Platinum hunter since 2012. Horror and JRPGs. Currently grinding Elden Ring."></textarea>
     <div class="hint" style="text-align:right"><span id="bioCount">0</span>/160</div>
     <div class="actions"><button class="cta ghost" id="bioCancel">Cancel</button><button class="cta" id="bioSave">Save</button></div>
@@ -6008,7 +6008,8 @@ async function saveProfileImage(P, opts={}){
   // optional bio: up to 3 wrapped lines under the name and stats
   const BIO_LH = 20; let bioLines = [];
   if (opts.bio && (P.bio||"").trim()){ const m = document.createElement("canvas").getContext("2d"); m.font = "500 14px Manrope, sans-serif";
-    bioLines = wrapText(m, P.bio.trim().replace(/\s+/g, " "), W-104); if (bioLines.length > 3){ bioLines = bioLines.slice(0,3); bioLines[2] = bioLines[2].replace(/[\s.,;:]*$/, "") + "\u2026"; } }
+    bioLines = cleanBio(P.bio).split("\n").flatMap(line=> wrapText(m, line, W-104));                             // each line of the bio, wrapped to the card
+    if (bioLines.length > BIO_LINES){ bioLines = bioLines.slice(0, BIO_LINES); bioLines[BIO_LINES-1] = bioLines[BIO_LINES-1].replace(/[\s.,;:]*$/, "") + "\u2026"; } }
   const bioH = bioLines.length ? 6 + bioLines.length*BIO_LH : 0;
   // two looks you can switch on: the profile banner behind the name and stats, and a box around each section
   const banT = opts.banner ? themeFor(P.id, P) : null, boxes = !!opts.boxes;
@@ -6305,13 +6306,21 @@ function paintBadgePreview(){
   const P = { ...me, badgeLayout: readBadgeSelects() };
   $("#bdPreview").innerHTML = `<div class="avatar-wrap">${avatarEl(me.id, me.username, "big")}${badgeButtons(P)}</div>`;
 }
+// A bio keeps its line breaks, within limits so a profile header can't be stretched: at most 4 lines (anything past the
+// fourth is joined onto it), no blank lines, single spaces, 160 characters in all.
+const BIO_MAX = 160, BIO_LINES = 4;
+function cleanBio(s){
+  const lines = String(s || "").split(/\r?\n/).map(l=> l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  if (lines.length > BIO_LINES) lines.splice(BIO_LINES - 1, lines.length, lines.slice(BIO_LINES - 1).join(" "));
+  return lines.join("\n").slice(0, BIO_MAX).trim();
+}
 function openBio(){ $("#bioText").value = me?.bio || ""; $("#bioCount").textContent = $("#bioText").value.length; $("#bioWrap").classList.add("open"); $("#bioText").focus(); }
 function wireBioUI(){
   $("#bioText").addEventListener("input", ()=> $("#bioCount").textContent = $("#bioText").value.length);
   $("#bioCancel").onclick = ()=> $("#bioWrap").classList.remove("open");
   $("#bioWrap").addEventListener("click", e=>{ if(e.target.id==="bioWrap") $("#bioWrap").classList.remove("open"); });
   $("#bioSave").onclick = async ()=>{
-    const bio = $("#bioText").value.replace(/\s+/g," ").trim().slice(0,160);
+    const bio = cleanBio($("#bioText").value);
     if (!(await textOk("bio", bio))) return toast(BLOCKED_MSG);
     const { error } = await sb.from("profiles").update({ bio }).eq("id", me.id); if (error) return dbFail(error);
     me.bio = bio; $("#bioWrap").classList.remove("open"); toast("Bio saved"); render();
