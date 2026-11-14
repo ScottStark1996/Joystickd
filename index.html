@@ -2705,15 +2705,27 @@ function homeTopPick(list){
   return { src: oc.length >= HOME_TOP_MIN ? "oc" : "mixed",
            games: [...use].sort((a,b)=> homeScore(b)-homeScore(a) || (b.oc?.count ?? b.criticCount ?? 0)-(a.oc?.count ?? a.criticCount ?? 0)).slice(0, HOME_TOP_N) };
 }
+// The ranking barely changes from hour to hour, but Home reloads every time someone opens the app or comes back to it, so
+// the list is kept on the device for a few hours instead of asking the database for it on every visit.
+const HOME_TOP_TTL = 6*60*60*1000, HOME_TOP_KEY = "jd_homeTop";
+let homeTopMem = null;
+function homeTopKept(){
+  let c = homeTopMem; if (!c){ try { c = JSON.parse(localStorage.getItem(HOME_TOP_KEY) || "null"); } catch(e){ c = null; } }
+  if (!c || c.forYear !== YEAR || !(Date.now() - c.at < HOME_TOP_TTL) || !Array.isArray(c.rows) || !c.rows.length) return null;
+  homeTopMem = c; return { ...homeTopPick(c.rows.map(g=> cacheGame(g))), year: c.year };
+}
+function keepHomeTop(year, rows){ homeTopMem = { at: Date.now(), forYear: YEAR, year, rows }; try { localStorage.setItem(HOME_TOP_KEY, JSON.stringify(homeTopMem)); } catch(e){} }
 async function loadHomeTop(){
+  if (LIVE){ const kept = homeTopKept(); if (kept) return kept; }
   let first = null;
   for (const y of [YEAR, YEAR-1]){
     const { data, error } = await explorePage({ y, ord:"chigh" }, 0);
     if (error) throw new Error(error.message || String(error));
-    const pick = homeTopPick((Array.isArray(data) ? data : []).map(g=> cacheGame(g)));
-    if (pick.games.length >= HOME_TOP_MIN) return { ...pick, year: y };
-    if (!first) first = { ...pick, year: y };
+    const rows = Array.isArray(data) ? data : [], pick = homeTopPick(rows.map(g=> cacheGame(g)));
+    if (pick.games.length >= HOME_TOP_MIN){ if (LIVE) keepHomeTop(y, rows); return { ...pick, year: y }; }
+    if (!first) first = { ...pick, year: y, rows };
   }
+  if (LIVE && first && first.rows.length) keepHomeTop(first.year, first.rows);
   return first;                                                                 // neither year has enough yet: show what this year has
 }
 const homeTopCap = g => g.oc?.score!=null ? `OpenCritic ${g.oc.score}` : g.critic!=null ? `Critic ${g.critic} \u00b7 IGDB` : (g.year ?? "");
