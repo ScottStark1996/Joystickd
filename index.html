@@ -230,6 +230,17 @@
   .pn small{font-size:13px;color:var(--muted);font-weight:500}
   .pl{color:var(--muted);font-size:12px;font-weight:600;margin-top:6px}
   .pcount{color:var(--muted);font-size:12px;margin-top:8px}
+  /* a platinum stat that opens its vote breakdown */
+  button.platstat{display:block;width:100%;text-align:left;position:relative;transition:border-color .15s}
+  button.platstat:hover,button.platstat:focus-visible{border-color:var(--plat);outline:none}
+  button.platstat::after{content:"";position:absolute;top:14px;right:14px;width:14px;height:12px;opacity:.75;
+    background:linear-gradient(var(--muted),var(--muted)) 0 100%/3px 5px no-repeat,linear-gradient(var(--muted),var(--muted)) 5.5px 100%/3px 12px no-repeat,linear-gradient(var(--muted),var(--muted)) 11px 100%/3px 8px no-repeat}
+  .pd-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:16px 0 12px}
+  .pd-top .pn{font-size:38px}
+  .pd-top .pd-n{color:var(--muted);font-size:13px;font-weight:600}
+  .sheet .dist{background:var(--bg);max-width:none}
+  .dist.wide .dlab{font-size:10px;white-space:nowrap}
+  .pd-foot{color:var(--muted);font-size:13px;margin-top:10px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 
   .myplat{display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
   .myplat b{color:var(--plat);font-family:Outfit;font-weight:800;font-size:14px}
@@ -540,7 +551,6 @@
   .pro-plans[hidden]{display:none}                                   /* the grid display was beating the hidden attribute */
   .pro-feats{display:flex;flex-direction:column;gap:8px;margin-top:10px}
   .pro-feats div{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:600;padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
-  .pro-feats div span.ic{font-size:18px;line-height:1.2;flex:none}
   .pro-feats small{display:block;font-weight:500;color:var(--muted);margin-top:2px}
   .pro-feats .soon{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-left:auto;flex:none;padding-top:2px}
   .pro-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
@@ -912,6 +922,15 @@
     <div id="listGames" class="listrows edit"></div>
     <button class="cta ghost sm" id="listAdd" style="margin-top:10px">+ Add a game</button>
     <div class="actions"><button class="cta ghost" id="listCancel">Cancel</button><button class="cta" id="listSave">Save list</button></div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="platDistWrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="platDistTitle">
+    <div class="sheet-xrow"><button class="sheet-x" id="platDistX" aria-label="Close" title="Close">✕</button></div>
+    <h2 id="platDistTitle">Platinum difficulty</h2>
+    <div class="g" id="platDistGame"></div>
+    <div id="platDistBody"></div>
   </div>
 </div>
 
@@ -1338,18 +1357,18 @@ const isProId = uid => proActive(uid===me?.id ? me?.proUntil : proUntilOf[uid]);
 const proTag = uid => isProId(uid) ? `<span class="protag" title="Joystickd Pro"${badgeStyle(uid)}>Pro</span>` : "";
 // Features (built ones are gated with requirePro(); the rest show as coming soon on the Pro sheet)
 const PRO_FEATURES = [
-  { key:"stats",   ic:"\uD83D\uDCCA", name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:true },
-  { key:"frames",  ic:"\uD83D\uDD36", name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
-  { key:"theme",   ic:"\uD83C\uDFA8", name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
-  { key:"cards",   ic:"\uD83D\uDDBC\uFE0F", name:"Review image styles",             desc:"Poster, Cinematic and Magazine layouts, plus colors, backgrounds and patterns for every image you save.", built:true },
-  { key:"shelves", ic:"\uD83D\uDDC2\uFE0F", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:true },
-  { key:"compare", ic:"\u2694\uFE0F", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:true },
+  { key:"stats",   name:"Stats tab on your profile",            desc:"Games per year, rating spread, genres, platinum hours, streaks and more.", built:true },
+  { key:"frames",  name:"Custom avatar frames",                   desc:"Shown everywhere your avatar appears, including share images.", built:true },
+  { key:"theme",   name:"Profile look & username color",          desc:"Pick an accent for your profile page and your name across Joystickd.", built:true },
+  { key:"cards",   name:"Review image styles",             desc:"Poster, Cinematic and Magazine layouts, plus colors, backgrounds and patterns for every image you save.", built:true },
+  { key:"shelves", name:"Two extra shelves on your profile", desc:"Your own titled Top 5s \u2014 \u201cBest soundtracks\u201d, \u201cComfort games\u201d, anything.", built:true },
+  { key:"compare", name:"Comparison cards",                       desc:"Side-by-side review and profile images with people you follow.", built:true },
 ];
 // Gate: true if the current user is Pro; otherwise opens the Pro sheet and returns false.
 function requirePro(featureKey){ if (!LIVE) { toast("Pro needs the live site"); return false; } if (!me){ openAuth("signin"); return false; } if (isPro(me)) return true; openPro(featureKey); return false; }
 async function openPro(highlight){
   const live = await proPurchaseLive();
-  $("#proFeats").innerHTML = PRO_FEATURES.map(f=> `<div ${f.key===highlight ? 'style="border-color:var(--gold)"' : ""}><span class="ic">${f.ic}</span><span>${f.name}<small>${f.desc}</small></span>${f.built ? "" : `<span class="soon">soon</span>`}</div>`).join("");
+  $("#proFeats").innerHTML = PRO_FEATURES.map(f=> `<div ${f.key===highlight ? 'style="border-color:var(--gold)"' : ""}><span>${f.name}<small>${f.desc}</small></span>${f.built ? "" : `<span class="soon">soon</span>`}</div>`).join("");
   const pro = me && isPro(me);
   $("#proPlans").hidden = !!pro;
   $("#proLegal").hidden = !!pro || !isNativeApp();   // Apple requires the renewal terms + Terms/Privacy links on the in-app paywall
@@ -2239,6 +2258,7 @@ async function loadCommunityLegacy(id){
   const pl = others.filter(r=>r.platinum && (r.plat_diff!=null||r.plat_hours!=null)), pd = pl.map(r=>r.plat_diff).filter(v=>v!=null).map(Number), ph = pl.map(r=>r.plat_hours).filter(v=>v!=null).map(Number);
   communityCache[id] = { summary: { rating_count: rated.length, rating_avg: rated.length ? mean(rated) : null, dist, subs,
     plat_count: pl.length, plat_diff_count: pd.length, plat_hours_count: ph.length, plat_diff_avg: pd.length ? mean(pd) : null, plat_hours_avg: ph.length ? mean(ph) : null,
+    plat_diff_dist: tallyVals(pd), plat_hours_dist: tallyVals(ph), plat_fun_dist: tallyVals(others.filter(r=> r.platinum && r.plat_fun!=null).map(r=> +r.plat_fun)),
     review_count: rows.filter(r=>(r.review||"").trim()).length }, rows };
   likesCache[id] = K.error ? [] : (K.data||[]);
   gameBallots[id] = B.error ? [] : (B.data||[]);
@@ -2418,7 +2438,7 @@ function commentsBlock(gid, uid){
   if (!LIVE) return "";
   const k = ckey(gid,uid), open = openComments.has(k), rawList = commentsCache[k], list = rawList && rawList.filter(c=>!isBlocked(c.user_id)), n = commentCount(gid,uid);
   return `<div class="cmts">
-    <button class="cmt-toggle ${open?"on":""}" data-ctoggle="${gid}:${uid}">💬 ${n==null ? "Comments" : `${n} comment${n===1?"":"s"}`}</button>
+    <button class="cmt-toggle ${open?"on":""}" data-ctoggle="${gid}:${uid}">${n==null ? "Comments" : `${n} comment${n===1?"":"s"}`}</button>
     ${open ? `<div class="cmt-list">
       ${!list ? `<div class="hint">Loading…</div>` : list.length ? list.map(c=>`
         <div class="cmt">
@@ -2600,6 +2620,7 @@ const snapHalf = v => Math.min(10, Math.max(1, Math.floor(v*2)/2));
 
 // ---- averages ------------------------------------------------------------
 const mean = a => a.reduce((s,v)=>s+v,0)/a.length;
+const tallyVals = a => a.reduce((c,v)=>{ c[String(+v)] = (c[String(+v)]||0) + 1; return c; }, {});
 // Merge one local value (my own log, which the server summary excludes) into a server average.
 const mergeAvg = (avg, count, mine) => { let n=+(count||0), sum=n*(+(avg||0)); if (mine!=null){ n++; sum+=+mine; } return n ? { avg:(sum/n).toFixed(1), count:n } : null; };
 function userAverage(id){
@@ -2632,6 +2653,33 @@ function platAverage(id){
   const d = all.map(x=>x[0]).filter(v=>v!=null), h = all.map(x=>x[1]).filter(v=>v!=null);
   if (!d.length && !h.length) return null;
   return { diff: d.length ? mean(d).toFixed(1) : null, hours: h.length ? Math.round(mean(h)) : null, count: all.length };
+}
+// Vote breakdown for one platinum stat as {value: count}, my own report included - the same reports the averages
+// above are made of. null when the server summary doesn't carry it (older database function).
+const PLAT_STATS = {
+  diff:  { title: "Platinum difficulty",       col: "plat_diff",  mine: "platDiff",  unit: " / 10" },
+  hours: { title: "Platinum time to complete", col: "plat_hours", mine: "platHours", unit: " hrs" },
+  fun:   { title: "Platinum enjoyability",     col: "plat_fun",   mine: "platFun",   unit: " / 10" },
+};
+function platDist(id, kind){
+  const def = PLAT_STATS[kind], l = logs[id], mineOk = l?.platinum && (l.platDiff!=null || l.platHours!=null || l.platFun!=null), c = {};
+  const add = (v, n=1)=>{ if (v!=null && isFinite(+v)) c[String(+v)] = (c[String(+v)]||0) + n; };
+  if (LIVE){ const d = summaryOf(id)?.[def.col + "_dist"]; if (!d) return null; Object.entries(d).forEach(([k,v])=> add(k, +v)); }
+  else communityPlat(id).forEach(x=> add(kind==="diff" ? x[0] : kind==="hours" ? x[1] : null));
+  if (mineOk) add(l[def.mine]);
+  return c;
+}
+const distTotal = c => c ? Object.values(c).reduce((a,b)=> a+b, 0) : 0;
+// Scores are in half steps; anything in between (older entries) joins the nearest step so every report gets a bar.
+const halfSteps = c => Object.entries(c).reduce((o,[k,n])=>{ const v = String(Math.min(10, Math.max(1, Math.round(+k*2)/2))); o[v] = (o[v]||0) + n; return o; }, {});
+// Hours are free numbers, so they are grouped: the smallest round step that covers everything in six bars or fewer.
+function hourBuckets(c){
+  const vals = Object.keys(c).map(Number); if (!vals.length) return [];
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const w = [1,2,5,10,20,25,50,100,200,250,500,1000,2000,2500,5000].find(w=> Math.floor(hi/w) - Math.floor(lo/w) + 1 <= 6) || 10000;
+  const out = []; for (let a = Math.floor(lo/w)*w; a <= hi; a += w) out.push({ from:a, label: w===1 ? String(a) : `${a}–${a+w-1}`, n:0 });
+  vals.forEach(v=>{ out[Math.floor(v/w) - Math.floor(lo/w)].n += c[String(v)]; });
+  return out;
 }
 // Share a link: the native share sheet where it exists (iOS app, mobile browsers), otherwise copy to the clipboard.
 async function shareUrl(url, title, copiedMsg){
@@ -4658,14 +4706,44 @@ function profileAwards(ballot, isMe, runners){
 }
 
 // ---- rating distribution chart (profile + game page) -----------------------
-function distChart(ratings){            // ratings: array of values, or a {value: count} map
+const PLAT_BAR = "linear-gradient(180deg,#e6ecf5,#9aabc4)";     // platinum-silver bars for stats that aren't a good/bad score
+function distChart(ratings, fill){      // ratings: array of values, or a {value: count} map; fill: one colour for every bar (default: by rating)
   const steps=[]; for(let v=1;v<=10;v+=0.5) steps.push(v);
   const counts = Array.isArray(ratings) ? steps.map(v=> ratings.filter(r=>r===v).length) : steps.map(v=> +(ratings[String(v)]||0)), max = Math.max(1,...counts);
   return `<div class="dist">${steps.map((v,i)=>`<div class="dcol" title="${counts[i]} rated ${v}">
-      <div class="dbarwrap"><div class="dbar" style="height:${counts[i]/max*100}%;background:${counts[i] ? ratingGradient(v) : "var(--panel2)"}"><span>${counts[i]||""}</span></div></div>
+      <div class="dbarwrap"><div class="dbar" style="height:${counts[i]/max*100}%;background:${counts[i] ? (fill || ratingGradient(v)) : "var(--panel2)"}"><span>${counts[i]||""}</span></div></div>
       ${v%1===0 ? `<div class="dlab">${v}</div>` : `<div class="dlab"></div>`}
     </div>`).join("")}</div>`;
 }
+
+// One platinum stat box on the game page: a button that opens its breakdown when there is one to show.
+const platStatBox = (gid, kind, has, inner) => has && distTotal(platDist(gid, kind))
+  ? `<button class="platstat" data-platdist="${kind}" aria-label="${PLAT_STATS[kind].title}: see how the reports are spread">${inner}</button>`
+  : `<div class="platstat">${inner}</div>`;
+function barsChart(cols, fill){         // cols: [{label, n}] - a few labelled groups, same look as distChart
+  const max = Math.max(1, ...cols.map(c=> c.n));
+  return `<div class="dist wide">${cols.map(c=>`<div class="dcol" title="${c.n} in ${c.label}">
+      <div class="dbarwrap"><div class="dbar" style="height:${c.n/max*100}%;background:${c.n ? fill : "var(--panel2)"}"><span>${c.n||""}</span></div></div>
+      <div class="dlab">${c.label}</div>
+    </div>`).join("")}</div>`;
+}
+// The sheet behind a platinum stat on the game page: the average again, then how the reports are spread.
+function openPlatDist(gid, kind){
+  const def = PLAT_STATS[kind], g = getGame(gid), c = platDist(gid, kind), n = distTotal(c), p = platAverage(gid); if (!n || !p) return;
+  const avg = p[kind], l = logs[gid], mine = c && l?.platinum ? l[def.mine] : null, vals = Object.keys(c).map(Number);
+  $("#platDistTitle").textContent = def.title;
+  $("#platDistGame").textContent = g?.title || "";
+  $("#platDistBody").innerHTML = `
+    <div class="pd-top"><div class="pn">${kind==="fun" ? `<span style="${ratingText(snapHalf(+avg))}">${avg}</span>` : avg}<small>${def.unit}</small></div>
+      <div class="pd-n">${n === 1 ? "from 1 report" : `average of ${n} reports`}</div></div>
+    ${kind==="hours" ? barsChart(hourBuckets(c), PLAT_BAR) : distChart(halfSteps(c), kind==="fun" ? null : PLAT_BAR)}
+    <div class="pd-foot"><span>${kind==="hours" ? (vals.length > 1 ? `Quickest ${Math.min(...vals)} hrs · Longest ${Math.max(...vals)} hrs` : "Hours to platinum")
+        : kind==="diff" ? "1 = easiest · 10 = hardest" : "1 = a slog · 10 = a joy"}</span>${mine!=null ? `<span>Your report: <b style="color:var(--text)">${+mine}${kind==="hours" ? " hrs" : ""}</b></span>` : ""}</div>`;
+  $("#platDistWrap").classList.add("open");
+}
+function closePlatDist(){ $("#platDistWrap").classList.remove("open"); }
+$("#platDistX").onclick = closePlatDist;
+$("#platDistWrap").addEventListener("click", e=>{ if (e.target.id==="platDistWrap") closePlatDist(); });
 
 // ---- shared log card (game page + profile reviews) ---------------------------
 const dateLine = l => [l.date && "Played " + fmtDate(l.date), l.firstTrophy && "First trophy " + fmtDate(l.firstTrophy), l.platDate && "Platinum " + fmtDate(l.platDate), hasPlat2(l) && l.plat2On && `${l.plat2Label || "2nd"} platinum ` + fmtDate(l.plat2On), hasPlat3(l) && l.plat3On && `${l.plat3Label || "3rd"} platinum ` + fmtDate(l.plat3On)].filter(Boolean).join(" · ");
@@ -4930,9 +5008,9 @@ async function renderGame(app){
         <section class="platsec">
           <h3>${TROPHY()} Platinum</h3>
           <div class="platgrid">
-            <div class="platstat"><div class="pn">${p.diff ?? "—"}<small>${p.diff ? " / 10" : ""}</small></div><div class="pl">Platinum difficulty</div></div>
-            <div class="platstat"><div class="pn">${p.hours ?? "—"}<small>${p.hours ? " hrs" : ""}</small></div><div class="pl">Platinum time to complete</div></div>
-            ${p.fun ? `<div class="platstat"><div class="pn"><span style="${ratingText(snapHalf(+p.fun))}">${p.fun}</span><small> / 10</small></div><div class="pl">Platinum enjoyability</div></div>` : ""}
+            ${platStatBox(g.id, "diff", p.diff != null, `<div class="pn">${p.diff ?? "—"}<small>${p.diff ? " / 10" : ""}</small></div><div class="pl">Platinum difficulty</div>`)}
+            ${platStatBox(g.id, "hours", p.hours != null, `<div class="pn">${p.hours ?? "—"}<small>${p.hours ? " hrs" : ""}</small></div><div class="pl">Platinum time to complete</div>`)}
+            ${p.fun ? platStatBox(g.id, "fun", true, `<div class="pn"><span style="${ratingText(snapHalf(+p.fun))}">${p.fun}</span><small> / 10</small></div><div class="pl">Platinum enjoyability</div>`) : ""}
           </div>
           <div class="pcount">Based on ${p.count} platinum report${p.count===1?"":"s"}</div>
         </section>` : ""; })()}
@@ -4960,6 +5038,7 @@ async function renderGame(app){
     if (gameReviewsState[g.id]?.local) gameRevShown+=20; else await loadGameReviews(g.id, reviewSort, true); render(); });
   wireComments(app);
   $("#friendsMore") && ($("#friendsMore").onclick = ()=>{ friendsExpanded = g.id; render(); });
+  document.querySelectorAll("[data-platdist]").forEach(b=> b.onclick = ()=> openPlatDist(g.id, b.dataset.platdist));
   app.querySelectorAll("[data-fview]").forEach(b=> b.onclick = ()=>{
     const uid=b.dataset.fview, r=(friendLogs[g.id]||[]).find(x=>x.user_id===uid); if (!r) return;
     const name = revNames[uid]||follows.names[uid]||"…";
