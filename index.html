@@ -983,7 +983,7 @@
     <div class="look-sec"><h3>Card color</h3><div class="chips" id="cardBg"></div></div>
     <div class="look-sec"><h3>Background</h3><div class="g" id="cardStyleHint" style="margin:-2px 0 8px" hidden>Blurred cover uses the first game in your Top 5.</div><div class="chips" id="cardStyle"></div></div>
     <div class="look-sec"><h3>Pattern</h3><div class="chips" id="cardPattern"></div></div>
-    <div class="look-sec" id="cardTextSec"><h3>Review text</h3><div class="g" style="margin:-2px 0 8px">Boxed puts a panel behind the writing on review cards, so it stays easy to read over a pattern or cover art.</div><div class="chips" id="cardText"></div></div>
+    <div class="look-sec" id="cardTextSec"><h3>Review text</h3><div class="g" style="margin:-2px 0 8px">Boxed puts a panel behind the writing on Review card and Cinematic images, so it stays easy to read over a pattern or cover art.</div><div class="chips" id="cardText"></div></div>
     <div class="look-sec"><h3>Highlight color</h3><div class="swatches" id="cardAccent"></div></div>
     <div class="look-sec" id="cardScoreSec"><h3>Score style</h3><div class="g" style="margin:-2px 0 8px">How your rating number looks on saved images.</div><div class="chips" id="cardScore"></div></div>
     <div class="actions"><button class="cta ghost" id="cardReset">Reset to default</button><button class="cta ghost" id="cardCancel">Cancel</button><button class="cta" id="cardSave">Save</button></div>
@@ -5429,7 +5429,10 @@ async function saveReviewCinematic(g, saved, who){
   const RT = revText(); let CF = Math.round(19*RT.font/16), CLH = Math.round(29*RT.font/16), CBODY = `400 ${CF}px Manrope, sans-serif`;
   const m = document.createElement("canvas").getContext("2d");
   const paras = (l.review||"").trim().split(/\n+/).filter(Boolean);
-  const wrapBody = ()=>{ m.font = CBODY; const out = []; paras.forEach((p,i)=>{ if (i) out.push(""); wrapText(m, p, W-pad*2-26).forEach(ln=> out.push(ln)); }); return out; };
+  // Boxed review text (Image style → Review text): a panel behind the writing, as on the Review card. Plain keeps
+  // the accent rule down the left. BOXC = the extra room the panel needs above the first line.
+  const boxed = ct.textBox && paras.length > 0, BOXC = boxed ? CF + 15 : 0, bodyX = boxed ? pad : pad + 26, bodyW = boxed ? W - pad*2 : W - pad*2 - 26;
+  const wrapBody = ()=>{ m.font = CBODY; const out = []; paras.forEach((p,i)=>{ if (i) out.push(""); wrapText(m, p, bodyW).forEach(ln=> out.push(ln)); }); return out; };
   let lines = wrapBody();
   m.font = "700 15px Outfit, sans-serif"; const pillLabel = t => `${isMine?"my":"their"} ${t.year} ${t.key==="goty" ? "Game of the Year" : t.label.replace(/^Best /,"best ").replace(/^Most /,"most ")}`;
   const pillW = tags.map(t=> m.measureText(pillLabel(t)).width + 28);
@@ -5437,11 +5440,11 @@ async function saveReviewCinematic(g, saved, who){
   const metaH = 110 + (dparts.length ? 30 : 0) + (showPlatLine ? 34 : 0) + (pillRows ? pillRows*44 + 6 : 0);
   const subsH = rated.length ? 40 + Math.ceil(rated.length/2)*34 : 0;
   // fixed page size: shrink the body text until it fits (down to 12px), then trim with an ellipsis
-  { const pageH = revTargetH(W), revMax = pageH ? pageH - (46 + heroH + metaH + subsH + 30 + 46 + 46) : Infinity;
+  { const pageH = revTargetH(W), revMax = pageH ? pageH - (46 + heroH + metaH + subsH + 30 + BOXC + 46 + 46) : Infinity;
     while (pageH && lines.length*CLH > revMax && CF > 12){ CF -= 0.5; CLH = CF*29/19; CBODY = `400 ${CF}px Manrope, sans-serif`; lines = wrapBody(); }
     if (pageH && lines.length*CLH > revMax){ const keep = Math.max(1, Math.floor(revMax/CLH)); lines = lines.slice(0, keep); lines[keep-1] = lines[keep-1].replace(/[\s.,;:]*$/, "") + "\u2026"; }
     if (pageH && lines.length) CLH = Math.min(revMax/lines.length, CF*1.9); }
-  const revH = lines.length ? lines.length*CLH + 30 : 0;
+  const revH = lines.length ? lines.length*CLH + 30 + BOXC : 0;
   const H = Math.max(46 + heroH + metaH + subsH + revH + 46 + 46, revTargetH(W) || 0);
   const c=document.createElement("canvas"); const x=c.getContext("2d"); const S=exportScale(W,H); c.width=W*S; c.height=H*S; x.scale(S,S);
   paintCinematic(x, W, H, cover, ct);
@@ -5494,9 +5497,12 @@ async function saveReviewCinematic(g, saved, who){
       x.textAlign="right"; x.font="800 18px Outfit, sans-serif"; x.fillStyle=ratingFillCtx(x, +l.subs[sr.key], bx+colW-40, by-14, bx+colW, by); x.fillText(String(l.subs[sr.key]), bx+colW, by); x.textAlign="left";
       x.fillStyle="rgba(255,255,255,.08)"; x.fillRect(bx, by+10, colW, 1); });
     y += Math.ceil(rated.length/2)*34 + 10; }
-  // the review, with an accent rule down the left
-  if (lines.length){ y += 20; x.fillStyle=accent; x.fillRect(pad, y-20, 4, lines.length*CLH + 6);
-    x.font=CBODY; x.fillStyle="#dbe2ee"; lines.forEach(ln=>{ if (ln) x.fillText(ln, pad+26, y); y += CLH; }); }
+  // the review: in a panel (boxed), or with an accent rule down the left (plain)
+  if (lines.length){ y += 20 + BOXC;
+    if (boxed){ const t0 = y - CF - 21, hh = (lines.length-1)*CLH + CF + 21 + CF*0.35 + 22;
+      x.save(); x.beginPath(); x.roundRect(pad-22, t0, W-(pad-22)*2, hh, 20); x.fillStyle = rgba(ct.panel, .72); x.fill(); x.strokeStyle = rgba(accent, .5); x.lineWidth = 2; x.stroke(); x.restore(); }
+    else { x.fillStyle=accent; x.fillRect(pad, y-20, 4, lines.length*CLH + 6); }
+    x.font=CBODY; x.fillStyle="#dbe2ee"; lines.forEach(ln=>{ if (ln) x.fillText(ln, bodyX, y); y += CLH; }); }
   const blob = await new Promise(res=> fitCanvasToFormat(c, W, H, S, ct).toBlob(res, "image/png")); if (!blob){ toast("Couldn't create the image"); return; }
   await deliverImage(blob, `joystickd-${(g.title||"game").toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,40)}-cinematic.png`);
 }
@@ -5658,9 +5664,8 @@ async function saveReviewImage(g, saved, who){
       pills.push({ label, x:px, y:py, w, goty: t.key==="goty" }); px += w + PILL_GAP; });
     H += (pills.length ? pills[pills.length-1].y + PILL_H : 0) + 14; }
   const tagLines = pills;
-  // Long reviews become a series: part 1 is the full card, later parts are continuation cards.
   // On a fixed page size (8.5×11 / square / portrait) the card keeps its full width: the text shrinks (to 12px)
-  // until the review fits the page, and only then spills into continuation cards.
+  // until the review fits the page, and only then spills into continuation cards (part 1 is the full card).
   const ct = cardThemeFor(me?.id, me);                                          // the person saving picks the look (their Image style), whoever wrote the review
   // Boxed review text (Image style → Review text): a panel behind the writing, like the Magazine layout's.
   // BOX1 / BOXN = the extra room the panel needs above the text on the first card / on continuation cards.
@@ -5670,7 +5675,8 @@ async function saveReviewImage(g, saved, who){
     cx.save(); cx.beginPath(); cx.roundRect(30, t0, W-60, hh, 14);
     cx.fillStyle = rgba(ct.panel, .72); cx.fill(); cx.strokeStyle = rgba(ct.accent, .5); cx.lineWidth = 1.5; cx.stroke(); cx.restore(); };
   H += BOX1;
-  let PART1 = Math.round(34*25/LH), PARTN = Math.round(46*25/LH); const MAXPARTS = 4;
+  // Adaptive size: no pages - the card simply grows with the review (up to what a phone can hold in one image).
+  let PART1 = Math.max(1, Math.floor((16e6/W - (H + 70) - 18)/LH)), PARTN = Math.round(46*25/LH); const MAXPARTS = 4;
   { const fixedH = revTargetH(W);
     if (fixedH){ const revMax = fixedH - (H + 70) - 18;
       while (allLines.length*LH > revMax && F > 12){ F -= 0.5; LH = F*RT.lh/RT.font; BODY = `400 ${F}px Manrope, sans-serif`; allLines = wrapAll(); }
