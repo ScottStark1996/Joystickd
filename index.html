@@ -567,6 +567,15 @@
   .hero-pts span{font-size:13px;font-weight:600;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
   .hero-cta{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:20px}
   .hero-cta .cta{margin:0}
+  /* "Download our app" under the welcome box (website only, signed-out visitors) */
+  .appbox{display:flex;align-items:center;gap:14px;margin:0 0 26px;padding:16px 18px;border-radius:18px;background:var(--panel);border:1px solid var(--line);color:var(--text);text-decoration:none;transition:border-color .15s}
+  .hero + .appbox{margin-top:-14px}
+  .appbox:hover,.appbox:focus-visible{border-color:var(--gold);outline:none}
+  .appbox-ico{flex:none;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:#fff;color:#000;font:400 27px/1 -apple-system,"SF Pro Display","Helvetica Neue",sans-serif}
+  .appbox-ico svg{width:24px;height:24px}
+  .appbox-t{flex:1;min-width:0;font-family:'Outfit',sans-serif;font-weight:700;font-size:17px;line-height:1.2}
+  .appbox-t small{display:block;margin-top:3px;font-family:'Manrope',sans-serif;font-weight:500;font-size:13px;color:var(--muted)}
+  .appbox-go{flex:none;color:var(--muted);font-size:22px;line-height:1}
   @media(max-width:640px){.hero{padding:20px 16px}.hero h1{font-size:27px}.hero-cta .cta{flex:1 1 auto;text-align:center}}
   .avatar.img{object-fit:cover;background:var(--panel2)}
   .avatar.big{width:64px;height:64px;border-radius:50%;font-size:28px}
@@ -3197,6 +3206,20 @@ function drawUsers(){
   });
 }
 
+// "Download our app": a box under the welcome box for signed-out visitors on the website (never inside the app).
+// The Apple mark is the system's own character, which only Apple devices have; everywhere else a plain phone icon.
+const IOS_APP_URL = "https://apps.apple.com/app/id6808438318";
+const onAppleDevice = (ua = navigator.userAgent) => /iPhone|iPad|iPod|Macintosh/.test(ua);
+function appBoxHtml(){
+  if (isNativeApp()) return "";
+  const ico = onAppleDevice() ? "\uF8FF"
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>`;
+  return `<a class="appbox" id="heroApp" href="${IOS_APP_URL}" target="_blank" rel="noopener" aria-label="Download our app on the App Store">
+      <span class="appbox-ico" aria-hidden="true">${ico}</span>
+      <span class="appbox-t">Download our app<small>Joystickd for iPhone, on the App Store</small></span>
+      <span class="appbox-go" aria-hidden="true">\u203A</span>
+    </a>`;
+}
 function renderHome(app){
   if (!home.loaded && !home.loading) loadHome();
   const body = scaffold(app);
@@ -3214,7 +3237,7 @@ function renderHome(app){
         <span>👥 Follow reviewers you trust</span>
       </div>
       <div class="hero-cta"><button class="cta" id="heroJoin">Create a free account</button><button class="cta ghost" id="heroIn">Sign in</button><span class="hint">or just browse — no account needed</span></div>
-    </section>` : "";
+    </section>${appBoxHtml()}` : "";
   body.innerHTML = `
     ${home.loading && !home.loaded ? `<div class="empty"><div class="spinner"></div>Loading…</div>` : `
     <section class="hsec">
