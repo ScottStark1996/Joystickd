@@ -147,6 +147,11 @@
   .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:14px}
   .avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(160deg,var(--gold),#8a5a10);display:grid;place-items:center;font-family:Outfit;font-weight:800;font-size:28px;color:#1a1200;flex-shrink:0}
   .profile-head h1{font-size:30px;font-weight:800;line-height:1.1}
+  /* Text outline (Pro): a thin black edge traced around the letters, whatever they are filled with */
+  .profile-head{--ol:drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000) drop-shadow(0 -1px 0 #000)}
+  .profile-head.ol-bio .bio{-webkit-filter:var(--ol);filter:var(--ol);color:#e9eef6}
+  .profile-head.ol-name h1{-webkit-filter:var(--ol);filter:var(--ol)}
+  .profile-head.ol-stats .stat b{-webkit-filter:var(--ol);filter:var(--ol)}
   .stats{color:var(--muted);font-size:14px;margin-top:4px}
   .stats b{color:var(--text)}
   .platstat-inline{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;vertical-align:middle;position:relative;top:-1px}
@@ -181,7 +186,8 @@
   .pick{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:10px;text-align:left;width:100%}
   .pick:hover:not(:disabled),.pick:focus-visible{background:var(--panel2);outline:none}
   .pick:disabled{opacity:.4;cursor:default}
-  .pick-cover{width:34px;height:46px;border-radius:5px;flex-shrink:0}
+  .pick-cover{width:34px;height:46px;border-radius:5px;flex-shrink:0;position:relative;overflow:hidden}
+  .pick-cover .cv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
   .pick-n{font-weight:600;font-size:14px;line-height:1.25}
   .pick-n small{display:block;color:var(--muted);font-weight:500;font-size:12px}
   .pick-used{margin-left:auto;color:var(--gold);font-family:Outfit;font-weight:800;font-size:13px}
@@ -968,6 +974,7 @@
     <div class="look-sec"><h3>Header tint</h3><div class="chips" id="lookTints"></div></div>
     <div class="look-sec"><h3>Avatar frame</h3><div class="frames" id="lookFrames"></div></div>
     <div class="look-sec"><h3>Username style</h3><div class="chips" id="lookNameStrength" style="margin-bottom:10px"></div><div class="chips" id="lookNameFx"></div></div>
+    <div class="look-sec"><h3>Text outline</h3><div class="g" style="margin-bottom:8px">A thin black edge around the letters, so they stay easy to read over a banner. Turn on any of them.</div><div class="chips" id="lookOutline"></div></div>
     <div class="look-sec"><h3>Pro badge</h3><div class="chips" id="lookBadgeFx"></div></div>
     <div class="look-sec"><label class="toggle-row"><span>Color my username everywhere<br><small style="font-weight:500;color:var(--muted)">Feed, reviews, comments — not just my profile</small></span><input type="checkbox" id="lookNameColor"></label></div>
     <div class="actions"><button class="cta ghost" id="lookReset">Reset to default</button><button class="cta ghost" id="lookCancel">Cancel</button><button class="cta" id="lookSave">Save</button></div>
@@ -1842,6 +1849,8 @@ function cleanTheme(t){ t = t && typeof t==="object" ? t : {}; return {
   nameColor: t.nameColor !== false, frame: (t.frame==="accent" || FRAMES[t.frame]) ? t.frame : "none", nameFx: FRAMES[t.nameFx]?.stops ? t.nameFx : "accent", nameSoft: t.nameSoft === true,
   badgeFx: t.badgeFx==="accent" || (FRAMES[t.badgeFx]?.stops) ? t.badgeFx : "gold",
   bg: PAGE_BGS[t.bg] ? t.bg : "navy",
+  // a thin black edge around header text, each part switched on its own (all off unless chosen)
+  outline: { bio: t.outline?.bio === true, name: t.outline?.name === true, stats: t.outline?.stats === true },
   score: SCORE_STYLES[t.score] ? t.score : "gradient",
   card: { bg: PAGE_BGS[t.card?.bg] ? t.card.bg : "navy",
           // the card's highlight color is its own hex (older saves used "gold" / "theme" — mapped here)
@@ -1935,10 +1944,14 @@ const badgeStyle = (uid, P) => { const t = themeFor(uid, P); const c = badgeCss(
 const mixHex = (a, b, k) => { const A=hexRgb(a), B=hexRgb(b); return "#" + A.map((v,i)=> Math.round(v + (B[i]-v)*k).toString(16).padStart(2,"0")).join(""); };
 const softStops = stops => { const mid = [...stops].sort((a,b)=> Math.abs(lum(a)-0.55) - Math.abs(lum(b)-0.55))[0]; return stops.map(c=> { let m = mixHex(c, mid, 0.55); if (lum(m) < 0.42) m = mixHex(m, "#ffffff", (0.42-lum(m))*1.6); return m; }); };
 const nameStops = t => { const f = FRAMES[t.nameFx]; if (!f?.stops) return null; const st = f.textStops || f.stops; return t.nameSoft ? (f.softTextStops || softStops(st)) : st; };
-const nameFxCss = t => t.nameFx !== "accent" && FRAMES[t.nameFx]?.stops
-  ? `background:linear-gradient(100deg, ${nameStops(t).join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent${FRAMES[t.nameFx].textGlow && !t.nameSoft ? `;filter:drop-shadow(0 0 .18em ${FRAMES[t.nameFx].textGlow})` : ""}`
+const nameFxCss = (t, noGlow) => t.nameFx !== "accent" && FRAMES[t.nameFx]?.stops
+  ? `background:linear-gradient(100deg, ${nameStops(t).join(",")});-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent${FRAMES[t.nameFx].textGlow && !t.nameSoft && noGlow !== true ? `;filter:drop-shadow(0 0 .18em ${FRAMES[t.nameFx].textGlow})` : ""}`
   : `color:${t.accent}`;
 const nameFxStyle = t => t ? ` style="${nameFxCss(t)}"` : "";
+// Text outline on a profile header (Pro, Profile look): classes for the header, and the username's style to go with them.
+const OUTLINE_PARTS = { bio: "Bio", name: "Username", stats: "Games and platinum numbers" };
+const outlineClass = t => t?.outline ? Object.keys(OUTLINE_PARTS).filter(k=> t.outline[k]).map(k=> " ol-" + k).join("") : "";
+const headNameStyle = t => t ? ` style="${nameFxCss(t, !!t.outline?.name)}"` : "";
 // Canvas fill for a username drawn with the same style (x0..x1 = text extent)
 function nameFillCtx(x, t, x0, y0, x1, y1){ if (!t) return null; if (t.nameFx==="accent" || !FRAMES[t.nameFx]?.stops) return t.accent;
   const st = nameStops(t), g = x.createLinearGradient(x0, y0, x1, y1); st.forEach((c,i)=> g.addColorStop(i/(st.length-1), c)); return g; }
@@ -2039,9 +2052,13 @@ let lookDraft = null;
 function openLook(){ if (!requirePro("theme")) return; lookDraft = cleanTheme(me.theme); paintLook(); $("#lookWrap").classList.add("open"); }
 function paintLook(){
   const t = lookDraft, P = { id: me.id, username: me.username, proUntil: me.proUntil, theme: t };
-  $("#lookPrev").innerHTML = `<div class="profile-head themed" ${headStyle(t)}>
+  const plats = Object.values(logs).filter(l=> l.platinum).length;
+  $("#lookPrev").innerHTML = `<div class="profile-head themed${outlineClass(t)}" ${headStyle(t)}>
     <div class="avatar-wrap haspro">${avatarEl(me.id, me.username, "big", frameOf(t))}<span class="prounder" style="${badgeCss(t)}">PRO</span></div>
-    <div><h1 style="${nameFxCss(t)};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div></div></div></div>`;
+    <div><h1 style="${nameFxCss(t, t.outline.name)};font-size:24px">${esc(me.username)}</h1><div class="statrow"><div class="stat"><b>${Object.keys(logs).length}</b><small>games logged</small></div>${plats ? `<div class="stat"><b>${plats}</b><small>platinum${plats===1?"":"s"}</small></div>` : ""}</div>
+      <p class="bio">${esc(me.bio || "Your bio goes here")}</p></div></div>`;
+  $("#lookOutline").innerHTML = Object.entries(OUTLINE_PARTS).map(([k,l])=> `<button class="chip ${t.outline[k]?"on":""}" data-ol="${k}" aria-pressed="${t.outline[k]}">${l}</button>`).join("");
+  $("#lookOutline").querySelectorAll("[data-ol]").forEach(b=> b.onclick = ()=>{ lookDraft.outline[b.dataset.ol] = !lookDraft.outline[b.dataset.ol]; paintLook(); });
   paintSwatches($("#lookSwatches"), "acc", "lookCustom", t.accent);
   $("#lookPatterns").innerHTML = Object.entries(PATTERNS).map(([k,v])=> `<button class="chip ${t.pattern===k?"on":""}" data-pat="${k}">${v}</button>`).join("");
   $("#lookTints").innerHTML = Object.entries(TINTS).map(([k,v])=> `<button class="chip ${t.tint===k?"on":""}" data-tint="${k}">${v}</button>`).join("");
@@ -2178,7 +2195,9 @@ const SAMPLE = [
 const gameCache = {};
 const overrides = {};                 // game_id -> {released, year}
 function applyOverride(g){ const o = overrides[g.id]; if (o){ g.released = o.released; g.year = o.year; } return g; }
-function cacheGame(g){ applyOverride(g); const old = gameCache[g.id]; if (old && Array.isArray(old.themes) && !Array.isArray(g.themes)) g.themes = old.themes; gameCache[g.id] = g; return g; }
+function cacheGame(g){ applyOverride(g); const old = gameCache[g.id]; if (old && Array.isArray(old.themes) && !Array.isArray(g.themes)) g.themes = old.themes;
+  if (old && old.cover && !g.cover) g.cover = old.cover;      // a later copy without a cover never wipes one we already have
+  gameCache[g.id] = g; return g; }
 const tagsOf = g => [...new Set([...(g?.genres||[]), ...(g?.themes||[])])];
 // Refresh game details (genres + themes) for a list of ids from the games cache, 100 at a time.
 async function refreshGames(ids){
@@ -2575,15 +2594,45 @@ const esc = s => String(s??"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",
 const fmtDate = d => d ? new Date(d+"T00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}) : "";
 const hueOf = g => (g.id*47)%360;
 const coverStyle = g => g.cover ? `background:url('${g.cover}') center/cover` : `background:linear-gradient(160deg,hsl(${hueOf(g)} 55% 45%),hsl(${hueOf(g)+30} 60% 18%))`;
-// Cards load covers as real <img>s: lazy (only what's on screen), one automatic retry if IGDB's image server
-// drops the request, and the initials fallback if it still fails — a CSS background just stays blank.
+// Covers are real <img>s (cards and picker rows): lazy (only what's on screen), retried a few times if IGDB's
+// image server drops the request, then the initials fallback - a CSS background would just stay blank. A cover
+// that still didn't arrive is not given up on for the rest of the session: see coverWatch() below.
 const coverFallback = g => `background:linear-gradient(160deg,hsl(${hueOf(g)} 55% 45%),hsl(${hueOf(g)+30} 60% 18%))`;
 const coverImg = g => g.cover ? `<img class="cv" src="${esc(g.cover)}" alt="" loading="lazy" decoding="async" onerror="coverErr(this)">` : "";
+const COVER_RETRY = [800, 2500, 6000];             // waits before the 2nd, 3rd and 4th attempt
+const coverBase = img => (img.getAttribute("src") || "").split("?")[0];
+function coverRetry(img){ img.loading = "eager"; img.dataset.t = ""; img.src = `${coverBase(img)}?r=${Date.now()}`; }
 function coverErr(img){
-  if (!img.dataset.r){ img.dataset.r = "1"; const src = img.getAttribute("src").split("?")[0]; setTimeout(()=>{ img.src = `${src}?r=${Date.now()}`; }, 800); return; }
-  const box = img.closest(".cover"), title = box?.closest(".card")?.querySelector(".n")?.textContent || "";
-  img.remove(); if (box && !box.querySelector(".t")) box.insertAdjacentHTML("beforeend", `<span class="t">${esc(initials(title))}</span>`);
+  const n = +(img.dataset.r || 0);
+  if (n < COVER_RETRY.length){ img.dataset.r = n + 1; setTimeout(()=>{ if (img.isConnected) coverRetry(img); }, COVER_RETRY[n]); return; }
+  const box = img.parentElement, title = box?.closest(".card")?.querySelector(".n")?.textContent || "";
+  if (box){ box.dataset.cv = coverBase(img); box.dataset.cvn = +(box.dataset.cvn || 0) + 1; }      // remembered, so it can be tried again later
+  img.remove(); if (box && box.classList.contains("cover") && !box.querySelector(".t")) box.insertAdjacentHTML("beforeend", `<span class="t">${esc(initials(title))}</span>`);
 }
+// Put the image back on tiles that gave up (up to three more rounds each), e.g. when the connection returns.
+function coverRevive(root = document){
+  root.querySelectorAll("[data-cv]").forEach(box=>{ if (+box.dataset.cvn > 3) return;
+    const src = box.dataset.cv; delete box.dataset.cv; box.querySelector(":scope > .t")?.remove();
+    box.insertAdjacentHTML("afterbegin", `<img class="cv" src="${esc(src)}?r=${Date.now()}" alt="" decoding="async" data-r="${COVER_RETRY.length - 1}" onerror="coverErr(this)">`); });
+}
+// Every few seconds: a cover that is on screen but has been "loading" for 10 seconds is stuck (no error ever
+// arrives for those, so nothing else would retry it) - start it again, at most twice. Tiles that gave up get
+// another go every 20 seconds, and at once when the app comes back to the foreground or the connection returns.
+let coverRound = 0, COVER_STUCK_MS = 10000;
+function coverWatch(){
+  if (document.visibilityState !== "visible" || navigator.onLine === false) return;
+  const now = Date.now(), vh = innerHeight;
+  document.querySelectorAll("img.cv").forEach(img=>{
+    if (img.complete){ if (img.dataset.t) img.dataset.t = ""; return; }
+    const r = img.getBoundingClientRect(); if (!r.width || r.bottom < -100 || r.top > vh + 100) return;
+    if (!img.dataset.t){ img.dataset.t = now; return; }
+    if (now - img.dataset.t < COVER_STUCK_MS || +(img.dataset.k || 0) >= 2) return;
+    img.dataset.k = +(img.dataset.k || 0) + 1; coverRetry(img); });
+  if (++coverRound % 7 === 0) coverRevive();
+}
+setInterval(coverWatch, 3000);
+addEventListener("online", ()=> coverRevive());
+document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState === "visible") coverRevive(); });
 const coverText = g => g.cover ? "" : `<span class="t">${initials(g.title)}</span>`;
 const initials = t => t.replace(/[^A-Za-z0-9 ]/g,"").split(" ").filter(Boolean).slice(0,3).map(w=>w[0]).join("").toUpperCase();
 const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
@@ -2960,12 +3009,15 @@ function scaffold(app){
 }
 
 // ---- user search (front page) ----------------------------------------------
+// What someone typed, made safe to drop into a LIKE pattern: "_" and "%" are wildcards there, so they are escaped
+// to mean themselves. (They used to be removed instead, so "C_money" searched for "Cmoney" and found nobody.)
+const likeSafe = q => String(q).replace(/[\\%_]/g, "\\$&");
 let searchMode = "games", userResults = null, userLoading = false;
 const searchUsers = debounce(async ()=>{
   const q = view.query.trim(); if (!q || searchMode!=="users") return;
   if (!LIVE){ drawUsers(); return; }
   userLoading = true; drawUsers();
-  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").ilike("username", `%${q.replace(/[%_]/g,"")}%`).order("username").limit(30);
+  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").ilike("username", `%${likeSafe(q)}%`).order("username").limit(30);
   (data||[]).forEach(p=>{ avatars[p.id]=p.avatar_url; notePro(p); follows.names[p.id]=p.username; });
   userResults = data||[]; userLoading = false;
   if (view.query.trim()===q) drawUsers();
@@ -3051,6 +3103,7 @@ function paintList(box, html){
     old._sig = sig;
     old.before(...top.slice(0, at)); old.after(...top.slice(at+1));   // new heading / filters / button go in around the grid…
     stale.forEach(n=> n.remove());                                    // …then the old ones come out; the grid itself never leaves the page
+    coverRevive(old);
     return;
   }
   box.innerHTML = ""; box.appendChild(tpl.content); if (neu) neu._sig = sig;
@@ -3577,10 +3630,10 @@ function renderLogs(app, P, isMe){
   else body = profileAwards(P.ballot, isMe, P.runners);
 
   paintSame(app, `
-    ${(()=>{ const t = themeFor(P.id, P), card = t && (t.tint!=="off" || t.pattern!=="none"); return `<div class="profile-head${card?" themed":""}" ${headStyle(t)}>`; })()}
+    ${(()=>{ const t = themeFor(P.id, P), card = t && (t.tint!=="off" || t.pattern!=="none"); return `<div class="profile-head${card?" themed":""}${outlineClass(t)}" ${headStyle(t)}>`; })()}
       <div class="avatar-wrap${isPro(P)?" haspro":""}">${avatarEl(P.id, P.username, "big")}${badgeButtons(P)}${isPro(P) ? `<span class="prounder" title="Joystickd Pro"${badgeStyle(P.id, P)}>PRO</span>` : ""}${isMe && LIVE ? `<button class="avatar-edit" id="avatarEdit" title="Change picture">✎</button><input type="file" id="avatarFile" accept="image/*" hidden>` : ""}${(!isMe && me?.isAdmin && avatars[P.id]) ? `<button class="avatar-edit danger-btn" id="avatarClear" title="Remove picture (admin)">✕</button>` : ""}</div>
       <div>
-        <h1${nameFxStyle(themeFor(P.id, P))}>${esc(P.username)}</h1>
+        <h1${headNameStyle(themeFor(P.id, P))}>${esc(P.username)}</h1>
         <div class="statrow">
           <div class="stat"><b>${rated}</b><small>game${rated===1?"":"s"} logged</small></div>
           ${P.hidePlats ? "" : `<div class="stat"><b>${TROPHY("instat")}${platTotal}</b><small>platinum${platTotal===1?"":"s"}</small></div>`}
@@ -4294,7 +4347,7 @@ function drawPickList(note=""){
   $("#pickList").innerHTML = (note ? `<div class="hint" style="padding:4px 10px 8px">${note}</div>` : "") + (pickList.map(g=>{
     const usedLabel = pick.taken?.(g.id), l=logs[g.id];
     return `<button class="pick" data-pick="${g.id}" ${usedLabel?"disabled":""}>
-      <span class="pick-cover" style="${coverStyle(g)}"></span>
+      <span class="pick-cover" style="${coverFallback(g)}">${coverImg(g)}</span>
       <span class="pick-n">${esc(g.title)}<small>${g.year ?? ""}${l?" · rated "+l.rating:""}</small></span>
       ${usedLabel ? `<span class="pick-used">${esc(usedLabel)}</span>` : ""}
     </button>`; }).join("") || (note || more ? "" : `<div class="empty small">No matches.</div>`)) + (more ? `<div style="padding-bottom:14px">${more}</div>` : "");
@@ -6831,7 +6884,7 @@ let peopleQuery = "", peopleResults = [];
 const searchPeople = debounce(async ()=>{
   const q = peopleQuery.trim();
   if (!q){ peopleResults=[]; return render(); }
-  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").ilike("username", `%${q.replace(/[%_]/g,"")}%`).limit(10);
+  const { data } = await sb.from("profiles").select("id,username,avatar_url,pro_until,theme").ilike("username", `%${likeSafe(q)}%`).limit(10);
   peopleResults = (data||[]).filter(p=>p.id!==me.id); peopleResults.forEach(p=>{ follows.names[p.id]=p.username; avatars[p.id]=p.avatar_url; notePro(p); });
   if (peopleQuery.trim()===q) render();
 }, 300);
