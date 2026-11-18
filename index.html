@@ -1446,7 +1446,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard", underwater:"Underwater", fogtown:"Foggy town", lakeside:"Lakeside" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard", underwater:"Underwater", fogtown:"Foggy town", lakeside:"Lakeside", clouds:"Clouds" };
 // Line-art patterns: a tile is a list of strokes/fills given as SVG path text, so the banner (an SVG background) and
 // saved images (canvas, via Path2D) are drawn from the very same data.
 //   op = [path, fill opacity (0 = none), stroke opacity (0 = none), line width, [x, y, rotation°] or null, dash pattern or null]
@@ -1754,7 +1754,38 @@ const LAKESIDE = (()=>{
            stars: { w:180, h:70, ops: flakes },
            moonAt: [0, 0] };
 })();
-const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD, underwater: UNDERWATER, fogtown: FOGTOWN, lakeside: LAKESIDE };
+// "Clouds": seen from above the weather. A sea of cumulus rolls along the bottom in three banks (uneven puffs, with
+// towers piling up here and there), two hot-air balloons ride over it, small clouds and wisps higher up, sun in the corner.
+const CLOUDS = (()=>{
+  const W = 430, H = 116, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const circ = (cx, cy, r) => `M${f(cx-r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2*r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2*r)} 0Z`;
+  // A small puffy cloud sitting on (0,0): a flat rounded base with overlapping puffs. One path, base and puffs wound
+  // the same way round, so the overlaps fill solid instead of punching holes.
+  const PUFFS = [{ half: 30, puffs: [[-17, -8, 10], [-3, -15, 14], [13, -10, 11], [22, -5, 7]] }, { half: 22, puffs: [[-10, -7, 9], [4, -11, 11], [14, -5, 7]] }];
+  const cloud = (kind, s) => { const c = PUFFS[kind], h = 6*s, w = c.half*s; return `M${f(-w)} 0H${f(w)}a${f(h)} ${f(h)} 0 0 0 0 ${f(-2*h)}H${f(-w)}a${f(h)} ${f(h)} 0 0 0 0 ${f(2*h)}Z` + c.puffs.map(([x, y, r]) => circ(x*s, y*s, r*s)).join(""); };
+  const streak = (w, h) => `M${f(-w/2)} 0a${h} ${h} 0 0 1 0 ${-2*h}H${f(w/2)}a${h} ${h} 0 0 1 0 ${2*h}Z`;
+  // One bank of the cloud sea: a body filled to the bottom edge, a rolling row of puffs of very different sizes along
+  // its top, and a few towers. Anything crossing a tile edge is repeated on the other side, so the banks tile.
+  const deck = (base, seed, o)=>{ const r = rng(seed), cs = [];
+    let x = -6; while (x < W){ const big = r() < o.bigChance, rad = (big ? o.rBig : o.rMin) + r()*(big ? o.rBigVar : o.rVar), y = base + (big ? -rad*.25 : rad*.2) + (r() - .5)*o.jitter; cs.push([x, y, rad]); x += rad*(1.05 + r()*.5); }
+    o.towers.forEach(([tx, k])=>{ const t = base - 4; cs.push([tx, t - 10*k, 17*k], [tx - 15*k, t - 2*k, 13*k], [tx + 16*k, t - 4*k, 14*k], [tx + 4*k, t - 24*k, 12*k], [tx - 8*k, t - 19*k, 9*k], [tx + 27*k, t + 2*k, 9*k], [tx - 26*k, t + 3*k, 8*k]); });
+    let d = `M0 ${H}H${W}V${f(base)}H0Z`; cs.forEach(([cx, cy, rad])=>{ d += circ(cx, cy, rad); if (cx - rad < 0) d += circ(cx + W, cy, rad); if (cx + rad > W) d += circ(cx - W, cy, rad); }); return d; };
+  // a hot-air balloon hanging from (0,0) = the bottom of its basket
+  const envelope = s => `M0 ${f(-34*s)}C${f(13*s)} ${f(-34*s)} ${f(15*s)} ${f(-20*s)} ${f(8*s)} ${f(-11*s)}L${f(3.2*s)} ${f(-4.5*s)}H${f(-3.2*s)}L${f(-8*s)} ${f(-11*s)}C${f(-15*s)} ${f(-20*s)} ${f(-13*s)} ${f(-34*s)} 0 ${f(-34*s)}Z`;
+  const basket = s => `M${f(-2.4*s)} ${f(-1.6*s)}h${f(4.8*s)}v${f(3.6*s)}h${f(-4.8*s)}z`, ropes = s => `M${f(-3*s)} ${f(-4.5*s)}L${f(-2.2*s)} ${f(-1.6*s)}M${f(3*s)} ${f(-4.5*s)}L${f(2.2*s)} ${f(-1.6*s)}`;
+  const gores = s => `M0 ${f(-34*s)}V${f(-4.5*s)}M0 ${f(-34*s)}C${f(-7*s)} ${f(-28*s)} ${f(-7*s)} ${f(-14*s)} ${f(-3.2*s)} ${f(-4.5*s)}M0 ${f(-34*s)}C${f(7*s)} ${f(-28*s)} ${f(7*s)} ${f(-14*s)} ${f(3.2*s)} ${f(-4.5*s)}`;
+  const balloon = (x, y, s, a) => [[envelope(s), a, 0, 0, [x, y, 0]], [gores(s), 0, +(a*1.1).toFixed(3), .9, [x, y, 0]], [ropes(s), 0, +(a*1.6).toFixed(3), .8, [x, y, 0]], [basket(s), +(a*1.9).toFixed(3), 0, 0, [x, y, 0]]];
+  let rays = ""; for (let i = 0; i < 12; i++){ const a = i*Math.PI/6, r0 = 19, r1 = r0 + 7*(i % 2 ? .6 : 1); rays += `M${f(Math.cos(a)*r0)} ${f(Math.sin(a)*r0)}L${f(Math.cos(a)*r1)} ${f(Math.sin(a)*r1)}`; }
+  return { sky:   { w:W, h:H, ops:[[cloud(1, .6), .08, 0, 0, [86, 22, 0]], [cloud(0, .55), .07, 0, 0, [336, 18, 0]], [streak(70, 2.2), .09, 0, 0, [214, 30, 0]], [streak(46, 2), .08, 0, 0, [392, 40, 0]],
+                                   ...balloon(292, 58, 1.05, .24), ...balloon(118, 46, .6, .15),
+                                   [deck(80, 12, { rMin: 9, rVar: 7, rBig: 17, rBigVar: 8, bigChance: .28, jitter: 6, towers: [[70, 1.05], [330, .9]] }), .09, 0, 0, null],
+                                   [deck(94, 37, { rMin: 8, rVar: 6, rBig: 15, rBigVar: 7, bigChance: .3, jitter: 5, towers: [[205, 1], [410, .8]] }), .16, 0, 0, null],
+                                   [deck(108, 71, { rMin: 7, rVar: 5, rBig: 13, rBigVar: 6, bigChance: .3, jitter: 4, towers: [[120, .8], [290, .7]] }), .27, 0, 0, null]] },
+           moon:  { w:84, h:84, ops:[[circ(42, 42, 26), .07, 0, 0, null], [circ(42, 42, 15), .5, 0, 0, null], [rays, 0, .34, 1.8, [42, 42, 0]]] },      // the sun
+           stars: { w:180, h:70, ops: [] },                                      // open sky: nothing scattered above the clouds
+           moonAt: [14, 4] };
+})();
+const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD, underwater: UNDERWATER, fogtown: FOGTOWN, lakeside: LAKESIDE, clouds: CLOUDS };
 const pathArtSvg = (art, accent) => `<svg xmlns="http://www.w3.org/2000/svg" width="${art.w}" height="${art.h}" viewBox="0 0 ${art.w} ${art.h}">${art.ops.map(([d, f, st, lw, tr, dash])=>
   `<path d="${d}"${tr ? ` transform="translate(${tr[0]} ${tr[1]})${tr[2] ? ` rotate(${tr[2]})` : ""}"` : ""} fill="${f ? accent : "none"}"${f ? ` fill-opacity="${f}"` : ""}${st ? ` stroke="${accent}" stroke-opacity="${st}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash.join(" ")}"` : ""}` : ""}/>`).join("")}</svg>`;
 function paintPathArt(x, W, H, art, accent){
@@ -1891,7 +1922,7 @@ function paintPattern(x, W, H, pattern, accent, opts){   // opts (placed pattern
                             else { x.moveTo(px+sh[2], py+sh[3]); for (let i=4; i<sh.length; i+=2) x.lineTo(px+sh[i], py+sh[i+1]); x.closePath(); } });
                           x.fill(); }); } break;
     case "space":     paintPathArt(x, W, H, PATH_ARTS[pattern], accent); break;
-    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside":
+    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside": case "clouds":
                       { const S = SCENES[pattern], I = (opts && opts.inset) || 0, fillOnly = !!(opts && opts.part === "fill");
                         // stars everywhere above the rooftops / treeline (never among the windows); no crescent or birds on saved images
                         x.save(); if (!fillOnly){ x.beginPath(); x.rect(0, 0, W, H - I - S.sky.h + 12); x.clip(); } paintPathArt(x, W, H, S.stars, accent); x.restore();
@@ -2002,7 +2033,7 @@ function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImag
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${v.w}" height="${v.h}"><g fill="${t.accent}">${vectorShapes(v, forImage).map(sh=> sh[0]==="c" ? `<circle cx="${sh[2]}" cy="${sh[3]}" r="${sh[4]}" opacity="${sh[1]}"/>` : `<polygon points="${sh.slice(2).join(" ")}" opacity="${sh[1]}"/>`).join("")}</g></svg>`;
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${v.w}px ${v.h}px`]; }
     case "space":     { const v = PATH_ARTS[t.pattern]; return [`url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(v, t.accent))}')`, `${v.w}px ${v.h}px`]; }
-    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside":
+    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside": case "clouds":
                       { const u = a => `url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(a, t.accent))}')`, sz = a => `${a.w}px ${a.h}px`, S = SCENES[t.pattern];
                         // layers: buildings along the bottom, one band of stars along the top (kept clear of the buildings, so no stray dots among the windows),
                         // and on the banner a crescent in the corner (left off saved images, where the wordmark sits there)
