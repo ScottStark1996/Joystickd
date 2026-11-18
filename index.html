@@ -1661,8 +1661,8 @@ function fogLayers(W, banks, alpha, copies = 5){
 // A ground haze that thickens smoothly toward the bottom of a strip: many thin stacked bands.
 function hazeBands(W, H, from, step){ let d = ""; for (let y = from; y < H; y += step) d += `M0 ${y}H${W}V${H}H0Z`; return d; }
 // Foggy town: a placed scene like the others. An empty small-town street runs along the bottom edge (repeating sideways
-// only): low shopfronts and houses with mostly dark windows, a water tower behind them, utility poles carrying street
-// lamps and sagging lines, and banks of fog drifting through. Nothing sits in the corner; drifting flakes take the place
+// only): low shopfronts and houses with mostly dark windows, a water tower behind them, utility poles carrying
+// sagging lines, and banks of fog drifting through. Nothing sits in the corner; drifting flakes take the place
 // of stars. Built once from fixed seeds. Windows sit on an even grid centred in each building.
 const FOGTOWN = (()=>{
   const W = 430, H = 112, base = H - 8, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
@@ -1692,17 +1692,16 @@ const FOGTOWN = (()=>{
       far += `M${f(xa)} ${f(fa)}L${f(xb)} ${f(fb)}L${f(xb)} ${f(Math.max(nb, fb))}L${f(xa)} ${f(Math.max(na, fa))}Z`; }
     [318, 343].forEach(x=>{ const foot = roofAt(nearRoof, x + 1.5, 1); if (foot > base - 80) far += `M${x} ${base-80}h3V${f(foot)}h-3Z`; });               // the tower's legs stop at the roofs in front
     far += `M312 ${base-80}v-16h40v16ZM312 ${base-96}L332 ${base-106}L352 ${base-96}Z`; }
-  // utility poles with two sagging lines, each carrying a street lamp
-  const PH = 62, px = [0, 1, 2].map(i=> (i + .5)*W/3); let poles = "", wires = "", posts = "", heads = "", halo = "";
+  // utility poles with two sagging lines. (No street lamps: the only light on the street is the few lit windows.)
+  const PH = 62, px = [0, 1, 2].map(i=> (i + .5)*W/3); let poles = "", wires = "";
   px.forEach(x=>{ poles += `M${f(x)} ${base+2}V${base-PH}M${f(x-6)} ${base-PH+3}H${f(x+6)}M${f(x-4.5)} ${base-PH+7}H${f(x+4.5)}`; });
   for (let i = -1; i < 3; i++){ const a = i < 0 ? px[2] - W : px[i], b = i < 2 ? px[i+1] : px[0] + W, y = base - PH + 3; [-5.5, 5.5].forEach(o=>{ wires += `M${f(a+o)} ${y}Q${f((a+b)/2 + o)} ${y+9} ${f(b+o)} ${y}`; }); }
-  [[70, 1], [214, -1], [356, 1]].forEach(([x, dir])=>{ const top = base - 40; posts += `M${x} ${base+2}V${top}q0 -5 ${5*dir} -5h${3*dir}`; heads += `M${x + (dir > 0 ? 6 : -11)} ${f(top-5.6)}h5v2.6h-5z`; halo += ring(x + 8.5*dir, top - 3, 13) + ring(x + 8.5*dir, top - 3, 6); });
   const fr = rng(31), flakes = []; for (let i = 0; i < 14; i++) flakes.push([PA.circ(+(4 + fr()*172).toFixed(1), +(4 + fr()*62).toFixed(1), +(.6 + fr()*.9).toFixed(2)), +(.14 + fr()*.2).toFixed(2), 0, 0, null]);
   // fog: high wisps over the rooftops, a bank between the far roofs and the street front, and thicker banks rolling along the street
   const wisps = fogLayers(W, [[150, 20, 95, 5], [372, 30, 80, 4.5]], .008, 4), midFog = fogLayers(W, [[70, 46, 120, 11], [300, 40, 130, 12]], .013),
         streetFog = fogLayers(W, [[30, 88, 120, 12], [205, 84, 135, 14], [380, 90, 115, 11]], .017);
   return { sky:   { w:W, h:H, ops:[...wisps, [far, .09, 0, 0, null], ...midFog, [body, .24, 0, 0, null], [trim, 0, .26, 1.6, null], [unlit, .10, 0, 0, null], [lit, .50, 0, 0, null],
-                                   [poles, 0, .26, 1.6, null], [wires, 0, .18, .8, null], [halo, .09, 0, 0, null], [posts, 0, .38, 1.6, null], [heads, .80, 0, 0, null],
+                                   [poles, 0, .26, 1.6, null], [wires, 0, .18, .8, null],
                                    ...streetFog, [`M0 ${base}H${W}V${H}H0Z`, .26, 0, 0, null], [hazeBands(W, H, 62, 3), .0045, 0, 0, null]] },
            moon:  null,                                                          // nothing in the corner on this one
            stars: { w:180, h:70, ops: flakes },
