@@ -1446,7 +1446,7 @@ async function openProPortal(){ if (!me) return; if (me.proSource==="apple"){ wi
   try { const { data, error } = await sb.functions.invoke("pro-checkout", { body: { action:"portal" } }); if (error || !data?.url) throw error || new Error("no url"); location.href = data.url; } catch(e){ toast("Couldn't open the billing portal \u2014 try again in a moment"); } }
 // ---- Profile look + avatar frames (Pro) --------------------------------------
 const ACCENTS = ["#f0b429","#ff8a1f","#e5484d","#ff5ab0","#b06cf0","#4a8cff","#00c2d1","#2fd37a","#a3e635","#e6ebf4","#9aa8c0","#8a5a10"];
-const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard", underwater:"Underwater", fogtown:"Foggy town", lakeside:"Lakeside", clouds:"Clouds" };
+const PATTERNS = { none:"None", dots:"Dots", grid:"Grid", stripes:"Stripes", rings:"Rings", checks:"Checks", scanlines:"Scanlines", diamonds:"Diamonds", pixels:"Pixels", eightbit:"Charms", blocks:"Blocks", stars:"Stars", shelf:"Trophy shelf", waves:"Waves", space:"Space", skyline:"Skyline", forest:"Forest", cathedral:"Cathedral", graveyard:"Graveyard", underwater:"Underwater", fogtown:"Foggy town", lakeside:"Lakeside", clouds:"Clouds", icebergs:"Icebergs" };
 // Line-art patterns: a tile is a list of strokes/fills given as SVG path text, so the banner (an SVG background) and
 // saved images (canvas, via Path2D) are drawn from the very same data.
 //   op = [path, fill opacity (0 = none), stroke opacity (0 = none), line width, [x, y, rotation°] or null, dash pattern or null]
@@ -1784,7 +1784,34 @@ const CLOUDS = (()=>{
            stars: { w:180, h:70, ops: [] },                                      // open sky: nothing scattered above the clouds
            moonAt: [14, 4] };
 })();
-const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD, underwater: UNDERWATER, fogtown: FOGTOWN, lakeside: LAKESIDE, clouds: CLOUDS };
+// "Icebergs": open polar water. Faceted bergs drift at three distances with their reflections, a whale's tail lifts
+// out of the sea, a few floes ride the swell; a low sun with a halo in the corner and a light drift of snow above.
+const ICEBERGS = (()=>{
+  const W = 430, H = 112, sea = 78, f = n => +(+n).toFixed(1), rng = seed => { let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+  const circ = (cx, cy, r) => `M${f(cx-r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2*r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2*r)} 0Z`;
+  // One iceberg standing on the waterline at (0,0): a faceted outline, the lines where its faces meet, one face a
+  // shade stronger, and a squashed reflection below.
+  const berg = (w, h, seed)=>{ const r = rng(seed), j = (v, k = .06) => v + (r() - .5)*k*w;
+    const p = [[-w/2, 0], [j(-w*.36), -h*(.42 + r()*.12)], [j(-w*.2), -h*(.5 + r()*.1)], [j(-w*.06), -h], [j(w*.12), -h*(.66 + r()*.1)], [j(w*.3), -h*(.72 + r()*.1)], [w/2, 0]];
+    return { out: `M${p.map(q => `${f(q[0])} ${f(q[1])}`).join("L")}Z`,
+      facets: `M${f(p[3][0])} ${f(p[3][1])}L${f(-w*.08)} 0M${f(p[2][0])} ${f(p[2][1])}L${f(-w*.26)} 0M${f(p[5][0])} ${f(p[5][1])}L${f(w*.24)} 0M${f(p[4][0])} ${f(p[4][1])}L${f(w*.1)} ${f(-h*.22)}`,
+      shade: `M${f(p[3][0])} ${f(p[3][1])}L${f(p[4][0])} ${f(p[4][1])}L${f(p[5][0])} ${f(p[5][1])}L${f(w/2)} 0L${f(-w*.08)} 0Z`,
+      mirror: `M${p.map(q => `${f(q[0]*.96)} ${f(-q[1]*.34 + 1.5)}`).join("L")}Z` }; };
+  const put = (b, x, y, a) => { const at = [x, y, 0], o = v => +v.toFixed(3); return [[b.mirror, o(a*.3), 0, 0, at], [b.out, a, 0, 0, at], [b.shade, o(a*.45), 0, 0, at], [b.facets, 0, o(a*1.2), .9, at]]; };
+  const floe = w => `M0 0l${f(w*.14)} -1.8h${f(w*.58)}l${f(w*.28)} 1.5l${f(-w*.2)} 2h${f(-w*.66)}z`;
+  const fluke = k => { const t = v => f(v*k); return `M${t(-2.2)} 0c${t(.6)} ${t(-5)} ${t(.8)} ${t(-8)} ${t(1.2)} ${t(-11)}c${t(-3.6)} ${t(-.6)} ${t(-7.6)} ${t(-3.4)} ${t(-10)} ${t(-7.6)}c${t(4.6)} ${t(.4)} ${t(8.6)} ${t(2)} ${t(11)} ${t(5)}c${t(2.4)} ${t(-3)} ${t(6.4)} ${t(-4.6)} ${t(11)} ${t(-5)}c${t(-2.4)} ${t(4.2)} ${t(-6.4)} ${t(7)} ${t(-10)} ${t(7.6)}c${t(.4)} ${t(3)} ${t(.6)} ${t(6)} ${t(1.2)} ${t(11)}z`; };
+  const sr = rng(31), snow = []; for (let i = 0; i < 10; i++){ const x = 6 + sr()*188, y = 5 + sr()*70, q = .5 + sr()*.8; snow.push([circ(f(x), f(y), +q.toFixed(2)), +(.22 + sr()*.34).toFixed(2), 0, 0, null]); }
+  return { sky:   { w:W, h:H, ops:[[`M0 ${sea}H${W}V${H}H0Z`, .1, 0, 0, null],
+                                   ...put(berg(46, 22, 4), 72, sea + 1, .1), ...put(berg(34, 16, 9), 366, sea + 1, .09), ...put(berg(26, 12, 15), 236, sea, .08),     // far off
+                                   ...put(berg(96, 52, 23), 156, sea + 12, .2), ...put(berg(70, 36, 31), 330, sea + 18, .26),                                         // near
+                                   [fluke(.95), .34, 0, 0, [246, sea + 16, 0]], [`M236 ${sea+17}h20M240 ${sea+19.5}h12`, 0, .22, 1, null],
+                                   ...[[28, 100, 30], [98, 106, 22], [262, 104, 26], [404, 101, 24]].map(([x, y, w]) => [floe(w), .3, 0, 0, [x, y, 0]]),
+                                   [`M8 88h18M60 96h12M200 108h22M290 92h14M380 108h16M410 90h12`, 0, .15, 1, null]] },
+           moon:  { w:96, h:96, ops:[[circ(48, 48, 13), .5, 0, 0, null], [circ(48, 48, 24), 0, .16, 1.2, null], [circ(48, 48, 36), 0, .09, 1.2, null], [circ(12, 48, 2.4) + circ(84, 48, 2.4), .3, 0, 0, null]] },   // low sun, its halo and sun dogs
+           stars: { w:200, h:80, ops: snow },
+           moonAt: [8, -2] };
+})();
+const SCENES = { skyline: SKYLINE, forest: FOREST, cathedral: CATHEDRAL, graveyard: GRAVEYARD, underwater: UNDERWATER, fogtown: FOGTOWN, lakeside: LAKESIDE, clouds: CLOUDS, icebergs: ICEBERGS };
 const pathArtSvg = (art, accent) => `<svg xmlns="http://www.w3.org/2000/svg" width="${art.w}" height="${art.h}" viewBox="0 0 ${art.w} ${art.h}">${art.ops.map(([d, f, st, lw, tr, dash])=>
   `<path d="${d}"${tr ? ` transform="translate(${tr[0]} ${tr[1]})${tr[2] ? ` rotate(${tr[2]})` : ""}"` : ""} fill="${f ? accent : "none"}"${f ? ` fill-opacity="${f}"` : ""}${st ? ` stroke="${accent}" stroke-opacity="${st}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash.join(" ")}"` : ""}` : ""}/>`).join("")}</svg>`;
 function paintPathArt(x, W, H, art, accent){
@@ -1921,7 +1948,7 @@ function paintPattern(x, W, H, pattern, accent, opts){   // opts (placed pattern
                             else { x.moveTo(px+sh[2], py+sh[3]); for (let i=4; i<sh.length; i+=2) x.lineTo(px+sh[i], py+sh[i+1]); x.closePath(); } });
                           x.fill(); }); } break;
     case "space":     paintPathArt(x, W, H, PATH_ARTS[pattern], accent); break;
-    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside": case "clouds":
+    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside": case "clouds": case "icebergs":
                       { const S = SCENES[pattern], I = (opts && opts.inset) || 0, fillOnly = !!(opts && opts.part === "fill");
                         // stars everywhere above the rooftops / treeline (never among the windows); no crescent or birds on saved images
                         x.save(); if (!fillOnly){ x.beginPath(); x.rect(0, 0, W, H - I - S.sky.h + 12); x.clip(); } paintPathArt(x, W, H, S.stars, accent); x.restore();
@@ -2032,7 +2059,7 @@ function patternCss(t, forImage){ const c = a => rgba(t.accent, a);   // forImag
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${v.w}" height="${v.h}"><g fill="${t.accent}">${vectorShapes(v, forImage).map(sh=> sh[0]==="c" ? `<circle cx="${sh[2]}" cy="${sh[3]}" r="${sh[4]}" opacity="${sh[1]}"/>` : `<polygon points="${sh.slice(2).join(" ")}" opacity="${sh[1]}"/>`).join("")}</g></svg>`;
                         return [`url('data:image/svg+xml,${encodeURIComponent(svg)}')`, `${v.w}px ${v.h}px`]; }
     case "space":     { const v = PATH_ARTS[t.pattern]; return [`url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(v, t.accent))}')`, `${v.w}px ${v.h}px`]; }
-    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside": case "clouds":
+    case "skyline": case "forest": case "cathedral": case "graveyard": case "underwater": case "fogtown": case "lakeside": case "clouds": case "icebergs":
                       { const u = a => `url('data:image/svg+xml,${encodeURIComponent(pathArtSvg(a, t.accent))}')`, sz = a => `${a.w}px ${a.h}px`, S = SCENES[t.pattern];
                         // layers: buildings along the bottom, one band of stars along the top (kept clear of the buildings, so no stray dots among the windows),
                         // and on the banner a crescent in the corner (left off saved images, where the wordmark sits there)
@@ -2484,8 +2511,12 @@ async function postComment(gid, uid, body){
   if (!(await textOk("comment", body))) return toast(BLOCKED_MSG);
   const { data, error } = await sb.from("review_comments").insert({game_id:gid, review_user:uid, user_id:me.id, body}).select().single();
   if (error) return dbFail(error);
+  delete commentDrafts[ckey(gid,uid)];
   (commentsCache[ckey(gid,uid)] ||= []).push(data); render();
 }
+// What someone has typed into a comment box but not posted yet, by review. The page redraws on every like, so
+// without this a half-written comment would be wiped; it also keeps two copies of the same review in step.
+const commentDrafts = {};
 async function deleteComment(gid, uid, id){
   const { error } = await sb.from("review_comments").delete().eq("id", id); if (error) return dbFail(error);
   commentsCache[ckey(gid,uid)] = (commentsCache[ckey(gid,uid)]||[]).filter(c=>c.id!==id); render();
@@ -2506,7 +2537,7 @@ function commentsBlock(gid, uid){
             return `<button class="cmt-like ${st.on?"on":""}" data-clike="${c.id}" ${own?"disabled":""} aria-pressed="${st.on}" aria-label="${own ? "Likes on your comment" : "Like this comment"}">${cLikeLabel(st)}</button>`; })()}${(me && c.user_id!==me.id) ? `<button class="cmt-del" data-creport="${gid}:${uid}:${c.id}" title="Report comment">⚑</button>` : ""}${(me && (c.user_id===me.id || uid===me.id || me.isAdmin)) ? `<button class="cmt-del" data-cdel="${gid}:${uid}:${c.id}" aria-label="Delete comment">✕</button>` : ""}</span>
           <div class="cmt-body">${esc(c.body)}</div>
         </div>`).join("") : `<div class="hint">No comments yet.</div>`}
-      ${me ? `<div class="cmt-form"><textarea class="cmt-input" data-cinput="${gid}:${uid}" placeholder="Add a comment…" maxlength="2000"></textarea><button class="cta sm" data-cpost="${gid}:${uid}">Post</button></div>`
+      ${me ? `<div class="cmt-form"><textarea class="cmt-input" data-cinput="${gid}:${uid}" placeholder="Add a comment…" maxlength="2000">${esc(commentDrafts[k] || "")}</textarea><button class="cta sm" data-cpost="${gid}:${uid}">Post</button></div>`
            : `<button class="cta ghost sm" data-csignin>Sign in to comment</button>`}
     </div>` : ""}
   </div>`;
@@ -2518,7 +2549,13 @@ function wireComments(app, repaint){
     if (openComments.has(k)) openComments.delete(k); else { openComments.add(k); if (!commentsCache[k]){ paint(); await loadComments(+gid, uid); } }
     paint();
   });
-  app.querySelectorAll("[data-cpost]").forEach(b=> b.onclick = async ()=>{ const [gid,uid]=b.dataset.cpost.split(":"); const ta=app.querySelector(`[data-cinput="${b.dataset.cpost}"]`); await postComment(+gid, uid, ta.value); if (repaint) repaint(); });
+  // The box read is the one beside the button that was tapped. (A review can be on the page twice - Home lists it under
+  // both "Latest reviews" and people you follow - and looking the box up by review found the other, empty copy,
+  // so Post did nothing.)
+  app.querySelectorAll("[data-cpost]").forEach(b=> b.onclick = async ()=>{ const [gid,uid]=b.dataset.cpost.split(":"); const ta = b.closest(".cmt-form")?.querySelector("[data-cinput]") || app.querySelector(`[data-cinput="${b.dataset.cpost}"]`);
+    if (!ta.value.trim()) return ta.focus();
+    await postComment(+gid, uid, ta.value); if (repaint) repaint(); });
+  app.querySelectorAll("[data-cinput]").forEach(ta=> ta.oninput = ()=>{ const [gid,uid]=ta.dataset.cinput.split(":"); commentDrafts[ckey(+gid,uid)] = ta.value; });
   app.querySelectorAll("[data-cdel]").forEach(b=> b.onclick = async ()=>{ const [gid,uid,id]=b.dataset.cdel.split(":"); if (confirm("Delete this comment?")){ await deleteComment(+gid, uid, +id); if (repaint) repaint(); } });
   app.querySelectorAll("[data-clike]").forEach(b=> b.onclick = async ()=>{ const cid = +b.dataset.clike; if (b.dataset.busy) return; b.dataset.busy = 1;
     const p = toggleCommentLike(cid); paintCLike(b, cid); await p; delete b.dataset.busy; paintCLike(b, cid); });   // only this button repaints, so nothing else on the page flickers
