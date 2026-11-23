@@ -694,6 +694,17 @@
   .score small{font-size:16px;color:var(--muted);font-weight:500}
   .when{color:var(--muted);font-size:13px;margin-left:auto}
   .review{margin-top:12px;line-height:1.6;white-space:pre-wrap;color:#d4dbe8}
+  /* Words people type: one very long unbroken word (AAAAAAAA…) wraps inside its box instead of running out of it. */
+  .review,.cmt-body,.bio,.list-head h2,.lname,.psec h2{overflow-wrap:anywhere;word-break:break-word}
+  /* A review its writer marked as having spoilers: a cover in place of the text until the reader asks for it. */
+  .spoil-cover{margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px dashed var(--line);border-radius:10px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 8px,transparent 8px 16px);color:var(--muted);font-size:14px;line-height:1.4}
+  .spoil-cover span{display:flex;align-items:center;gap:8px;min-width:0}
+  .spoil-cover svg{flex:none}
+  .rev .spoil-cover{margin-top:8px}
+  .spoil-tag{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+  .spoil-tagrow + .review{margin-top:6px}
+  #spoilToggle{margin-top:10px}
+  #spoilToggle.on .trophy{color:var(--gold)} #spoilToggle.on .switch{background:var(--gold)}
 
   /* log sheet */
   .sheet-wrap{position:fixed;inset:0;background:rgba(5,9,18,.7);display:none;align-items:flex-end;justify-content:center;z-index:20}
@@ -1278,6 +1289,11 @@
 
     <label for="reviewText">Review</label>
     <textarea id="reviewText" placeholder="What stuck with you? What didn't land?"></textarea>
+    <button class="plat-toggle" id="spoilToggle" role="switch" aria-checked="false">
+      <span class="trophy" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.2A9.7 9.7 0 0 1 12 5c5.5 0 9 5.2 9.7 7-.3.8-1.2 2.3-2.7 3.8M6.3 6.8C3.9 8.4 2.6 10.9 2.3 12c.7 1.8 4.2 7 9.7 7 1.5 0 2.9-.4 4.1-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></span>
+      <span class="pt-text">This review has spoilers<small>Hides the text until a reader taps to show it</small></span>
+      <span class="switch"><i></i></span>
+    </button>
 
     <label>Dates</label>
     <div class="dates">
@@ -2317,6 +2333,7 @@ async function loadCommunity(id){
   if (S.error){ console.warn("game_summary unavailable, using legacy loader:", S.error.message); return loadCommunityLegacy(id); }
   communityCache[id] = { summary: S.data || {} };
   friendLogs[id] = F.error ? [] : (F.data||[]);
+  await fillSpoilers(friendLogs[id], id);
   friendLogs[id].forEach(r=> absorbRow(id, r));
 }
 async function loadGameReviews(id, sort, append=false){
@@ -2325,7 +2342,7 @@ async function loadGameReviews(id, sort, append=false){
   const off = append && st && st.sort===sort ? st.rows.length : 0;
   const { data, error } = await sb.rpc("game_reviews", { gid:id, sort, lim:20, off });
   if (error){ console.warn("game_reviews:", error.message); gameReviewsState[id] = { sort, rows: append ? st.rows : [], total: append ? st.total : 0 }; return; }
-  const rows = data||[]; rows.forEach(r=> absorbRow(id, r));
+  const rows = data||[]; await fillSpoilers(rows, id); rows.forEach(r=> absorbRow(id, r));
   gameReviewsState[id] = { sort, rows: append && st && st.sort===sort ? st.rows.concat(rows) : rows, total: rows[0]?.total_count ?? (append ? st.total : 0) };
 }
 // Legacy path (only if the RPCs aren't installed yet): download rows and compute the same summary locally.
@@ -2456,6 +2473,38 @@ function wireReports(app){
 // ---- comments ---------------------------------------------------------------
 const commentsCache = {};            // "gid:uid" -> [{id,user_id,body,created_at}]
 const openComments = new Set();      // "gid:uid" keys currently expanded
+// ---- spoiler tags -----------------------------------------------------------
+// A writer can mark a review as having spoilers. Everyone else then sees a cover instead of the text until they tap
+// "Show review"; once shown it stays shown for the visit. The writer always sees their own text, with a small tag.
+const spoilerShown = new Set();      // "gid:uid" reviews whose cover has been lifted
+let spoilerCol = true;               // false once the database says it has no spoiler column (spoiler-tags.sql not run yet)
+const spoilerFlags = {};             // "gid:uid" -> true/false, for rows that had to be looked up separately
+const EYE_OFF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.2A9.7 9.7 0 0 1 12 5c5.5 0 9 5.2 9.7 7-.3.8-1.2 2.3-2.7 3.8M6.3 6.8C3.9 8.4 2.6 10.9 2.3 12c.7 1.8 4.2 7 9.7 7 1.5 0 2.9-.4 4.1-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>`;
+// body = the review's normal HTML. Returns it as is, tagged, or tucked behind the cover.
+function spoilerWrap(l, gid, uid, isMine, body){
+  if (!l || !l.spoiler || !(l.review||"").trim()) return body;
+  const k = ckey(gid, uid), tag = `<div class="spoil-tagrow"><span class="spoil-tag">${EYE_OFF}Spoilers</span></div>`;
+  if (isMine || spoilerShown.has(k)) return tag + body;
+  return `<div data-spoilbox="${esc(k)}"><div class="spoil-cover"><span>${EYE_OFF}This review has spoilers.</span><button class="cta ghost sm" data-spoil="${esc(k)}">Show review</button></div><div data-spoilbody hidden>${tag}${body}</div></div>`;
+}
+// One listener for every cover on the site (feeds, game pages, profiles, the review sheet): lift it in place, no redraw.
+document.addEventListener("click", e=>{ const b = e.target.closest && e.target.closest("[data-spoil]"); if (!b) return;
+  e.preventDefault(); e.stopPropagation(); const k = b.dataset.spoil; spoilerShown.add(k);
+  document.querySelectorAll("[data-spoilbox]").forEach(box=>{ if (box.dataset.spoilbox !== k) return; const body = box.querySelector("[data-spoilbody]"); box.querySelector(".spoil-cover")?.remove(); if (body) body.hidden = false; });
+}, true);
+// Review rows from a database function that doesn't hand the flag back get it from one small lookup, before anything is drawn.
+async function fillSpoilers(rows, gid){
+  rows = (rows||[]).filter(Boolean); const need = [], key = r => ckey(gid ?? r.game_id, r.user_id);
+  for (const r of rows){ if (r.spoiler != null) continue; if (!(r.review||"").trim()){ r.spoiler = false; continue; } if (key(r) in spoilerFlags) r.spoiler = spoilerFlags[key(r)]; else need.push(r); }
+  if (!need.length || !LIVE || !spoilerCol) return rows;
+  try { for (let i = 0; i < need.length; i += 50){ const part = need.slice(i, i+50);
+      const { data, error } = await sb.from("logs").select("user_id,game_id").eq("spoiler", true).in("user_id", [...new Set(part.map(r=>r.user_id))]).in("game_id", [...new Set(part.map(r=> gid ?? r.game_id))]);
+      if (error){ if (/spoiler/i.test(error.message||"")) spoilerCol = false; break; }
+      const on = new Set((data||[]).map(d=> ckey(d.game_id, d.user_id)));
+      part.forEach(r=>{ r.spoiler = spoilerFlags[key(r)] = on.has(key(r)); }); }
+  } catch(e){ console.warn("spoiler flags:", e); }
+  return rows;
+}
 const ckey = (gid, uid) => `${gid}:${uid}`;
 async function loadComments(gid, uid){
   if (!LIVE) return;
@@ -2608,8 +2657,8 @@ async function loadCritic(g){
     const d = await r.json(); criticCache[g.id] = d.error ? { error:d.error } : d;
   } catch(e){ criticCache[g.id] = { error:String(e) }; }
 }
-const invalidateCommunity = id => { delete communityCache[id]; delete friendLogs[id]; delete gameReviewsState[id]; };
-const clearCommunity = ()=> { Object.keys(communityCache).forEach(k=>delete communityCache[k]); Object.keys(friendLogs).forEach(k=>delete friendLogs[k]); Object.keys(gameReviewsState).forEach(k=>delete gameReviewsState[k]); };
+const invalidateCommunity = id => { delete communityCache[id]; delete friendLogs[id]; delete gameReviewsState[id]; Object.keys(spoilerFlags).forEach(k=>{ if (k.startsWith(id + ":")) delete spoilerFlags[k]; }); };
+const clearCommunity = ()=> { Object.keys(communityCache).forEach(k=>delete communityCache[k]); Object.keys(friendLogs).forEach(k=>delete friendLogs[k]); Object.keys(spoilerFlags).forEach(k=>delete spoilerFlags[k]); Object.keys(gameReviewsState).forEach(k=>delete gameReviewsState[k]); };
 
 // Sample mode only: pretend community ratings so the demo has numbers.
 // There are no other users yet. Until accounts exist, each game gets a small,
@@ -2938,7 +2987,7 @@ function feedCard(f, idx, kind){
               <button class="rev-open" ${open} title="Open this log">${l.rating!=null ? `<span class="rev-score" style="${ratingText(l.rating, f.userId)}">${l.rating}</span>` : `<span class="rev-score played">Played</span>`}${l.platinum ? PLAT_IMG(l.rating,"inrev") : ""}</button>
             </div>
             ${l.review ? (()=>{ const key=`${kind}:${idx}`, long = l.review.length > 420 || (l.review.match(/\n/g)||[]).length > 5, exp = feedExpanded.has(key);
-              return `<div class="review rev-text${(long && !exp) ? " clamp" : ""}" role="button" tabindex="0" ${open}>${esc(l.review)}</div>${long ? `<button class="linklike rev-more" data-fexpand="${key}">${exp ? "Show less" : "Read more"}</button>` : ""}`; })() : ""}
+              return spoilerWrap(l, g.id, f.userId, mine, `<div class="review rev-text${(long && !exp) ? " clamp" : ""}" role="button" tabindex="0" ${open}>${esc(l.review)}</div>${long ? `<button class="linklike rev-more" data-fexpand="${key}">${exp ? "Show less" : "Read more"}</button>` : ""}`); })() : ""}
             <div class="crev-foot">${LIVE && me && l.review ? `<button class="likebtn ${liked?"on":""}" data-hlike="${g.id}:${f.userId}" ${mine?"disabled":""} aria-label="${mine ? "Likes on your review" : "Like this review"}">${liked?"♥":"♡"} ${lk.length||""}</button>${mine ? "" : `<button class="cmt-toggle" data-freport="${g.id}:${f.userId}" title="Report review">⚑ Report</button>`}` : ""}<button class="cmt-toggle" ${open}>Open log →</button></div>
             ${(l.review||"").trim() ? commentsBlock(g.id, f.userId) : ""}
           </div>
@@ -3011,7 +3060,7 @@ async function loadHome(){
       // Latest written reviews across the whole site (server filters blocked users)
       try {
         const { data: lr, error: lrErr } = lrRes;
-        home.latest = lrErr ? [] : (lr||[]).map(latestRowToFeed);
+        home.latest = lrErr ? [] : (await fillSpoilers(lr)).map(latestRowToFeed);
       } catch(e){ home.latest = []; }
       const counts = {}; rows.forEach(r=>{ const c=(counts[r.game_id] ||= {id:r.game_id, n:0, rated:0, sum:0}); c.n++; if (r.rating!=null){ c.rated++; c.sum+=+r.rating; } });
       home.friendPopular = Object.values(counts).sort((a,b)=> b.n-a.n || (b.sum/(b.rated||1))-(a.sum/(a.rated||1))).slice(0,20).map(c=>({ game:getGame(c.id), n:c.n, avg: c.rated ? (c.sum/c.rated).toFixed(1) : null })).filter(x=>x.game);
@@ -4896,7 +4945,7 @@ function logCard(l, g, ballot, isMe, uid){
   return `<div class="yourlog">
     <div class="top">${l.rating!=null ? `<div class="score"><span style="${ratingText(l.rating, uid)}">${l.rating}</span><small> / 10</small></div>` : `<div class="score played">Played</div>`}${l.platinum ? PLAT_IMG(l.rating,"inlog") : ""}<div class="when">${dateLine(l)}</div></div>
     ${w.length ? `<div class="award-tags">${w.map(x=>awardTag(x, isMe)).join("")}</div>` : ""}
-    ${l.review ? `<div class="review">${esc(l.review)}</div>` : `<div class="review" style="color:var(--muted)">No review written.</div>`}
+    ${l.review ? spoilerWrap(l, g.id, uid, isMe, `<div class="review">${esc(l.review)}</div>`) : `<div class="review" style="color:var(--muted)">No review written.</div>`}
     ${l.platinum && platNumText(l) ? `<div class="platnum">Platinum ${platNumText(l)}</div>` : ""}
     ${l.platinum && l.showPlatStats && (l.platDiff!=null || l.platHours!=null || l.platFun!=null) ? `
       <div class="myplat">
@@ -4937,7 +4986,7 @@ async function loadCommLatest(want, quiet){                                   //
   try {
     const { data, error } = await sb.rpc("latest_reviews", { lim: want });
     if (error) throw new Error(error.message || String(error));
-    const rows = Array.isArray(data) ? data : [];
+    const rows = Array.isArray(data) ? data : []; await fillSpoilers(rows);
     commLatest.items = rows.map(latestRowToFeed).filter(f=> !isBlocked(f.userId));
     commLatest.asked = want; commLatest.more = rows.length >= want && want < COMM_LATEST_MAX; commLatest.at = Date.now();
     loadFeedCommentCounts(commLatest.items);
@@ -5271,6 +5320,8 @@ function paintPlat(){
 }
 $("#showStatsToggle").onclick = ()=>{ draft.showPlatStats = !draft.showPlatStats; paintPlat(); };
 $("#awardsToggle").onclick = ()=>{ draft.showAwards = !draft.showAwards; paintAwardsToggle(); };
+$("#spoilToggle").onclick = ()=>{ draft.spoiler = !draft.spoiler; paintSpoilToggle(); };
+function paintSpoilToggle(){ const t=$("#spoilToggle"); t.setAttribute("aria-checked", !!draft.spoiler); t.classList.toggle("on", !!draft.spoiler); }
 function paintAwardsToggle(){
   const t=$("#awardsToggle"), mine=myAwardsFor(draft.gameId);
   t.setAttribute("aria-checked", !!draft.showAwards); t.classList.toggle("on", !!draft.showAwards);
@@ -5280,8 +5331,8 @@ function paintAwardsToggle(){
 function openSheet(g){
   const l = logs[g.id] || {};
   draft = {gameId:g.id, rating: l.rating ?? null, playedOnly: !!(l.game && l.rating==null), subs:{...(l.subs||{})}, platinum: !!l.platinum,
-           platDiff: l.platDiff ?? null, platFun: l.platFun ?? null, platHours: l.platHours ?? null, showPlatStats: l.showPlatStats ?? true, showAwards: l.showAwards ?? true};
-  paintAwardsToggle();
+           platDiff: l.platDiff ?? null, platFun: l.platFun ?? null, platHours: l.platHours ?? null, showPlatStats: l.showPlatStats ?? true, showAwards: l.showAwards ?? true, spoiler: !!l.spoiler};
+  paintAwardsToggle(); paintSpoilToggle();
   $("#platHours").value = draft.platHours ?? "";
   $("#platNum").value = l.platNum ?? ""; $("#platLabel").value = l.platLabel || "";
   $("#plat2Num").value = l.plat2Num ?? ""; $("#plat2Label").value = l.plat2Label || ""; $("#plat2Date").value = l.plat2On || "";
@@ -5318,7 +5369,7 @@ $("#saveLog").onclick = async ()=>{
   logs[draft.gameId] = { game:getGame(draft.gameId), rating: draft.playedOnly && draft.rating==null ? null : draft.rating, review:$("#reviewText").value.trim(), date:dPlayed, firstTrophy:dTrophy, platDate:dPlat, subs:{...draft.subs},
     platinum:!!draft.platinum, platinumVerified:false,
     platDiff: draft.platinum ? draft.platDiff : null, platFun: draft.platinum ? draft.platFun : null, platHours: draft.platinum && !isNaN(hrs) && hrs>0 ? hrs : null, platNum: draft.platinum && !isNaN(pnum) && pnum>0 ? pnum : null, ...plat2FromSheet(),
-    showPlatStats: !!draft.showPlatStats, showAwards: !!draft.showAwards };
+    showPlatStats: !!draft.showPlatStats, showAwards: !!draft.showAwards, spoiler: !!draft.spoiler && !!$("#reviewText").value.trim() };
   closeSheet(); render(); toast("Log saved");
   saveLogRow(draft.gameId);
   maybeAskPush("firstlog");
@@ -5432,8 +5483,11 @@ async function loadCoverMax(url){ if (typeof url!=="string") return null;
 function loadImg(src, cors, ms=2500){ return new Promise(res=>{ const i=new Image(); if (cors) i.crossOrigin="anonymous"; const t=setTimeout(()=>res(null),ms); i.onload=()=>{clearTimeout(t);res(i)}; i.onerror=()=>{clearTimeout(t);res(null)}; i.src=src; }); }
 function wrapText(ctx, text, maxW){
   const out=[]; for (const para of text.split(/\n/)){ let line="";
-    for (const w of para.split(/\s+/)){ const t=line?line+" "+w:w;
-      if (ctx.measureText(t).width>maxW && line){ out.push(line); line=w; } else line=t; }
+    for (let w of para.split(/\s+/)){ const t=line?line+" "+w:w;
+      if (ctx.measureText(t).width>maxW && line){ out.push(line); line=w; } else line=t;
+      while (ctx.measureText(line).width>maxW && line.length>1){      // one word wider than the whole line: cut it where it stops fitting
+        let n=1; while (n<line.length && ctx.measureText(line.slice(0,n+1)).width<=maxW) n++;
+        out.push(line.slice(0,n)); line=line.slice(n); } }
     out.push(line); }
   return out;
 }
@@ -6391,10 +6445,14 @@ async function saveProfileImage(P, opts={}){
 
 // ---- database writes (live mode) ------------------------------------------
 function rowToLog(r){ return { game:r.game, rating: r.rating==null ? null : +r.rating, review:r.review||"", date:r.played_on||"", firstTrophy:r.first_trophy_on||"", platDate:r.platinum_on||"", subs:r.subs||{}, platinum:!!r.platinum, platinumVerified:!!r.platinum_verified,
-  platDiff:r.plat_diff==null?null:+r.plat_diff, platFun:r.plat_fun==null?null:+r.plat_fun, platHours:r.plat_hours==null?null:+r.plat_hours, platNum:r.plat_num==null?null:+r.plat_num, platLabel:r.plat_label||null, plat2Num:r.plat2_num==null?null:+r.plat2_num, plat2On:r.plat2_on||null, plat2Label:r.plat2_label||null, plat3Num:r.plat3_num==null?null:+r.plat3_num, plat3On:r.plat3_on||null, plat3Label:r.plat3_label||null, showPlatStats:r.show_plat_stats!==false, showAwards:r.show_awards!==false }; }
+  platDiff:r.plat_diff==null?null:+r.plat_diff, platFun:r.plat_fun==null?null:+r.plat_fun, platHours:r.plat_hours==null?null:+r.plat_hours, platNum:r.plat_num==null?null:+r.plat_num, platLabel:r.plat_label||null, plat2Num:r.plat2_num==null?null:+r.plat2_num, plat2On:r.plat2_on||null, plat2Label:r.plat2_label||null, plat3Num:r.plat3_num==null?null:+r.plat3_num, plat3On:r.plat3_on||null, plat3Label:r.plat3_label||null, showPlatStats:r.show_plat_stats!==false, showAwards:r.show_awards!==false, spoiler:r.spoiler===true }; }
 function logToRow(id, l){ return { user_id:me.id, game_id:id, game:l.game, rating:l.rating, review:l.review, played_on:l.date||null, first_trophy_on:l.firstTrophy||null, platinum_on:l.platDate||null, subs:l.subs, platinum:l.platinum, platinum_verified:false,
-  plat_diff:l.platDiff, plat_fun:l.platFun??null, plat_hours:l.platHours, plat_num:l.platNum, plat_label:l.platLabel||null, plat2_num:l.plat2Num||null, plat2_on:l.plat2On||null, plat2_label:l.plat2Label||null, plat3_num:l.plat3Num||null, plat3_on:l.plat3On||null, plat3_label:l.plat3Label||null, show_plat_stats:l.showPlatStats, show_awards:l.showAwards, updated_at:new Date().toISOString() }; }
-async function saveLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; const { error } = await sb.from("logs").upsert(logToRow(id, logs[id])); if (error) dbFail(error); }
+  plat_diff:l.platDiff, plat_fun:l.platFun??null, plat_hours:l.platHours, plat_num:l.platNum, plat_label:l.platLabel||null, plat2_num:l.plat2Num||null, plat2_on:l.plat2On||null, plat2_label:l.plat2Label||null, plat3_num:l.plat3Num||null, plat3_on:l.plat3On||null, plat3_label:l.plat3Label||null, show_plat_stats:l.showPlatStats, show_awards:l.showAwards, ...(spoilerCol ? { spoiler: !!l.spoiler } : {}), updated_at:new Date().toISOString() }; }
+async function saveLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; let { error } = await sb.from("logs").upsert(logToRow(id, logs[id]));
+  // The spoiler column comes from spoiler-tags.sql. If that hasn't been run, the log still saves - just without the tag.
+  if (error && spoilerCol && /spoiler/i.test(error.message||"")){ spoilerCol = false; const wanted = !!logs[id]?.spoiler; ({ error } = await sb.from("logs").upsert(logToRow(id, logs[id])));
+    if (!error && wanted) toast("Saved, but spoiler tags aren't switched on yet"); }
+  if (error) dbFail(error); }
 async function deleteLogRow(id){ if (!LIVE||!me) return; invalidateCommunity(id); stats.rows=null; const { error } = await sb.from("logs").delete().match({user_id:me.id, game_id:id}); if (error) dbFail(error); }
 async function saveTop5(slot, id){ if (!LIVE||!me) return;
   const { error } = id ? await sb.from("top5").upsert({user_id:me.id, slot, game_id:id, game:getGame(id)}) : await sb.from("top5").delete().match({user_id:me.id, slot});
@@ -6728,16 +6786,22 @@ function wireSettingsUI(){
 const PROFILE_COLS = ["id","username","avatar_url","bio","is_admin","founder","badge_layout","emblem_url","emblem_name","emblem_desc","hide_plats","pro_until","pro_source","theme","shelves"];
 let profileCols = PROFILE_COLS.slice();
 async function readProfile(where){
+  // A name is matched exactly (upper/lower case aside). "_" and "%" in it are escaped: left as they are, the database reads
+  // "_" as "any one character", so "hano_" also matched a name like "hanoi", and two answers counted as none ("No user named").
+  const name = where.id ? null : String(where.username ?? "");
+  if (!where.id && !name) return null;
+  const ask = cols => { const q = sb.from("profiles").select(cols); return where.id ? q.eq("id", where.id).limit(1) : q.ilike("username", likeSafe(name)).limit(5); };
+  const pick = rows => !rows || !rows.length ? null : where.id ? rows[0] : (rows.find(r=> r.username === name) || rows.find(r=> String(r.username).toLowerCase() === name.toLowerCase()) || rows[0]);
+  let cols = profileCols.slice();
   for (let attempt = 0; attempt < 8; attempt++){
-    let q = sb.from("profiles").select(profileCols.join(",")); q = where.id ? q.eq("id", where.id) : q.ilike("username", where.username);
-    const { data, error } = await q.maybeSingle();
-    if (!error) return data;
+    const { data, error } = await ask(cols.join(","));
+    if (!error) return pick(data);
     const m = /column\s+(?:profiles\.)?"?([a-z_]+)"?\s+does not exist/i.exec(error.message||"") || /'?([a-z_]+)'?\s+column/i.exec(error.message||"");
-    const bad = m && profileCols.includes(m[1]) && !["id","username"].includes(m[1]) ? m[1] : null;
+    const bad = m && cols.includes(m[1]) && !["id","username"].includes(m[1]) ? m[1] : null;
     console.warn("profile load:", error.message);
-    if (bad) profileCols = profileCols.filter(c=> c!==bad);                 // remember for this session
-    else if (profileCols.length > 2) profileCols = profileCols.slice(0, Math.max(2, profileCols.length-1));   // unknown error: shed the newest column
-    else { const q2 = sb.from("profiles").select("id,username"); return (await (where.id ? q2.eq("id", where.id) : q2.ilike("username", where.username)).maybeSingle()).data; }
+    if (bad){ cols = cols.filter(c=> c!==bad); profileCols = profileCols.filter(c=> c!==bad); }   // a column that isn't there: remember for this session
+    else if (cols.length > 2) cols = cols.slice(0, Math.max(2, cols.length-1));   // unknown error: try this one read with fewer columns (not remembered, so a passing hiccup can't strip later profiles)
+    else return pick((await ask("id,username")).data);
   }
   return null;
 }
